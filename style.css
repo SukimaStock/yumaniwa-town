@@ -1,0 +1,187 @@
+/* 全体のリセットと背景設定 */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #111;
+    color: #fff;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden; /* スマホでの意図しないスクロールを防止 */
+}
+
+/* ゲーム画面のコンテナ (アスペクト比を維持して最大化) */
+#game-container {
+    position: relative;
+    width: 100%;
+    max-width: 768px;
+    aspect-ratio: 768 / 512;
+    background-color: #333;
+    overflow: hidden;
+}
+
+/* キャンバスのドット絵をくっきり表示 */
+#game-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* 左上の情報表示 UI */
+#ui-layer {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    pointer-events: none;
+    text-shadow: 1px 1px 2px #000;
+    z-index: 50;
+}
+
+/* メッセージウィンドウ (RPG風) */
+#message-window {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background: rgba(10, 15, 30, 0.85);
+    color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 16px;
+    line-height: 1.5;
+    display: none;
+    z-index: 100;
+}
+
+/* メニューウィンドウ */
+#menu-window {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 30, 0.95);
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+    display: none;
+    z-index: 110;
+    min-width: 250px;
+}
+
+.menu-item {
+    padding: 12px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #555;
+    text-align: center;
+}
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+.menu-item:last-child {
+    border-bottom: none;
+}
+
+/* 仮シーン表示用のコンテナ */
+#scene-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #1a1a1a;
+    color: #eee;
+    display: none;
+    padding: 30px;
+    box-sizing: border-box;
+    z-index: 200;
+    overflow-y: auto;
+}
+
+#scene-container h2 {
+    margin-top: 0;
+    border-bottom: 2px solid #555;
+    padding-bottom: 10px;
+}
+
+#scene-container button {
+    background: #444;
+    color: #fff;
+    border: 1px solid #777;
+    padding: 10px 20px;
+    margin: 5px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: block;
+    width: 100%;
+    max-width: 300px;
+}
+
+#scene-container button:hover {
+    background: #666;
+}
+
+/* スマホ向けコントローラー */
+#mobile-controls {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    right: 0;
+    height: 120px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    pointer-events: none;
+    z-index: 80;
+}
+
+#dpad {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    pointer-events: auto;
+}
+
+.dpad-btn {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 8px;
+    font-size: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    user-select: none;
+}
+.dpad-btn:active { background: rgba(255, 255, 255, 0.5); }
+
+.up { top: 0; left: 40px; }
+.down { bottom: 0; left: 40px; }
+.left { top: 40px; left: 0; }
+.right { top: 40px; right: 40px; }
+
+#btn-action {
+    pointer-events: auto;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 100, 100, 0.6);
+    border: 2px solid rgba(255, 150, 150, 0.8);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 20px;
+}
+#btn-action:active { background: rgba(255, 100, 100, 0.9); }
+
+/* PC(幅769px以上)ではスマホUIを隠す */
+@media (min-width: 769px) {
+    #mobile-controls {
+        display: none;
+    }
+}
