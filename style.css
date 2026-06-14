@@ -1,31 +1,27 @@
 /* 全体のリセットと背景設定 */
-body {
+body, html {
     margin: 0;
     padding: 0;
-    background-color: #111;
+    width: 100%;
+    height: 100%;
+    background-color: #0a0a0a;
     color: #fff;
     font-family: sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
     overflow: hidden; /* スマホでの意図しないスクロールを防止 */
+    touch-action: none; /* デフォルトのタッチアクションを無効化 */
 }
 
-/* ゲーム画面のコンテナ (アスペクト比を維持して最大化) */
+/* ゲーム画面のコンテナ (画面いっぱいに広げる) */
 #game-container {
     position: relative;
-    width: 100%;
-    max-width: 768px;
-    aspect-ratio: 768 / 512;
-    background-color: #333;
+    width: 100vw;
+    height: 100dvh; /* スマホブラウザのアドレスバー等を考慮した高さ */
+    background-color: #111;
     overflow: hidden;
 }
 
 /* キャンバスのドット絵をくっきり表示 */
 #game-canvas {
-    width: 100%;
-    height: 100%;
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
@@ -34,17 +30,33 @@ body {
 /* 左上の情報表示 UI */
 #ui-layer {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
     pointer-events: none;
     text-shadow: 1px 1px 2px #000;
     z-index: 50;
 }
 
-/* メッセージウィンドウ (RPG風) */
+#scene-name {
+    font-weight: bold;
+    font-size: 18px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+#debug-info {
+    display: inline-block;
+    margin-top: 5px;
+    background: rgba(200, 0, 0, 0.6);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* メッセージウィンドウ */
 #message-window {
     position: absolute;
-    bottom: 20px;
+    bottom: calc(140px + env(safe-area-inset-bottom)); /* コントローラーの上に配置 */
     left: 20px;
     right: 20px;
     background: rgba(10, 15, 30, 0.85);
@@ -94,6 +106,7 @@ body {
     color: #eee;
     display: none;
     padding: 30px;
+    padding-top: max(30px, env(safe-area-inset-top));
     box-sizing: border-box;
     z-index: 200;
     overflow-y: auto;
@@ -126,14 +139,14 @@ body {
 /* スマホ向けコントローラー */
 #mobile-controls {
     position: absolute;
-    bottom: 10px;
-    left: 0;
-    right: 0;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
     height: 120px;
     display: flex;
     justify-content: space-between;
-    padding: 0 20px;
-    pointer-events: none;
+    padding: 0 10px;
+    pointer-events: none; /* コンテナ自体はタッチをスルー */
     z-index: 80;
 }
 
@@ -141,15 +154,15 @@ body {
     position: relative;
     width: 120px;
     height: 120px;
-    pointer-events: auto;
+    pointer-events: auto; /* ボタン部分はタッチ有効 */
 }
 
 .dpad-btn {
     position: absolute;
     width: 40px;
     height: 40px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(20, 20, 20, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
     font-size: 16px;
     display: flex;
@@ -157,31 +170,38 @@ body {
     align-items: center;
     color: white;
     user-select: none;
+    touch-action: none;
 }
-.dpad-btn:active { background: rgba(255, 255, 255, 0.5); }
+.dpad-btn:active { background: rgba(255, 255, 255, 0.4); }
 
 .up { top: 0; left: 40px; }
 .down { bottom: 0; left: 40px; }
 .left { top: 40px; left: 0; }
 .right { top: 40px; right: 40px; }
 
+#action-btns {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 10px;
+}
+
 #btn-action {
     pointer-events: auto;
-    width: 80px;
-    height: 80px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
     background: rgba(255, 100, 100, 0.6);
-    border: 2px solid rgba(255, 150, 150, 0.8);
+    border: 2px solid rgba(255, 150, 150, 0.6);
     color: white;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
-    margin-top: 20px;
+    touch-action: none;
 }
 #btn-action:active { background: rgba(255, 100, 100, 0.9); }
 
-/* PC(幅769px以上)ではスマホUIを隠す */
+/* PC等の大きな画面での対応 */
 @media (min-width: 769px) {
-    #mobile-controls {
-        display: none;
+    #message-window {
+        bottom: 20px; /* PCでは下に詰める */
     }
 }

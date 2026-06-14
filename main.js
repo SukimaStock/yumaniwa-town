@@ -8,7 +8,7 @@ var MAP_HEIGHT = 32;
 
 var PLAYER_START = { x: 24, y: 22 };
 
-// 通行不可エリア (x, y, w, h はタイル単位)
+// 通行不可エリア
 var blockedRects = [
     { x: 19, y: 24, w: 12, h: 7 },  // 湯間庭駅
     { x: 29, y: 10, w: 7,  h: 8 },  // 観光案内所
@@ -21,7 +21,7 @@ var blockedRects = [
     { x: 0,  y: 31, w: 48, h: 1 }   // 最下段
 ];
 
-// 通行不可ポイント (1x1タイル)
+// 通行不可ポイント
 var blockedPoints = [
     { x: 22, y: 11 }, { x: 23, y: 11 }, { x: 24, y: 11 }, { x: 25, y: 11 }, // 看板
     { x: 22, y: 12 }, { x: 23, y: 12 }, { x: 24, y: 12 }, { x: 25, y: 12 },
@@ -107,7 +107,6 @@ var bgImage = new Image();
 var bgLoaded = false;
 var bgError = false;
 
-// プレイヤー情報 (当たり判定は足元の 16x16 px)
 var player = {
     x: PLAYER_START.x * TILE_SIZE,
     y: PLAYER_START.y * TILE_SIZE,
@@ -120,10 +119,9 @@ var player = {
 var currentScene = 'station_plaza';
 var isMessageOpen = false;
 var isMenuOpen = false;
-var pendingWarp = null; // ワープ確認待ちのシーンID
+var pendingWarp = null;
 
-var debugGrid = false;
-var debugHitbox = false;
+var debugMode = false;
 
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
@@ -132,7 +130,10 @@ window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
 
-    // 背景画像の読み込み処理
+    // キャンバスを画面サイズに合わせる
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
     bgImage.onload = function() { bgLoaded = true; };
     bgImage.onerror = function() { bgError = true; };
     bgImage.src = BG_IMAGE_PATH;
@@ -141,37 +142,33 @@ window.onload = function() {
     requestAnimationFrame(gameLoop);
 };
 
+// 画面サイズが変わった時の処理
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
 
 // ==========================================
 // 3. 入力イベント設定
 // ==========================================
 function setupEvents() {
-    // キーボード入力
     window.addEventListener('keydown', function(e) {
         keys[e.key] = true;
         
-        // デバッグ切り替え
-        if (e.key === 'g' || e.key === 'G') debugGrid = !debugGrid;
-        if (e.key === 'd' || e.key === 'D') debugHitbox = !debugHitbox;
+        // デバッグ切り替え (GまたはDキーでON/OFFを統一)
+        if (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D') {
+            debugMode = !debugMode;
+            document.getElementById('debug-info').style.display = debugMode ? 'inline-block' : 'none';
+        }
         
-        // キャンセル操作
         if (e.key === 'Escape') {
             closeMessage();
             closeMenu();
             pendingWarp = null;
         }
 
-        // 決定操作 (Enter / Space)
         if (e.key === 'Enter' || e.key === ' ') {
-            if (!isMessageOpen && !isMenuOpen && currentScene === 'station_plaza') {
-                handleAction();
-            } else if (isMessageOpen && pendingWarp) {
-                changeScene(pendingWarp);
-                closeMessage();
-                pendingWarp = null;
-            } else if (isMessageOpen) {
-                closeMessage();
-            }
+            handleActionTrigger();
         }
     });
 
@@ -191,20 +188,23 @@ function setupEvents() {
     var btnAction = document.getElementById('btn-action');
     var actionFunc = function(e) {
         e.preventDefault();
-        if (!isMessageOpen && !isMenuOpen && currentScene === 'station_plaza') {
-            handleAction();
-        } else if (isMessageOpen && pendingWarp) {
-            changeScene(pendingWarp);
-            closeMessage();
-            pendingWarp = null;
-        } else if (isMessageOpen) {
-            closeMessage();
-        }
+        handleActionTrigger();
     };
     btnAction.addEventListener('touchstart', actionFunc, {passive: false});
-    btnAction.addEventListener('click', actionFunc); // PCクリック対応
+    btnAction.addEventListener('click', actionFunc);
 }
 
+function handleActionTrigger() {
+    if (!isMessageOpen && !isMenuOpen && currentScene === 'station_plaza') {
+        handleAction();
+    } else if (isMessageOpen && pendingWarp) {
+        changeScene(pendingWarp);
+        closeMessage();
+        pendingWarp = null;
+    } else if (isMessageOpen) {
+        closeMessage();
+    }
+}
 
 // ==========================================
 // 4. メインループと更新・判定
@@ -216,7 +216,6 @@ function gameLoop() {
 }
 
 function update() {
-    // UIを開いている時や別シーンの時は移動しない
     if (isMessageOpen || isMenuOpen || currentScene !== 'station_plaza') return;
 
     var dx = 0; var dy = 0;
@@ -226,21 +225,18 @@ function update() {
     if (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right) dx += player.speed;
 
     if (dx !== 0 || dy !== 0) {
-        // 向きの更新
         if (Math.abs(dx) > Math.abs(dy)) {
             player.dir = dx > 0 ? 'right' : 'left';
         } else {
             player.dir = dy > 0 ? 'down' : 'up';
         }
 
-        // X軸, Y軸それぞれで衝突判定を行う(壁沿いを滑らせるため)
         var newX = player.x + dx;
         var newY = player.y + dy;
 
         if (!checkCollision(newX, player.y)) player.x = newX;
         if (!checkCollision(player.x, newY)) player.y = newY;
 
-        // マップ外に出ないように制限
         if (player.x < 0) player.x = 0;
         if (player.x + player.w > MAP_WIDTH * TILE_SIZE) player.x = MAP_WIDTH * TILE_SIZE - player.w;
         if (player.y < 0) player.y = 0;
@@ -250,7 +246,6 @@ function update() {
     }
 }
 
-// 当たり判定チェック
 function checkCollision(x, y) {
     var rect = { x: x, y: y, w: player.w, h: player.h };
 
@@ -272,16 +267,14 @@ function isColliding(r1, r2) {
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
 }
 
-
 // ==========================================
-// 5. インタラクション (調べる・ワープ・メニュー)
+// 5. インタラクション
 // ==========================================
 function handleAction() {
     var checkX = player.x;
     var checkY = player.y;
     var checkSize = TILE_SIZE;
 
-    // 向いている方向の先をチェック
     if (player.dir === 'up') checkY -= checkSize;
     if (player.dir === 'down') checkY += checkSize;
     if (player.dir === 'left') checkX -= checkSize;
@@ -296,12 +289,11 @@ function handleAction() {
             w: t.area.w * TILE_SIZE, h: t.area.h * TILE_SIZE 
         };
 
-        // 目の前、またはプレイヤー自身がエリアに乗っているか
         if (isColliding(targetRect, tr) || isColliding(player, tr)) {
             if (t.type === 'inspect') {
                 showMessage(t.text);
             } else if (t.type === 'warp') {
-                showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(Enterで移動)</span>");
+                showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(移動します)</span>");
                 pendingWarp = t.target;
             } else if (t.type === 'menu') {
                 showMessage(t.text);
@@ -312,9 +304,8 @@ function handleAction() {
     }
 }
 
-
 // ==========================================
-// 6. UIとシーン管理 (HTML/DOM操作)
+// 6. UIとシーン管理
 // ==========================================
 function updateUI() {
     var tileX = Math.floor((player.x + player.w/2) / TILE_SIZE);
@@ -329,7 +320,9 @@ function updateUI() {
     };
 
     document.getElementById('scene-name').innerText = sceneNameMap[currentScene] || currentScene;
-    document.getElementById('coord-display').innerText = "座標: (" + tileX + ", " + tileY + ")";
+    if (debugMode) {
+        document.getElementById('coord-display').innerText = "座標: (" + tileX + ", " + tileY + ")";
+    }
 }
 
 function showMessage(text) {
@@ -385,9 +378,7 @@ window.changeScene = function(sceneId) {
         return;
     }
 
-    // HTMLの組み立て (テンプレートリテラル不使用)
     var html = '';
-    
     if (sceneId === 'tourist_info_interior') {
         html += '<h2>観光案内所</h2>';
         html += '<p>湯間庭町の地図やパンフレットが置かれている。ここから町のことを少しずつ知ることができそうだ。</p>';
@@ -417,42 +408,67 @@ window.changeScene = function(sceneId) {
     sceneContainer.style.display = 'block';
 };
 
-
 // ==========================================
-// 7. 描画処理 (Canvas)
+// 7. 描画処理 (カメラ計算とCanvas描画)
 // ==========================================
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // スマホなど画面が狭い場合はズーム倍率を上げる
+    var zoom = (window.innerWidth < 768) ? 2.5 : 2;
+
+    // 画面(ビューポート)の論理サイズを計算
+    var viewW = canvas.width / zoom;
+    var viewH = canvas.height / zoom;
+
+    // プレイヤーが画面の中心にくるようにカメラの左上座標を計算
+    var cameraX = (player.x + player.w / 2) - (viewW / 2);
+    var cameraY = (player.y + player.h / 2) - (viewH / 2);
+
+    // マップ外を映さないようにカメラ位置を制限 (クランプ)
+    var mapPixelW = MAP_WIDTH * TILE_SIZE;
+    var mapPixelH = MAP_HEIGHT * TILE_SIZE;
+
+    // マップより画面の方が大きい場合のセンタリング調整
+    if (viewW > mapPixelW) {
+        cameraX = -(viewW - mapPixelW) / 2;
+    } else {
+        if (cameraX < 0) cameraX = 0;
+        if (cameraX > mapPixelW - viewW) cameraX = mapPixelW - viewW;
+    }
+
+    if (viewH > mapPixelH) {
+        cameraY = -(viewH - mapPixelH) / 2;
+    } else {
+        if (cameraY < 0) cameraY = 0;
+        if (cameraY > mapPixelH - viewH) cameraY = mapPixelH - viewH;
+    }
+
+    // ---------- ここからカメラを適用した描画 ----------
+    ctx.save();
+    ctx.scale(zoom, zoom);
+    // カメラの座標分だけ全体を逆にずらすことで追従を実現
+    ctx.translate(-cameraX, -cameraY);
+
     // 1. 背景描画
     if (bgLoaded) {
-        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bgImage, 0, 0);
     } else {
-        // 画像読み込み失敗・遅延時の仮地面
         ctx.fillStyle = '#b0a080';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        if (bgError) {
-            ctx.fillStyle = '#fff';
-            ctx.font = '16px sans-serif';
-            ctx.fillText('背景画像読み込みエラー (assets/ 内を確認してください)', 20, 40);
-        }
+        ctx.fillRect(0, 0, mapPixelW, mapPixelH);
     }
 
-    // 2. デバッグ:グリッド (Gキー)
-    if (debugGrid) {
+    // 2. デバッグ:グリッドと当たり判定
+    if (debugMode) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
-        for (var x = 0; x < canvas.width; x += TILE_SIZE) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        for (var x = 0; x <= mapPixelW; x += TILE_SIZE) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, mapPixelH); ctx.stroke();
         }
-        for (var y = 0; y < canvas.height; y += TILE_SIZE) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        for (var y = 0; y <= mapPixelH; y += TILE_SIZE) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mapPixelW, y); ctx.stroke();
         }
-    }
 
-    // 3. デバッグ:当たり判定 (Dキー)
-    if (debugHitbox) {
-        // 通行不可(赤)
         ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
         for (var i = 0; i < blockedRects.length; i++) {
             ctx.fillRect(blockedRects[i].x * TILE_SIZE, blockedRects[i].y * TILE_SIZE, blockedRects[i].w * TILE_SIZE, blockedRects[i].h * TILE_SIZE);
@@ -460,37 +476,38 @@ function draw() {
         for (var j = 0; j < blockedPoints.length; j++) {
             ctx.fillRect(blockedPoints[j].x * TILE_SIZE, blockedPoints[j].y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
-        // トリガー(黄色)
+
         ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
         for (var k = 0; k < triggers.length; k++) {
             ctx.fillRect(triggers[k].area.x * TILE_SIZE, triggers[k].area.y * TILE_SIZE, triggers[k].area.w * TILE_SIZE, triggers[k].area.h * TILE_SIZE);
         }
-        // 通行可能目安(青)
+
         ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
         for (var m = 0; m < passableRects.length; m++) {
             ctx.fillRect(passableRects[m].x * TILE_SIZE, passableRects[m].y * TILE_SIZE, passableRects[m].w * TILE_SIZE, passableRects[m].h * TILE_SIZE);
         }
     }
 
-    // 4. プレイヤー描画 (駅前シーンの時のみ)
+    // 3. プレイヤー描画
     if (currentScene === 'station_plaza') {
         drawPlayer();
     }
+
+    // カメラの適用を解除
+    ctx.restore();
+    // ---------- カメラ適用ここまで ----------
 }
 
 function drawPlayer() {
     var px = player.x;
-    var py = player.y; // 足元(16x16)のY座標
+    var py = player.y;
 
-    // 頭部 (少し上にはみ出して描画: 16x24の表現)
     ctx.fillStyle = '#f4c2c2'; 
     ctx.fillRect(px + 2, py - 8, 12, 12);
     
-    // 胴体
     ctx.fillStyle = '#4a90e2';
     ctx.fillRect(px, py + 4, 16, 12);
 
-    // 向きを示すマーカー (白い点)
     ctx.fillStyle = '#ffffff';
     if (player.dir === 'down') {
         ctx.fillRect(px + 3, py - 4, 3, 3);
@@ -499,10 +516,9 @@ function drawPlayer() {
         ctx.fillRect(px + 1, py - 4, 3, 3);
     } else if (player.dir === 'right') {
         ctx.fillRect(px + 12, py - 4, 3, 3);
-    } // up は後ろ向きなので描かない
+    }
 
-    // デバッグ:足元の当たり判定ボックス
-    if (debugHitbox) {
+    if (debugMode) {
         ctx.strokeStyle = '#0f0';
         ctx.lineWidth = 1;
         ctx.strokeRect(player.x, player.y, player.w, player.h);
