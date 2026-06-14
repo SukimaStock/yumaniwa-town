@@ -300,25 +300,63 @@ function update() {
 }
 
 function checkCollision(x, y) {
-    var rect = { x: x, y: y, w: player.w, h: player.h };
+    var rect = getPlayerHitbox(x, y);
 
+    // 1. ホワイトリスト判定 (passableRects に足元の4隅すべてが入っているか)
+    var tl = isPointInRects(rect.x, rect.y, passableRects);
+    var tr = isPointInRects(rect.x + rect.w - 1, rect.y, passableRects);
+    var bl = isPointInRects(rect.x, rect.y + rect.h - 1, passableRects);
+    var br = isPointInRects(rect.x + rect.w - 1, rect.y + rect.h - 1, passableRects);
+
+    if (!tl || !tr || !bl || !br) {
+        return true; // 通行可能エリア外なのでブロック
+    }
+
+    // 2. ブラックリスト判定 (blockedRects / blockedPoints に重なっているか)
     for (var i = 0; i < blockedRects.length; i++) {
-        var br = blockedRects[i];
-        var tr = { x: br.x * TILE_SIZE, y: br.y * TILE_SIZE, w: br.w * TILE_SIZE, h: br.h * TILE_SIZE };
-        if (isColliding(rect, tr)) return true;
+        var bRect = blockedRects[i];
+        var trRect = { x: bRect.x * TILE_SIZE, y: bRect.y * TILE_SIZE, w: bRect.w * TILE_SIZE, h: bRect.h * TILE_SIZE };
+        if (isColliding(rect, trRect)) return true;
     }
     for (var j = 0; j < blockedPoints.length; j++) {
         var bp = blockedPoints[j];
         var tp = { x: bp.x * TILE_SIZE, y: bp.y * TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE };
         if (isColliding(rect, tp)) return true;
     }
+
     return false;
 }
+
+function getPlayerHitbox(x, y) {
+    return {
+        x: x + 2,
+        y: y + 8,
+        w: 12,
+        h: 8
+    };
+}
+
+
 
 function isColliding(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
 }
+
+function isPointInRects(px, py, rects) {
+    for (var i = 0; i < rects.length; i++) {
+        var r = rects[i];
+        var rx = r.x * TILE_SIZE;
+        var ry = r.y * TILE_SIZE;
+        var rw = r.w * TILE_SIZE;
+        var rh = r.h * TILE_SIZE;
+        if (px >= rx && px < rx + rw && py >= ry && py < ry + rh) {
+            return true;
+        }
+    }
+    return false;
+}
+
 
 // ==========================================
 // 5. インタラクション
@@ -497,7 +535,7 @@ function draw() {
     ctx.translate(-cameraX, -cameraY);
 
     if (bgLoaded) {
-        ctx.drawImage(bgImage, 0, 0);
+        ctx.drawImage(bgImage, 0, 0, mapPixelW, mapPixelH);
     } else {
         ctx.fillStyle = '#b0a080';
         ctx.fillRect(0, 0, mapPixelW, mapPixelH);
@@ -513,6 +551,11 @@ function draw() {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mapPixelW, y); ctx.stroke();
         }
 
+        ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
+        for (var m = 0; m < passableRects.length; m++) {
+            ctx.fillRect(passableRects[m].x * TILE_SIZE, passableRects[m].y * TILE_SIZE, passableRects[m].w * TILE_SIZE, passableRects[m].h * TILE_SIZE);
+        }
+
         ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
         for (var i = 0; i < blockedRects.length; i++) {
             ctx.fillRect(blockedRects[i].x * TILE_SIZE, blockedRects[i].y * TILE_SIZE, blockedRects[i].w * TILE_SIZE, blockedRects[i].h * TILE_SIZE);
@@ -524,11 +567,6 @@ function draw() {
         ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
         for (var k = 0; k < triggers.length; k++) {
             ctx.fillRect(triggers[k].area.x * TILE_SIZE, triggers[k].area.y * TILE_SIZE, triggers[k].area.w * TILE_SIZE, triggers[k].area.h * TILE_SIZE);
-        }
-
-        ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
-        for (var m = 0; m < passableRects.length; m++) {
-            ctx.fillRect(passableRects[m].x * TILE_SIZE, passableRects[m].y * TILE_SIZE, passableRects[m].w * TILE_SIZE, passableRects[m].h * TILE_SIZE);
         }
 
         if (lastTappedTile) {
@@ -546,6 +584,7 @@ function draw() {
 
     ctx.restore();
 }
+
 
 
 function drawPlayer() {
@@ -569,8 +608,10 @@ function drawPlayer() {
     }
 
     if (debugMode) {
+        var hitbox = getPlayerHitbox(px, py);
         ctx.strokeStyle = '#0f0';
         ctx.lineWidth = 1;
-        ctx.strokeRect(player.x, player.y, player.w, player.h);
+        ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
     }
 }
+
