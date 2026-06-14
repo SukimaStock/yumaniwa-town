@@ -10,15 +10,17 @@
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         
-        <div id="ui-layer">
+<div id="ui-layer">
             <div id="info-display">
                 <span id="scene-name">駅前広場</span><br>
                 <span id="debug-info" style="display: none;">
-                    <span id="coord-display">座標: (24, 22)</span><br>
-                    <span style="font-size: 12px;">※デバッグモードON</span>
+                    <span id="coord-display">現在座標: (24, 22)</span><br>
+                    <span id="clicked-coord" style="color: #ffaa00; font-weight: bold; font-size: 18px; background: rgba(0,0,0,0.8); padding: 4px; border-radius: 4px; display: inline-block; margin-top: 5px;">タップ座標: --</span>
                 </span>
             </div>
         </div>
+        
+        <button id="btn-debug-toggle">🔧 開発</button>
 
         <div id="message-window"></div>
         <div id="menu-window"></div>

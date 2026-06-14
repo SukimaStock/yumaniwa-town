@@ -123,6 +123,9 @@ var pendingWarp = null;
 
 var debugMode = false;
 
+var lastTappedTile = null;
+
+
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
 
@@ -154,29 +157,21 @@ function resizeCanvas() {
 function setupEvents() {
     window.addEventListener('keydown', function(e) {
         keys[e.key] = true;
-        
-        // デバッグ切り替え (GまたはDキーでON/OFFを統一)
         if (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D') {
-            debugMode = !debugMode;
-            document.getElementById('debug-info').style.display = debugMode ? 'inline-block' : 'none';
+            toggleDebugMode();
         }
-        
         if (e.key === 'Escape') {
             closeMessage();
             closeMenu();
             pendingWarp = null;
         }
-
         if (e.key === 'Enter' || e.key === ' ') {
             handleActionTrigger();
         }
     });
 
-    window.addEventListener('keyup', function(e) {
-        keys[e.key] = false;
-    });
+    window.addEventListener('keyup', function(e) { keys[e.key] = false; });
 
-    // スマホ用タッチ入力
     function bindTouch(id, dir) {
         var el = document.getElementById(id);
         el.addEventListener('touchstart', function(e) { e.preventDefault(); dpad[dir] = true; }, {passive: false});
@@ -187,12 +182,70 @@ function setupEvents() {
 
     var btnAction = document.getElementById('btn-action');
     var actionFunc = function(e) {
-        e.preventDefault();
-        handleActionTrigger();
+        e.preventDefault(); handleActionTrigger();
     };
     btnAction.addEventListener('touchstart', actionFunc, {passive: false});
     btnAction.addEventListener('click', actionFunc);
+
+    var btnDebug = document.getElementById('btn-debug-toggle');
+    if (btnDebug) {
+        btnDebug.addEventListener('touchstart', function(e) { e.preventDefault(); toggleDebugMode(); }, {passive: false});
+        btnDebug.addEventListener('click', function(e) { e.preventDefault(); toggleDebugMode(); });
+    }
+
+    canvas.addEventListener('pointerdown', function(e) {
+        if (!debugMode) return;
+
+        var rect = canvas.getBoundingClientRect();
+        var clickX = e.clientX - rect.left;
+        var clickY = e.clientY - rect.top;
+
+        var zoom = (window.innerWidth < 768) ? 2.5 : 2;
+        var viewW = canvas.width / zoom;
+        var viewH = canvas.height / zoom;
+        var mapPixelW = MAP_WIDTH * TILE_SIZE;
+        var mapPixelH = MAP_HEIGHT * TILE_SIZE;
+
+        var cameraX = (player.x + player.w / 2) - (viewW / 2);
+        var cameraY = (player.y + player.h / 2) - (viewH / 2);
+
+        if (viewW > mapPixelW) { cameraX = -(viewW - mapPixelW) / 2; }
+        else {
+            if (cameraX < 0) cameraX = 0;
+            if (cameraX > mapPixelW - viewW) cameraX = mapPixelW - viewW;
+        }
+
+        if (viewH > mapPixelH) { cameraY = -(viewH - mapPixelH) / 2; }
+        else {
+            if (cameraY < 0) cameraY = 0;
+            if (cameraY > mapPixelH - viewH) cameraY = mapPixelH - viewH;
+        }
+
+        var worldX = (clickX / zoom) + cameraX;
+        var worldY = (clickY / zoom) + cameraY;
+        var tileX = Math.floor(worldX / TILE_SIZE);
+        var tileY = Math.floor(worldY / TILE_SIZE);
+
+        var clickedCoordEl = document.getElementById('clicked-coord');
+        if (clickedCoordEl) {
+            clickedCoordEl.innerText = "タップ: x=" + tileX + ", y=" + tileY;
+        }
+        lastTappedTile = { x: tileX, y: tileY };
+    });
 }
+
+function toggleDebugMode() {
+    debugMode = !debugMode;
+    var debugInfo = document.getElementById('debug-info');
+    if (debugInfo) {
+        debugInfo.style.display = debugMode ? 'inline-block' : 'none';
+    }
+    if (!debugMode) {
+        lastTappedTile = null;
+    }
+}
+
+
 
 function handleActionTrigger() {
     if (!isMessageOpen && !isMenuOpen && currentScene === 'station_plaza') {
@@ -414,22 +467,17 @@ window.changeScene = function(sceneId) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // スマホなど画面が狭い場合はズーム倍率を上げる
     var zoom = (window.innerWidth < 768) ? 2.5 : 2;
 
-    // 画面(ビューポート)の論理サイズを計算
     var viewW = canvas.width / zoom;
     var viewH = canvas.height / zoom;
 
-    // プレイヤーが画面の中心にくるようにカメラの左上座標を計算
     var cameraX = (player.x + player.w / 2) - (viewW / 2);
     var cameraY = (player.y + player.h / 2) - (viewH / 2);
 
-    // マップ外を映さないようにカメラ位置を制限 (クランプ)
     var mapPixelW = MAP_WIDTH * TILE_SIZE;
     var mapPixelH = MAP_HEIGHT * TILE_SIZE;
 
-    // マップより画面の方が大きい場合のセンタリング調整
     if (viewW > mapPixelW) {
         cameraX = -(viewW - mapPixelW) / 2;
     } else {
@@ -444,13 +492,10 @@ function draw() {
         if (cameraY > mapPixelH - viewH) cameraY = mapPixelH - viewH;
     }
 
-    // ---------- ここからカメラを適用した描画 ----------
     ctx.save();
     ctx.scale(zoom, zoom);
-    // カメラの座標分だけ全体を逆にずらすことで追従を実現
     ctx.translate(-cameraX, -cameraY);
 
-    // 1. 背景描画
     if (bgLoaded) {
         ctx.drawImage(bgImage, 0, 0);
     } else {
@@ -458,7 +503,6 @@ function draw() {
         ctx.fillRect(0, 0, mapPixelW, mapPixelH);
     }
 
-    // 2. デバッグ:グリッドと当たり判定
     if (debugMode) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
@@ -486,17 +530,23 @@ function draw() {
         for (var m = 0; m < passableRects.length; m++) {
             ctx.fillRect(passableRects[m].x * TILE_SIZE, passableRects[m].y * TILE_SIZE, passableRects[m].w * TILE_SIZE, passableRects[m].h * TILE_SIZE);
         }
+
+        if (lastTappedTile) {
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.7)';
+            ctx.fillRect(lastTappedTile.x * TILE_SIZE, lastTappedTile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(lastTappedTile.x * TILE_SIZE, lastTappedTile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
     }
 
-    // 3. プレイヤー描画
     if (currentScene === 'station_plaza') {
         drawPlayer();
     }
 
-    // カメラの適用を解除
     ctx.restore();
-    // ---------- カメラ適用ここまで ----------
 }
+
 
 function drawPlayer() {
     var px = player.x;

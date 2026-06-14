@@ -205,3 +205,22 @@ body, html {
         bottom: 20px; /* PCでは下に詰める */
     }
 }
+/* スマホ開発用デバッグボタン */
+#btn-debug-toggle {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    background: rgba(50, 50, 50, 0.8);
+    color: #fff;
+    border: 1px solid #aaa;
+    border-radius: 6px;
+    padding: 10px 15px;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 300;
+    cursor: pointer;
+    touch-action: none; /* ズーム防止 */
+}
+#btn-debug-toggle:active {
+    background: rgba(100, 100, 100, 0.9);
+}
