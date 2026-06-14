@@ -7,27 +7,25 @@ body, html {
     background-color: #0a0a0a;
     color: #fff;
     font-family: sans-serif;
-    overflow: hidden; /* スマホでの意図しないスクロールを防止 */
-    touch-action: none; /* デフォルトのタッチアクションを無効化 */
+    overflow: hidden;
+    touch-action: none;
 }
 
-/* ゲーム画面のコンテナ (画面いっぱいに広げる) */
 #game-container {
     position: relative;
     width: 100vw;
-    height: 100dvh; /* スマホブラウザのアドレスバー等を考慮した高さ */
+    height: 100dvh;
     background-color: #111;
     overflow: hidden;
 }
 
-/* キャンバスのドット絵をくっきり表示 */
 #game-canvas {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    touch-action: none;
 }
 
-/* 左上の情報表示 UI */
 #ui-layer {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
@@ -53,10 +51,20 @@ body, html {
     border-radius: 4px;
 }
 
-/* メッセージウィンドウ */
+#clicked-coord {
+    color: #ffaa00;
+    font-weight: bold;
+    font-size: 14px;
+    background: rgba(0,0,0,0.8);
+    padding: 4px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 5px;
+}
+
 #message-window {
     position: absolute;
-    bottom: calc(140px + env(safe-area-inset-bottom)); /* コントローラーの上に配置 */
+    bottom: calc(140px + env(safe-area-inset-bottom));
     left: 20px;
     right: 20px;
     background: rgba(10, 15, 30, 0.85);
@@ -70,7 +78,6 @@ body, html {
     z-index: 100;
 }
 
-/* メニューウィンドウ */
 #menu-window {
     position: absolute;
     top: 50%;
@@ -91,14 +98,9 @@ body, html {
     border-bottom: 1px solid #555;
     text-align: center;
 }
-.menu-item:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-.menu-item:last-child {
-    border-bottom: none;
-}
+.menu-item:hover { background: rgba(255, 255, 255, 0.2); }
+.menu-item:last-child { border-bottom: none; }
 
-/* 仮シーン表示用のコンテナ */
 #scene-container {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -112,31 +114,14 @@ body, html {
     overflow-y: auto;
 }
 
-#scene-container h2 {
-    margin-top: 0;
-    border-bottom: 2px solid #555;
-    padding-bottom: 10px;
-}
-
+#scene-container h2 { margin-top: 0; border-bottom: 2px solid #555; padding-bottom: 10px; }
 #scene-container button {
-    background: #444;
-    color: #fff;
-    border: 1px solid #777;
-    padding: 10px 20px;
-    margin: 5px 0;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    display: block;
-    width: 100%;
-    max-width: 300px;
+    background: #444; color: #fff; border: 1px solid #777; padding: 10px 20px;
+    margin: 5px 0; border-radius: 4px; cursor: pointer; font-size: 16px;
+    display: block; width: 100%; max-width: 300px;
 }
+#scene-container button:hover { background: #666; }
 
-#scene-container button:hover {
-    background: #666;
-}
-
-/* スマホ向けコントローラー */
 #mobile-controls {
     position: absolute;
     bottom: max(10px, env(safe-area-inset-bottom));
@@ -146,81 +131,104 @@ body, html {
     display: flex;
     justify-content: space-between;
     padding: 0 10px;
-    pointer-events: none; /* コンテナ自体はタッチをスルー */
+    pointer-events: none;
     z-index: 80;
 }
 
-#dpad {
-    position: relative;
-    width: 120px;
-    height: 120px;
-    pointer-events: auto; /* ボタン部分はタッチ有効 */
-}
-
+#dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; }
 .dpad-btn {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    background: rgba(20, 20, 20, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    font-size: 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    user-select: none;
-    touch-action: none;
+    position: absolute; width: 40px; height: 40px; background: rgba(20, 20, 20, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; font-size: 16px;
+    display: flex; justify-content: center; align-items: center; color: white;
+    user-select: none; touch-action: none;
 }
 .dpad-btn:active { background: rgba(255, 255, 255, 0.4); }
-
 .up { top: 0; left: 40px; }
 .down { bottom: 0; left: 40px; }
 .left { top: 40px; left: 0; }
 .right { top: 40px; right: 40px; }
 
-#action-btns {
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: 10px;
-}
-
+#action-btns { display: flex; align-items: flex-end; padding-bottom: 10px; }
 #btn-action {
-    pointer-events: auto;
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    background: rgba(255, 100, 100, 0.6);
-    border: 2px solid rgba(255, 150, 150, 0.6);
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-    touch-action: none;
+    pointer-events: auto; width: 70px; height: 70px; border-radius: 50%;
+    background: rgba(255, 100, 100, 0.6); border: 2px solid rgba(255, 150, 150, 0.6);
+    color: white; font-size: 14px; font-weight: bold; touch-action: none;
 }
 #btn-action:active { background: rgba(255, 100, 100, 0.9); }
 
-/* PC等の大きな画面での対応 */
-@media (min-width: 769px) {
-    #message-window {
-        bottom: 20px; /* PCでは下に詰める */
-    }
-}
-/* スマホ開発用デバッグボタン */
 #btn-debug-toggle {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
     right: max(10px, env(safe-area-inset-right));
     background: rgba(50, 50, 50, 0.8);
-    color: #fff;
-    border: 1px solid #aaa;
-    border-radius: 6px;
-    padding: 10px 15px;
-    font-size: 16px;
-    font-weight: bold;
-    z-index: 300;
-    cursor: pointer;
-    touch-action: none; /* ズーム防止 */
+    color: #fff; border: 1px solid #aaa; border-radius: 6px;
+    padding: 10px 15px; font-size: 16px; font-weight: bold;
+    z-index: 300; cursor: pointer; touch-action: none;
 }
-#btn-debug-toggle:active {
-    background: rgba(100, 100, 100, 0.9);
+
+/* マップエディタパネル */
+#editor-panel {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: 280px;
+    background: rgba(20, 20, 25, 0.95);
+    border: 2px solid #666;
+    border-radius: 8px;
+    z-index: 350;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
+
+.editor-header {
+    background: #333;
+    padding: 10px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editor-header button {
+    background: transparent; color: white; border: none; font-size: 16px; padding: 5px;
+}
+
+.editor-content { padding: 10px; font-size: 14px; }
+.editor-content label { display: block; margin-bottom: 8px; }
+.editor-content select, .editor-content input {
+    width: 100%; padding: 6px; margin-top: 4px;
+    background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
+}
+
+.editor-actions {
+    display: flex; justify-content: space-between; margin-top: 15px;
+}
+.editor-actions button {
+    flex: 1; padding: 8px; border: none; border-radius: 4px; color: white; font-weight: bold; margin: 0 5px;
+}
+
+/* Exportモーダル */
+#export-modal {
+    position: absolute;
+    top: 5%; left: 5%; right: 5%; bottom: 5%;
+    background: #111;
+    border: 2px solid #888;
+    border-radius: 8px;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+.export-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+.export-header button { background: #555; color: white; border: none; padding: 5px 10px; border-radius: 4px; }
+#export-textarea {
+    flex: 1; width: 100%; background: #222; color: #0f0; border: 1px solid #555;
+    padding: 10px; font-family: monospace; font-size: 12px; resize: none; user-select: all; box-sizing: border-box;
+}
+#btn-copy-export {
+    margin-top: 10px; background: #38f; color: white; border: none; padding: 15px; font-size: 16px; border-radius: 4px; font-weight: bold;
+}
+
+@media (min-width: 769px) { #message-window { bottom: 20px; } }

@@ -10,17 +10,15 @@
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         
-<div id="ui-layer">
+        <div id="ui-layer">
             <div id="info-display">
                 <span id="scene-name">駅前広場</span><br>
                 <span id="debug-info" style="display: none;">
                     <span id="coord-display">現在座標: (24, 22)</span><br>
-                    <span id="clicked-coord" style="color: #ffaa00; font-weight: bold; font-size: 18px; background: rgba(0,0,0,0.8); padding: 4px; border-radius: 4px; display: inline-block; margin-top: 5px;">タップ座標: --</span>
+                    <span id="clicked-coord">タップ座標: --</span>
                 </span>
             </div>
         </div>
-        
-        <button id="btn-debug-toggle">🔧 開発</button>
 
         <div id="message-window"></div>
         <div id="menu-window"></div>
@@ -38,6 +36,54 @@
                 <button id="btn-action">調べる</button>
             </div>
         </div>
+
+        <button id="btn-debug-toggle">🔧 開発</button>
+
+        <div id="editor-panel" style="display: none;">
+            <div class="editor-header">
+                <strong>マップエディタ</strong>
+                <button id="btn-close-editor">✖</button>
+            </div>
+            <div class="editor-content">
+                <label>編集対象:
+                    <select id="edit-target">
+                        <option value="passableRects">通行可能エリア(青)</option>
+                        <option value="blockedRects">通行不可エリア(赤矩形)</option>
+                        <option value="blockedPoints">通行不可ポイント(赤点)</option>
+                        <option value="triggers">トリガー(黄)</option>
+                    </select>
+                </label>
+
+                <div id="trigger-form" style="display: none; border-top: 1px solid #555; padding-top: 10px; margin-top: 10px;">
+                    <label>種類:
+                        <select id="trigger-type">
+                            <option value="inspect">調べる(inspect)</option>
+                            <option value="warp">移動(warp)</option>
+                            <option value="menu">メニュー(menu)</option>
+                        </select>
+                    </label>
+                    <label>ID: <input type="text" id="trigger-id" value="new_trigger"></label>
+                    <label>テキスト: <input type="text" id="trigger-text" value="ここを調べた"></label>
+                    <label>ターゲット(ID): <input type="text" id="trigger-target" value=""></label>
+                </div>
+
+                <div class="editor-actions">
+                    <button id="btn-editor-undo" style="background: #a55;">1つ戻す(Undo)</button>
+                    <button id="btn-editor-export" style="background: #5a5;">Export出力</button>
+                </div>
+                <div id="editor-status" style="margin-top: 10px; color: #ffaa00; font-size: 12px;">編集対象を選んでタップしてください</div>
+            </div>
+        </div>
+
+        <div id="export-modal" style="display: none;">
+            <div class="export-header">
+                <strong>Export Data</strong>
+                <button id="btn-close-export">閉じる</button>
+            </div>
+            <textarea id="export-textarea" readonly></textarea>
+            <button id="btn-copy-export">コピーする</button>
+        </div>
+
     </div>
     
     <script src="main.js"></script>
