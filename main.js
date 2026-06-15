@@ -285,6 +285,31 @@ var currentDestinationId = null;
 var currentDestinationMessage = "";
 var currentDestinationMessageTitle = "";
 
+function clearDpadInput() {
+    dpad.up = false;
+    dpad.down = false;
+    dpad.left = false;
+    dpad.right = false;
+
+    var ids = ["btn-up", "btn-down", "btn-left", "btn-right"];
+    for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (el) el.classList.remove("pressed");
+    }
+}
+
+function updateControlVisibility() {
+    var controls = document.getElementById("mobile-controls");
+    if (!controls) return;
+
+    if (isMessageOpen || isEditMode || debugMode || currentScene !== "station_plaza") {
+        controls.classList.add("disabled");
+    } else {
+        controls.classList.remove("disabled");
+    }
+}
+
+
 window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
@@ -492,25 +517,60 @@ function setupEvents() {
     });
     window.addEventListener('keyup', function(e) { keys[e.key] = false; });
 
+    window.addEventListener("blur", clearDpadInput);
+    document.addEventListener("visibilitychange", function() {
+        if (document.hidden) clearDpadInput();
+    });
+
     function stopProp(e) { e.stopPropagation(); }
 
-    function bindTouch(id, dir) {
+    function bindDpadButton(id, dir) {
         var el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('pointerdown', stopProp);
-        el.addEventListener('touchstart', function(e) { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            if (isMessageOpen) return;
-            dpad[dir] = true; 
-        }, {passive: false});
-        el.addEventListener('touchend', function(e) { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            dpad[dir] = false; 
-        }, {passive: false});
+
+        function press(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (isMessageOpen || isEditMode || debugMode || currentScene !== "station_plaza") return;
+
+            cancelTapMove();
+            dpad[dir] = true;
+            el.classList.add("pressed");
+
+            if (el.setPointerCapture && e.pointerId !== undefined) {
+                try {
+                    el.setPointerCapture(e.pointerId);
+                } catch (err) {}
+            }
+        }
+
+        function release(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            dpad[dir] = false;
+            el.classList.remove("pressed");
+
+            if (el.releasePointerCapture && e && e.pointerId !== undefined) {
+                try {
+                    el.releasePointerCapture(e.pointerId);
+                } catch (err) {}
+            }
+        }
+
+        el.addEventListener("pointerdown", press, { passive: false });
+        el.addEventListener("pointerup", release, { passive: false });
+        el.addEventListener("pointercancel", release, { passive: false });
+        el.addEventListener("pointerleave", release, { passive: false });
     }
-    bindTouch('btn-up', 'up'); bindTouch('btn-down', 'down'); bindTouch('btn-left', 'left'); bindTouch('btn-right', 'right');
+
+    bindDpadButton("btn-up", "up");
+    bindDpadButton("btn-down", "down");
+    bindDpadButton("btn-left", "left");
+    bindDpadButton("btn-right", "right");
 
     var btnAction = document.getElementById('btn-action');
     if (btnAction) {
@@ -570,13 +630,13 @@ function setupEvents() {
         if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
 
         if (isEditMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             handleEditorTap(tileX, tileY);
             return;
         }
 
         if (debugMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             currentHoverTile = { x: tileX, y: tileY };
             return;
         }
@@ -593,6 +653,7 @@ function setupEvents() {
         currentHoverTile = { x: Math.floor(worldX / TILE_SIZE), y: Math.floor(worldY / TILE_SIZE) };
     });
 }
+
 
 function setupMessageLayerEvents() {
     var msgWin = document.getElementById('message-window');
@@ -649,11 +710,14 @@ function toggleDebugMode() {
         panel.style.display = 'flex'; btn.style.display = 'none';
         debugMode = true; isEditMode = true;
         document.getElementById('debug-info').style.display = 'inline-block';
-        updateEditorStatus("編集対象を選んでタップしてください");
+        updateEditorStatus("編集対象を選んでタップしてください");
         document.getElementById('interaction-hint').classList.remove('visible');
         document.getElementById('area-title').classList.remove('visible');
+        clearDpadInput();
+        updateControlVisibility();
     }
 }
+
 
 // ==========================================
 // 5. エディタ機能
@@ -666,6 +730,7 @@ function setupEditorEvents() {
         document.getElementById('debug-info').style.display = 'none';
         editStep = 0; currentHoverTile = null;
         updateInteractionHint();
+        updateControlVisibility();
     });
 
     document.getElementById('edit-target').addEventListener('change', function(e) {
@@ -675,7 +740,7 @@ function setupEditorEvents() {
     });
 
     document.getElementById('btn-editor-undo').addEventListener('click', function() {
-        if (editHistory.length === 0) { updateEditorStatus("Undoする履歴がありません"); return; }
+        if (editHistory.length === 0) { updateEditorStatus("Undoする履歴がありません"); return; }
         var last = editHistory.pop();
         if (last.type === 'grid') { collisionGrid = last.prev; }
         else if (last.type === 'triggers') { triggers.pop(); }
@@ -689,10 +754,11 @@ function setupEditorEvents() {
     btnCopy.addEventListener('click', function() {
         var textarea = document.getElementById('export-textarea');
         textarea.select();
-        try { document.execCommand('copy'); btnCopy.innerText = "コピー完了!"; setTimeout(function(){ btnCopy.innerText = "コピーする"; }, 2000); }
-        catch(err) { alert("コピーに失敗しました。手動でコピーしてください。"); }
+        try { document.execCommand('copy'); btnCopy.innerText = "コピー完了!"; setTimeout(function(){ btnCopy.innerText = "コピーする"; }, 2000); }
+        catch(err) { alert("コピーに失敗しました。手動でコピーしてください。"); }
     });
 }
+
 
 function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; }
 function copyGrid() { var arr = []; for (var y = 0; y < MAP_HEIGHT; y++) arr.push(collisionGrid[y].slice()); return arr; }
@@ -806,6 +872,11 @@ function update() {
     if (manualInput) {
         cancelTapMove();
         
+        if (dx !== 0 && dy !== 0) {
+            dx *= 0.7071;
+            dy *= 0.7071;
+        }
+
         player.dir = (Math.abs(dx) > Math.abs(dy)) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
 
         if (!checkCollision(player.x + dx, player.y)) player.x += dx;
@@ -832,6 +903,7 @@ function update() {
         tapMarkerTimer--;
     }
 }
+
 
 function getPlayerHitbox(x, y) { return { x: x + 3, y: y + 10, w: 10, h: 6 }; }
 
@@ -973,7 +1045,10 @@ function showMessage(text) {
     }
 
     isMessageOpen = true;
+    clearDpadInput();
+    updateControlVisibility();
 }
+
 
 function closeMessage() { 
     var msgWin = document.getElementById('message-window');
@@ -986,11 +1061,13 @@ function closeMessage() {
     }
 
     isMessageOpen = false; 
+    updateControlVisibility();
 
     if (typeof updateInteractionHint === "function") {
         updateInteractionHint();
     }
 }
+
 
 function resetDestinationState() {
     currentDestinationId = null;
@@ -1009,17 +1086,22 @@ window.changeScene = function(sceneId) {
     document.getElementById('interaction-hint').classList.remove('visible');
     var btnAction = document.getElementById('btn-action');
     if (btnAction) {
-        btnAction.innerText = "調べる";
+        btnAction.innerText = "調べる";
     }
 
     if (sceneId === 'station_plaza') {
         resetDestinationState();
         closeDestinationScene();
+        clearDpadInput();
+        updateControlVisibility();
         return;
     }
 
     openDestination(sceneId);
+    clearDpadInput();
+    updateControlVisibility();
 };
+
 
 window.openDestination = function(destId) {
     currentDestinationId = destId;

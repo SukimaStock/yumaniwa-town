@@ -81,20 +81,52 @@ body, html {
 }
 
 /* スマホ用コントローラー */
+/* スマホ用コントローラー */
 #mobile-controls {
     position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left));
-    right: max(10px, env(safe-area-inset-right)); height: 120px; display: flex; justify-content: space-between;
+    right: max(10px, env(safe-area-inset-right)); height: 132px; display: flex; justify-content: space-between;
     padding: 0 10px; pointer-events: none; z-index: 300;
+    transition: opacity 0.3s;
 }
-#dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; opacity: 0.55; transition: opacity 0.2s; }
-#dpad:active { opacity: 1.0; }
+
+/* UI表示中は操作不可&半透明に */
+#mobile-controls.disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+#dpad { 
+    position: relative; width: 132px; height: 132px; pointer-events: auto; opacity: 0.58; 
+}
+
+/* 十字キー中央の装飾 */
+#dpad-center {
+    position: absolute; width: 20px; height: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    top: 56px; left: 56px;
+    pointer-events: none;
+}
+
 .dpad-btn {
-    position: absolute; width: 40px; height: 40px; background: rgba(20, 20, 20, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; font-size: 16px;
-    display: flex; justify-content: center; align-items: center; color: white; user-select: none; touch-action: none;
+    position: absolute; width: 44px; height: 44px; background: rgba(20, 20, 20, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 12px; font-size: 16px;
+    display: flex; justify-content: center; align-items: center; color: white; 
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    transition: background 0.1s, transform 0.1s;
 }
-.dpad-btn:active { background: rgba(255, 255, 255, 0.4); }
-.up { top: 0; left: 40px; } .down { bottom: 0; left: 40px; } .left { top: 40px; left: 0; } .right { top: 40px; right: 40px; }
+
+/* 押下時のスタイル */
+.dpad-btn.pressed { 
+    background: rgba(255, 255, 255, 0.32);
+    transform: scale(0.96);
+}
+
+.up { top: 0; left: 44px; } 
+.down { bottom: 0; left: 44px; } 
+.left { top: 44px; left: 0; } 
+.right { top: 44px; right: 0; } /* rightズレ修正 */
 
 #action-btns { display: flex; align-items: flex-end; padding-bottom: 10px; }
 #btn-action {
@@ -103,7 +135,6 @@ body, html {
     transition: background 0.2s, font-size 0.2s;
 }
 #btn-action:active { background: rgba(255, 100, 100, 0.9); }
-
 /* スマホ用開発ボタン */
 #btn-debug-toggle {
     position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
