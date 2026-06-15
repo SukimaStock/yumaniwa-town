@@ -9,33 +9,144 @@ var PLAYER_START = { x: 24, y: 22 };
 
 // 既存データ(初期化用)
 var passableRects = [
-    { x: 0, y: 7, w: 48, h: 18 }, { x: 19, y: 0, w: 10, h: 7 },
-    { x: 4, y: 25, w: 6, h: 7 }, { x: 14, y: 25, w: 20, h: 2 }
+    { x: 19, y: 7, w: 8, h: 2 },
+    { x: 11, y: 8, w: 5, h: 3 },
+    { x: 38, y: 8, w: 5, h: 7 },
+    { x: 5, y: 9, w: 4, h: 6 },
+    { x: 16, y: 9, w: 5, h: 1 },
+    { x: 22, y: 9, w: 4, h: 13 },
+    { x: 3, y: 10, w: 2, h: 5 },
+    { x: 9, y: 10, w: 2, h: 5 },
+    { x: 0, y: 11, w: 3, h: 4 },
+    { x: 11, y: 11, w: 3, h: 7 },
+    { x: 36, y: 13, w: 2, h: 4 },
+    { x: 43, y: 13, w: 2, h: 2 },
+    { x: 31, y: 14, w: 2, h: 7 },
+    { x: 45, y: 14, w: 3, h: 1 },
+    { x: 4, y: 15, w: 3, h: 17 },
+    { x: 14, y: 15, w: 8, h: 7 },
+    { x: 26, y: 15, w: 2, h: 7 },
+    { x: 38, y: 15, w: 2, h: 1 },
+    { x: 47, y: 15, w: 1, h: 1 },
+    { x: 28, y: 16, w: 1, h: 6 },
+    { x: 29, y: 17, w: 2, h: 4 },
+    { x: 33, y: 17, w: 4, h: 6 },
+    { x: 13, y: 18, w: 1, h: 3 },
+    { x: 29, y: 21, w: 1, h: 1 },
+    { x: 32, y: 21, w: 1, h: 11 },
+    { x: 14, y: 22, w: 3, h: 2 },
+    { x: 33, y: 23, w: 3, h: 9 },
+    { x: 15, y: 24, w: 2, h: 4 },
+    { x: 11, y: 26, w: 3, h: 6 },
+    { x: 42, y: 26, w: 2, h: 6 },
+    { x: 23, y: 28, w: 1, h: 3 },
+    { x: 0, y: 29, w: 4, h: 3 },
+    { x: 7, y: 29, w: 4, h: 3 },
+    { x: 14, y: 29, w: 9, h: 2 },
+    { x: 24, y: 29, w: 8, h: 2 },
+    { x: 36, y: 29, w: 6, h: 3 },
+    { x: 44, y: 29, w: 4, h: 3 },
+    { x: 14, y: 31, w: 2, h: 1 }
 ];
+
 var blockedRects = [
-    { x: 0, y: 0, w: 19, h: 7 }, { x: 29, y: 0, w: 19, h: 11 }, { x: 28, y: 11, w: 8, h: 6 },
-    { x: 0, y: 18, w: 4, h: 14 }, { x: 10, y: 18, w: 5, h: 14 }, { x: 36, y: 18, w: 12, h: 14 },
-    { x: 16, y: 26, w: 16, h: 6 }, { x: 24, y: 6, w: 5, h: 1 }, { x: 0, y: 31, w: 48, h: 1 }
+    { x: 0, y: 0, w: 48, h: 7 },
+    { x: 0, y: 7, w: 19, h: 1 },
+    { x: 27, y: 7, w: 21, h: 1 },
+    { x: 0, y: 8, w: 11, h: 1 },
+    { x: 16, y: 8, w: 3, h: 1 },
+    { x: 27, y: 8, w: 11, h: 5 },
+    { x: 43, y: 8, w: 5, h: 5 },
+    { x: 0, y: 9, w: 5, h: 1 },
+    { x: 9, y: 9, w: 2, h: 1 },
+    { x: 21, y: 9, w: 1, h: 6 },
+    { x: 26, y: 9, w: 1, h: 6 },
+    { x: 0, y: 10, w: 3, h: 1 },
+    { x: 16, y: 10, w: 5, h: 5 },
+    { x: 14, y: 11, w: 2, h: 4 },
+    { x: 27, y: 13, w: 9, h: 1 },
+    { x: 45, y: 13, w: 3, h: 1 },
+    { x: 27, y: 14, w: 4, h: 1 },
+    { x: 33, y: 14, w: 3, h: 3 },
+    { x: 0, y: 15, w: 4, h: 14 },
+    { x: 7, y: 15, w: 4, h: 14 },
+    { x: 28, y: 15, w: 3, h: 1 },
+    { x: 40, y: 15, w: 7, h: 11 },
+    { x: 29, y: 16, w: 2, h: 1 },
+    { x: 38, y: 16, w: 2, h: 13 },
+    { x: 47, y: 16, w: 1, h: 13 },
+    { x: 37, y: 17, w: 1, h: 12 },
+    { x: 11, y: 18, w: 2, h: 8 },
+    { x: 13, y: 21, w: 1, h: 5 },
+    { x: 30, y: 21, w: 2, h: 8 },
+    { x: 17, y: 22, w: 13, h: 6 },
+    { x: 36, y: 23, w: 1, h: 6 },
+    { x: 14, y: 24, w: 1, h: 5 },
+    { x: 40, y: 26, w: 2, h: 3 },
+    { x: 44, y: 26, w: 3, h: 3 },
+    { x: 15, y: 28, w: 8, h: 1 },
+    { x: 24, y: 28, w: 6, h: 1 },
+    { x: 16, y: 31, w: 16, h: 1 }
 ];
-var blockedPoints = [
-    { x: 17, y: 13 }, { x: 18, y: 13 }, { x: 19, y: 13 }, { x: 20, y: 13 },
-    { x: 17, y: 14 }, { x: 18, y: 14 }, { x: 19, y: 14 }, { x: 20, y: 14 },
-    { x: 17, y: 15 }, { x: 18, y: 15 }, { x: 19, y: 15 }, { x: 22, y: 13 },
-    { x: 14, y: 5 }, { x: 14, y: 6 }, { x: 33, y: 5 }, { x: 33, y: 6 },
-    { x: 16, y: 14 }, { x: 21, y: 15 }, { x: 26, y: 13 }, { x: 35, y: 15 },
-    { x: 6, y: 5 }, { x: 7, y: 5 }, { x: 8, y: 5 }, { x: 9, y: 5 },
-    { x: 6, y: 6 }, { x: 7, y: 6 }, { x: 8, y: 6 }, { x: 9, y: 6 }
-];
+
+var blockedPoints = [];
+
 var triggers = [
-    { id: "station", area: { x: 23, y: 25, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。" },
-    { id: "tourist_info", area: { x: 29, y: 17, w: 2, h: 1 }, type: "warp", target: "tourist_info_interior", text: "観光案内所に入りますか?" },
-    { id: "yumado_street", area: { x: 42, y: 11, w: 6, h: 1 }, type: "warp", target: "yumado_street_map", text: "湯窓通りへ進みますか?" },
-    { id: "leisure_center", area: { x: 39, y: 24, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?" },
-    { id: "tomogushi_alley", area: { x: 4, y: 20, w: 6, h: 1 }, type: "warp", target: "tomogushi_alley_map", text: "灯串横丁へ入りますか?" },
-    { id: "newspaper_board", area: { x: 6, y: 7, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?" },
-    { id: "tourist_map", area: { x: 17, y: 16, w: 4, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。" },
-    { id: "onsen_construction", area: { x: 23, y: 7, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。" }
+    {
+        id: "station",
+        area: { x: 23, y: 27, w: 2, h: 1 },
+        type: "inspect",
+        text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。"
+    },
+    {
+        id: "tourist_info",
+        area: { x: 31, y: 13, w: 2, h: 1 },
+        type: "warp",
+        target: "tourist_info_interior",
+        text: "観光案内所に入りますか?"
+    },
+    {
+        id: "yumado_street",
+        area: { x: 38, y: 11, w: 6, h: 1 },
+        type: "warp",
+        target: "yumado_street_map",
+        text: "湯窓通りへ進みますか?"
+    },
+    {
+        id: "leisure_center",
+        area: { x: 42, y: 26, w: 3, h: 1 },
+        type: "warp",
+        target: "leisure_center_map",
+        text: "湯窓レジャーセンターに入りますか?"
+    },
+    {
+        id: "tomogushi_alley",
+        area: { x: 4, y: 28, w: 3, h: 2 },
+        type: "warp",
+        target: "tomogushi_alley_map",
+        text: "灯串横丁へ入りますか?"
+    },
+    {
+        id: "newspaper_board",
+        area: { x: 5, y: 8, w: 4, h: 1 },
+        type: "menu",
+        target: "shinpo_board",
+        text: "湯間庭新報の掲示板だ。記事を読んでみますか?"
+    },
+    {
+        id: "tourist_map",
+        area: { x: 16, y: 14, w: 5, h: 1 },
+        type: "inspect",
+        text: "湯間庭観光マップだ。町の見どころが載っている。"
+    },
+    {
+        id: "onsen_construction",
+        area: { x: 22, y: 6, w: 4, h: 1 },
+        type: "inspect",
+        text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。"
+    }
 ];
+
 
 // ==========================================
 // 2. 状態管理・初期化 (グリッド化)
