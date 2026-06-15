@@ -5,148 +5,85 @@ var BG_IMAGE_PATH = 'assets/yumaniwa_station_mock_clean.png';
 var TILE_SIZE = 16;
 var MAP_WIDTH = 48;
 var MAP_HEIGHT = 32;
-var PLAYER_START = { x: 24, y: 18 };
+var PLAYER_START = { x: 24, y: 22 };
 
-// 既存データ(初期化用)
 var passableRects = [
-    { x: 19, y: 7, w: 8, h: 2 },
-    { x: 11, y: 8, w: 5, h: 3 },
-    { x: 38, y: 8, w: 5, h: 7 },
-    { x: 5, y: 9, w: 4, h: 6 },
-    { x: 16, y: 9, w: 5, h: 1 },
-    { x: 22, y: 9, w: 4, h: 13 },
-    { x: 3, y: 10, w: 2, h: 5 },
-    { x: 9, y: 10, w: 2, h: 5 },
-    { x: 0, y: 11, w: 3, h: 4 },
-    { x: 11, y: 11, w: 3, h: 7 },
-    { x: 36, y: 13, w: 2, h: 4 },
-    { x: 43, y: 13, w: 2, h: 2 },
-    { x: 31, y: 14, w: 2, h: 7 },
-    { x: 45, y: 14, w: 3, h: 1 },
-    { x: 4, y: 15, w: 3, h: 17 },
-    { x: 14, y: 15, w: 8, h: 7 },
-    { x: 26, y: 15, w: 2, h: 7 },
-    { x: 38, y: 15, w: 2, h: 1 },
-    { x: 47, y: 15, w: 1, h: 1 },
-    { x: 28, y: 16, w: 1, h: 6 },
-    { x: 29, y: 17, w: 2, h: 4 },
-    { x: 33, y: 17, w: 4, h: 6 },
-    { x: 13, y: 18, w: 1, h: 3 },
-    { x: 29, y: 21, w: 1, h: 1 },
-    { x: 32, y: 21, w: 1, h: 11 },
-    { x: 14, y: 22, w: 3, h: 2 },
-    { x: 33, y: 23, w: 3, h: 9 },
-    { x: 15, y: 24, w: 2, h: 4 },
-    { x: 11, y: 26, w: 3, h: 6 },
-    { x: 42, y: 26, w: 2, h: 6 },
-    { x: 23, y: 28, w: 1, h: 3 },
-    { x: 0, y: 29, w: 4, h: 3 },
-    { x: 7, y: 29, w: 4, h: 3 },
-    { x: 14, y: 29, w: 9, h: 2 },
-    { x: 24, y: 29, w: 8, h: 2 },
-    { x: 36, y: 29, w: 6, h: 3 },
-    { x: 44, y: 29, w: 4, h: 3 },
-    { x: 14, y: 31, w: 2, h: 1 }
+    { x: 19, y: 7, w: 8, h: 2 }, { x: 11, y: 8, w: 5, h: 3 }, { x: 38, y: 8, w: 5, h: 7 },
+    { x: 5, y: 9, w: 4, h: 6 }, { x: 16, y: 9, w: 5, h: 1 }, { x: 22, y: 9, w: 4, h: 13 },
+    { x: 3, y: 10, w: 2, h: 5 }, { x: 9, y: 10, w: 2, h: 5 }, { x: 0, y: 11, w: 3, h: 4 },
+    { x: 11, y: 11, w: 3, h: 7 }, { x: 36, y: 13, w: 2, h: 4 }, { x: 43, y: 13, w: 2, h: 2 },
+    { x: 31, y: 14, w: 2, h: 7 }, { x: 45, y: 14, w: 3, h: 1 }, { x: 4, y: 15, w: 3, h: 17 },
+    { x: 14, y: 15, w: 8, h: 7 }, { x: 26, y: 15, w: 2, h: 7 }, { x: 38, y: 15, w: 2, h: 1 },
+    { x: 47, y: 15, w: 1, h: 1 }, { x: 28, y: 16, w: 1, h: 6 }, { x: 29, y: 17, w: 2, h: 4 },
+    { x: 33, y: 17, w: 4, h: 6 }, { x: 13, y: 18, w: 1, h: 3 }, { x: 29, y: 21, w: 1, h: 1 },
+    { x: 32, y: 21, w: 1, h: 11 }, { x: 14, y: 22, w: 3, h: 2 }, { x: 33, y: 23, w: 3, h: 9 },
+    { x: 15, y: 24, w: 2, h: 4 }, { x: 11, y: 26, w: 3, h: 6 }, { x: 42, y: 26, w: 2, h: 6 },
+    { x: 23, y: 28, w: 1, h: 3 }, { x: 0, y: 29, w: 4, h: 3 }, { x: 7, y: 29, w: 4, h: 3 },
+    { x: 14, y: 29, w: 9, h: 2 }, { x: 24, y: 29, w: 8, h: 2 }, { x: 36, y: 29, w: 6, h: 3 },
+    { x: 44, y: 29, w: 4, h: 3 }, { x: 14, y: 31, w: 2, h: 1 }
 ];
-
 var blockedRects = [
-    { x: 0, y: 0, w: 48, h: 7 },
-    { x: 0, y: 7, w: 19, h: 1 },
-    { x: 27, y: 7, w: 21, h: 1 },
-    { x: 0, y: 8, w: 11, h: 1 },
-    { x: 16, y: 8, w: 3, h: 1 },
-    { x: 27, y: 8, w: 11, h: 5 },
-    { x: 43, y: 8, w: 5, h: 5 },
-    { x: 0, y: 9, w: 5, h: 1 },
-    { x: 9, y: 9, w: 2, h: 1 },
-    { x: 21, y: 9, w: 1, h: 6 },
-    { x: 26, y: 9, w: 1, h: 6 },
-    { x: 0, y: 10, w: 3, h: 1 },
-    { x: 16, y: 10, w: 5, h: 5 },
-    { x: 14, y: 11, w: 2, h: 4 },
-    { x: 27, y: 13, w: 9, h: 1 },
-    { x: 45, y: 13, w: 3, h: 1 },
-    { x: 27, y: 14, w: 4, h: 1 },
-    { x: 33, y: 14, w: 3, h: 3 },
-    { x: 0, y: 15, w: 4, h: 14 },
-    { x: 7, y: 15, w: 4, h: 14 },
-    { x: 28, y: 15, w: 3, h: 1 },
-    { x: 40, y: 15, w: 7, h: 11 },
-    { x: 29, y: 16, w: 2, h: 1 },
-    { x: 38, y: 16, w: 2, h: 13 },
-    { x: 47, y: 16, w: 1, h: 13 },
-    { x: 37, y: 17, w: 1, h: 12 },
-    { x: 11, y: 18, w: 2, h: 8 },
-    { x: 13, y: 21, w: 1, h: 5 },
-    { x: 30, y: 21, w: 2, h: 8 },
-    { x: 17, y: 22, w: 13, h: 6 },
-    { x: 36, y: 23, w: 1, h: 6 },
-    { x: 14, y: 24, w: 1, h: 5 },
-    { x: 40, y: 26, w: 2, h: 3 },
-    { x: 44, y: 26, w: 3, h: 3 },
-    { x: 15, y: 28, w: 8, h: 1 },
-    { x: 24, y: 28, w: 6, h: 1 },
+    { x: 0, y: 0, w: 48, h: 7 }, { x: 0, y: 7, w: 19, h: 1 }, { x: 27, y: 7, w: 21, h: 1 },
+    { x: 0, y: 8, w: 11, h: 1 }, { x: 16, y: 8, w: 3, h: 1 }, { x: 27, y: 8, w: 11, h: 5 },
+    { x: 43, y: 8, w: 5, h: 5 }, { x: 0, y: 9, w: 5, h: 1 }, { x: 9, y: 9, w: 2, h: 1 },
+    { x: 21, y: 9, w: 1, h: 6 }, { x: 26, y: 9, w: 1, h: 6 }, { x: 0, y: 10, w: 3, h: 1 },
+    { x: 16, y: 10, w: 5, h: 5 }, { x: 14, y: 11, w: 2, h: 4 }, { x: 27, y: 13, w: 9, h: 1 },
+    { x: 45, y: 13, w: 3, h: 1 }, { x: 27, y: 14, w: 4, h: 1 }, { x: 33, y: 14, w: 3, h: 3 },
+    { x: 0, y: 15, w: 4, h: 14 }, { x: 7, y: 15, w: 4, h: 14 }, { x: 28, y: 15, w: 3, h: 1 },
+    { x: 40, y: 15, w: 7, h: 11 }, { x: 29, y: 16, w: 2, h: 1 }, { x: 38, y: 16, w: 2, h: 13 },
+    { x: 47, y: 16, w: 1, h: 13 }, { x: 37, y: 17, w: 1, h: 12 }, { x: 11, y: 18, w: 2, h: 8 },
+    { x: 13, y: 21, w: 1, h: 5 }, { x: 30, y: 21, w: 2, h: 8 }, { x: 17, y: 22, w: 13, h: 6 },
+    { x: 36, y: 23, w: 1, h: 6 }, { x: 14, y: 24, w: 1, h: 5 }, { x: 40, y: 26, w: 2, h: 3 },
+    { x: 44, y: 26, w: 3, h: 3 }, { x: 15, y: 28, w: 8, h: 1 }, { x: 24, y: 28, w: 6, h: 1 },
     { x: 16, y: 31, w: 16, h: 1 }
 ];
-
 var blockedPoints = [];
 
+// ★ 追加機能1: トリガーに label, actionLabel を追加
 var triggers = [
     {
-        id: "station",
-        area: { x: 23, y: 27, w: 2, h: 1 },
-        type: "inspect",
-        text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。"
+        id: "station", label: "湯間庭駅", actionLabel: "調べる",
+        area: { x: 23, y: 27, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。"
     },
     {
-        id: "tourist_info",
-        area: { x: 31, y: 13, w: 2, h: 1 },
-        type: "warp",
-        target: "tourist_info_interior",
-        text: "観光案内所に入りますか?"
+        id: "tourist_info", label: "観光案内所", actionLabel: "入る",
+        area: { x: 31, y: 13, w: 2, h: 1 }, type: "warp", target: "tourist_info_interior", text: "観光案内所に入りますか?"
     },
     {
-        id: "yumado_street",
-        area: { x: 38, y: 11, w: 6, h: 1 },
-        type: "warp",
-        target: "yumado_street_map",
-        text: "湯窓通りへ進みますか?"
+        id: "yumado_street", label: "湯窓通り", actionLabel: "進む",
+        area: { x: 38, y: 11, w: 6, h: 1 }, type: "warp", target: "yumado_street_map", text: "湯窓通りへ進みますか?"
     },
     {
-        id: "leisure_center",
-        area: { x: 42, y: 26, w: 3, h: 1 },
-        type: "warp",
-        target: "leisure_center_map",
-        text: "湯窓レジャーセンターに入りますか?"
+        id: "leisure_center", label: "湯窓レジャーセンター", actionLabel: "入る",
+        area: { x: 42, y: 26, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?"
     },
     {
-        id: "tomogushi_alley",
-        area: { x: 4, y: 28, w: 3, h: 2 },
-        type: "warp",
-        target: "tomogushi_alley_map",
-        text: "灯串横丁へ入りますか?"
+        id: "tomogushi_alley", label: "灯串横丁", actionLabel: "入る",
+        area: { x: 4, y: 28, w: 3, h: 2 }, type: "warp", target: "tomogushi_alley_map", text: "灯串横丁へ入りますか?"
     },
     {
-        id: "newspaper_board",
-        area: { x: 5, y: 8, w: 4, h: 1 },
-        type: "menu",
-        target: "shinpo_board",
-        text: "湯間庭新報の掲示板だ。記事を読んでみますか?"
+        id: "newspaper_board", label: "湯間庭新報", actionLabel: "読む",
+        area: { x: 5, y: 8, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?"
     },
     {
-        id: "tourist_map",
-        area: { x: 16, y: 14, w: 5, h: 1 },
-        type: "inspect",
-        text: "湯間庭観光マップだ。町の見どころが載っている。"
+        id: "tourist_map", label: "観光マップ", actionLabel: "調べる",
+        area: { x: 16, y: 14, w: 5, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。"
     },
     {
-        id: "onsen_construction",
-        area: { x: 22, y: 6, w: 4, h: 1 },
-        type: "inspect",
-        text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。"
+        id: "onsen_construction", label: "湯間庭温泉方面", actionLabel: "調べる",
+        area: { x: 22, y: 6, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。"
     }
 ];
 
+// ★ 追加機能2: エリアロゴ表示用の区画データ
+var areaZones = [
+    { id: "station_plaza_center", title: "湯間庭駅前", subtitle: "Station Plaza", area: { x: 14, y: 15, w: 18, h: 10 } },
+    { id: "yumado_street_gate", title: "湯窓通り入口", subtitle: "Yumado Street", area: { x: 38, y: 8, w: 7, h: 8 } },
+    { id: "leisure_center_front", title: "湯窓レジャーセンター前", subtitle: "Yumado Leisure Center", area: { x: 39, y: 24, w: 8, h: 6 } },
+    { id: "tomogushi_alley_gate", title: "灯串横丁", subtitle: "Tomogushi Alley", area: { x: 4, y: 24, w: 5, h: 6 } },
+    { id: "shinpo_board_area", title: "湯間庭新報 掲示板前", subtitle: "Yumaniwa Shinpo", area: { x: 4, y: 7, w: 8, h: 5 } },
+    { id: "onsen_road_closed", title: "湯間庭温泉方面", subtitle: "Under Construction", area: { x: 20, y: 6, w: 8, h: 4 } }
+];
 
 // ==========================================
 // 2. 状態管理・初期化 (グリッド化)
@@ -175,8 +112,11 @@ var editStartY = 0;
 var currentHoverTile = null;
 var editHistory = [];
 
-// ★当たり判定・ペイント用 2次元配列
 var collisionGrid = [];
+
+// エリア表示用
+var currentAreaId = null;
+var areaTitleTimer = null;
 
 window.onload = function() {
     canvas = document.getElementById('game-canvas');
@@ -184,7 +124,7 @@ window.onload = function() {
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    initGrid(); // 配列データをグリッドに展開
+    initGrid();
 
     bgImage.onload = function() { bgLoaded = true; };
     bgImage.onerror = function() { bgError = true; };
@@ -193,6 +133,12 @@ window.onload = function() {
     setupEvents();
     setupEditorEvents();
     requestAnimationFrame(gameLoop);
+
+    // 初期化時に最初のエリアと案内表示を更新
+    setTimeout(function() {
+        updateCurrentArea();
+        updateInteractionHint();
+    }, 500);
 };
 
 function resizeCanvas() {
@@ -204,10 +150,9 @@ function initGrid() {
     collisionGrid = [];
     for (var y = 0; y < MAP_HEIGHT; y++) {
         var row = [];
-        for (var x = 0; x < MAP_WIDTH; x++) row.push(0); // 0: 未設定(ブロック)
+        for (var x = 0; x < MAP_WIDTH; x++) row.push(0);
         collisionGrid.push(row);
     }
-    // passable (1) を塗る
     for(var i=0; i<passableRects.length; i++) {
         var r = passableRects[i];
         for(var cy=r.y; cy<r.y+r.h; cy++) {
@@ -216,7 +161,6 @@ function initGrid() {
             }
         }
     }
-    // blocked (2) を上塗り
     for(var i=0; i<blockedRects.length; i++) {
         var r = blockedRects[i];
         for(var cy=r.y; cy<r.y+r.h; cy++) {
@@ -324,6 +268,9 @@ function toggleDebugMode() {
         debugMode = true; isEditMode = true;
         document.getElementById('debug-info').style.display = 'inline-block';
         updateEditorStatus("編集対象を選んでタップしてください");
+        // 編集時は邪魔なので案内とロゴを隠す
+        document.getElementById('interaction-hint').classList.remove('visible');
+        document.getElementById('area-title').classList.remove('visible');
     }
 }
 
@@ -337,6 +284,7 @@ function setupEditorEvents() {
         isEditMode = false; debugMode = false;
         document.getElementById('debug-info').style.display = 'none';
         editStep = 0; currentHoverTile = null;
+        updateInteractionHint(); // 元に戻った時に再計算
     });
 
     document.getElementById('edit-target').addEventListener('change', function(e) {
@@ -368,22 +316,15 @@ function setupEditorEvents() {
 }
 
 function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; }
-
-// グリッドをディープコピー(Undo保存用)
-function copyGrid() {
-    var arr = [];
-    for (var y = 0; y < MAP_HEIGHT; y++) arr.push(collisionGrid[y].slice());
-    return arr;
-}
+function copyGrid() { var arr = []; for (var y = 0; y < MAP_HEIGHT; y++) arr.push(collisionGrid[y].slice()); return arr; }
 
 function handleEditorTap(tx, ty) {
     if (editTarget === 'blockedPoints') {
         editHistory.push({ type: 'grid', prev: copyGrid() });
-        collisionGrid[ty][tx] = 2; // block上書き
+        collisionGrid[ty][tx] = 2; 
         updateEditorStatus("Point追加: (" + tx + ", " + ty + ")");
         return;
     }
-
     if (editStep === 0) {
         editStartX = tx; editStartY = ty; editStep = 1; currentHoverTile = { x: tx, y: ty };
         updateEditorStatus("終点をタップしてください");
@@ -408,21 +349,17 @@ function handleEditorTap(tx, ty) {
             var tId = document.getElementById('trigger-id').value;
             var tText = document.getElementById('trigger-text').value;
             var tTarget = document.getElementById('trigger-target').value;
-            triggers.push({ id: tId, area: newRect, type: tType, target: tTarget, text: tText });
+            triggers.push({ id: tId, label: "新規トリガー", actionLabel: "調べる", area: newRect, type: tType, target: tTarget, text: tText });
             editHistory.push({ type: 'triggers' });
         }
         editStep = 0; currentHoverTile = null; updateEditorStatus("追加完了。次の始点をタップ");
     }
 }
 
-// 2次元配列からRectの配列を最適化して生成するアルゴリズム
 function gridToRects(targetValue) {
-    var rects = [];
-    var visited = [];
+    var rects = []; var visited = [];
     for (var y = 0; y < MAP_HEIGHT; y++) {
-        var row = [];
-        for (var x = 0; x < MAP_WIDTH; x++) row.push(false);
-        visited.push(row);
+        var row = []; for (var x = 0; x < MAP_WIDTH; x++) row.push(false); visited.push(row);
     }
     for (var y = 0; y < MAP_HEIGHT; y++) {
         for (var x = 0; x < MAP_WIDTH; x++) {
@@ -431,14 +368,10 @@ function gridToRects(targetValue) {
                 while (x + w < MAP_WIDTH && collisionGrid[y][x + w] === targetValue && !visited[y][x + w]) w++;
                 var h = 1; var canExpand = true;
                 while (y + h < MAP_HEIGHT && canExpand) {
-                    for (var i = 0; i < w; i++) {
-                        if (collisionGrid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
-                    }
+                    for (var i = 0; i < w; i++) if (collisionGrid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
                     if (canExpand) h++;
                 }
-                for (var dy = 0; dy < h; dy++) {
-                    for (var dx = 0; dx < w; dx++) visited[y + dy][x + dx] = true;
-                }
+                for (var dy = 0; dy < h; dy++) for (var dx = 0; dx < w; dx++) visited[y + dy][x + dx] = true;
                 rects.push({ x: x, y: y, w: w, h: h });
             }
         }
@@ -447,11 +380,8 @@ function gridToRects(targetValue) {
 }
 
 function showExportModal() {
-    var pRects = gridToRects(1);
-    var bAll = gridToRects(2);
-    var newBlockedRects = [];
-    var newBlockedPoints = [];
-    
+    var pRects = gridToRects(1); var bAll = gridToRects(2);
+    var newBlockedRects = []; var newBlockedPoints = [];
     for(var i=0; i<bAll.length; i++) {
         if(bAll[i].w === 1 && bAll[i].h === 1) newBlockedPoints.push({ x: bAll[i].x, y: bAll[i].y });
         else newBlockedRects.push(bAll[i]);
@@ -475,11 +405,19 @@ function showExportModal() {
     str += "];\n\nvar triggers = [\n";
     for(var i=0; i<triggers.length; i++) {
         var t = triggers[i];
-        str += "    {\n        id: \"" + t.id + "\",\n        area: { x: " + t.area.x + ", y: " + t.area.y + ", w: " + t.area.w + ", h: " + t.area.h + " },\n";
+        str += "    {\n        id: \"" + t.id + "\", label: \"" + (t.label||"") + "\", actionLabel: \"" + (t.actionLabel||"調べる") + "\",\n";
+        str += "        area: { x: " + t.area.x + ", y: " + t.area.y + ", w: " + t.area.w + ", h: " + t.area.h + " },\n";
         str += "        type: \"" + t.type + "\",\n";
         if (t.target) str += "        target: \"" + t.target + "\",\n";
         str += "        text: \"" + t.text + "\"\n    }";
         if(i < triggers.length - 1) str += ","; str += "\n";
+    }
+    str += "\n];\n\nvar areaZones = [\n";
+    for(var i=0; i<areaZones.length; i++) {
+        var z = areaZones[i];
+        str += "    {\n        id: \"" + z.id + "\", title: \"" + z.title + "\", subtitle: \"" + z.subtitle + "\",\n";
+        str += "        area: { x: " + z.area.x + ", y: " + z.area.y + ", w: " + z.area.w + ", h: " + z.area.h + " }\n    }";
+        if(i < areaZones.length - 1) str += ","; str += "\n";
     }
     str += "\n];\n";
 
@@ -513,6 +451,8 @@ function update() {
         if (player.y + player.h > MAP_HEIGHT * TILE_SIZE) player.y = MAP_HEIGHT * TILE_SIZE - player.h;
         
         updateUI();
+        updateInteractionHint();
+        updateCurrentArea();
     }
 }
 
@@ -524,20 +464,19 @@ function checkCollision(x, y) {
         { x: rect.x, y: rect.y }, { x: rect.x + rect.w - 1, y: rect.y },
         { x: rect.x, y: rect.y + rect.h - 1 }, { x: rect.x + rect.w - 1, y: rect.y + rect.h - 1 }
     ];
-
     for (var i = 0; i < points.length; i++) {
-        var tx = Math.floor(points[i].x / TILE_SIZE);
-        var ty = Math.floor(points[i].y / TILE_SIZE);
+        var tx = Math.floor(points[i].x / TILE_SIZE); var ty = Math.floor(points[i].y / TILE_SIZE);
         if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT) return true;
         var val = collisionGrid[ty][tx];
-        if (val === 0 || val === 2) return true; // 0:通行不可, 2:ブロック
+        if (val === 0 || val === 2) return true;
     }
     return false;
 }
 
 function isColliding(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
 
-function handleAction() {
+// ★ 追加機能1: 近くのトリガーを取得
+function getNearbyTrigger() {
     var checkX = player.x; var checkY = player.y; var checkSize = TILE_SIZE;
     if (player.dir === 'up') checkY -= checkSize; if (player.dir === 'down') checkY += checkSize;
     if (player.dir === 'left') checkX -= checkSize; if (player.dir === 'right') checkX += checkSize;
@@ -549,11 +488,87 @@ function handleAction() {
         var t = triggers[i];
         var tr = { x: t.area.x * TILE_SIZE, y: t.area.y * TILE_SIZE, w: t.area.w * TILE_SIZE, h: t.area.h * TILE_SIZE };
         if (isColliding(targetRect, tr) || isColliding(pRect, tr)) {
-            if (t.type === 'inspect') showMessage(t.text);
-            else if (t.type === 'warp') { showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(移動します)</span>"); pendingWarp = t.target; }
-            else if (t.type === 'menu') { showMessage(t.text); openMenu(t.target); }
-            return;
+            return t;
         }
+    }
+    return null;
+}
+
+function updateInteractionHint() {
+    var hintEl = document.getElementById('interaction-hint');
+    var btnAction = document.getElementById('btn-action');
+
+    if (isEditMode || currentScene !== 'station_plaza') {
+        hintEl.classList.remove('visible');
+        btnAction.innerText = "調べる";
+        return;
+    }
+
+    var t = getNearbyTrigger();
+    if (t) {
+        document.getElementById('interaction-label').innerText = t.label || "";
+        document.getElementById('interaction-action').innerText = t.actionLabel || "調べる";
+        hintEl.classList.add('visible');
+        btnAction.innerText = t.actionLabel || "調べる";
+    } else {
+        hintEl.classList.remove('visible');
+        btnAction.innerText = "調べる";
+    }
+}
+
+// ★ 追加機能2: エリア判定とロゴ表示
+function updateCurrentArea() {
+    if (currentScene !== 'station_plaza') return;
+
+    var pRect = getPlayerHitbox(player.x, player.y);
+    var centerX = pRect.x + pRect.w / 2;
+    var centerY = pRect.y + pRect.h / 2;
+    var tileX = Math.floor(centerX / TILE_SIZE);
+    var tileY = Math.floor(centerY / TILE_SIZE);
+
+    var foundZone = null;
+    for (var i = 0; i < areaZones.length; i++) {
+        var z = areaZones[i];
+        if (tileX >= z.area.x && tileX < z.area.x + z.area.w && tileY >= z.area.y && tileY < z.area.y + z.area.h) {
+            foundZone = z;
+            break;
+        }
+    }
+
+    if (foundZone && foundZone.id !== currentAreaId) {
+        currentAreaId = foundZone.id;
+        showAreaTitle(foundZone);
+    }
+}
+
+function showAreaTitle(zone) {
+    if (isEditMode) return;
+
+    var titleEl = document.getElementById('area-title');
+    document.getElementById('area-title-main').innerText = zone.title;
+    document.getElementById('area-title-sub').innerText = zone.subtitle;
+
+    titleEl.classList.remove('visible');
+    
+    // アニメーションのリセットのためにわずかな遅延を入れる
+    setTimeout(function() {
+        titleEl.classList.add('visible');
+    }, 50);
+
+    if (areaTitleTimer) clearTimeout(areaTitleTimer);
+
+    // FadeIn(0.8s) + 表示維持(1.4s) = 2.2秒後にクラスを外してFadeOutさせる
+    areaTitleTimer = setTimeout(function() {
+        titleEl.classList.remove('visible');
+    }, 2200);
+}
+
+function handleAction() {
+    var t = getNearbyTrigger();
+    if (t) {
+        if (t.type === 'inspect') showMessage(t.text);
+        else if (t.type === 'warp') { showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(移動します)</span>"); pendingWarp = t.target; }
+        else if (t.type === 'menu') { showMessage(t.text); openMenu(t.target); }
     }
 }
 
@@ -584,7 +599,13 @@ window.handleMenuSelect = function(type) { closeMenu(); showMessage((type === 'n
 
 window.changeScene = function(sceneId) {
     currentScene = sceneId; updateUI(); var sceneContainer = document.getElementById('scene-container');
-    if (sceneId === 'station_plaza') { sceneContainer.style.display = 'none'; return; }
+    
+    // エリアロゴと案内を強制的に消す
+    document.getElementById('area-title').classList.remove('visible');
+    document.getElementById('interaction-hint').classList.remove('visible');
+    document.getElementById('btn-action').innerText = "調べる";
+
+    if (sceneId === 'station_plaza') { sceneContainer.style.display = 'none'; updateInteractionHint(); updateCurrentArea(); return; }
     var html = '';
     if (sceneId === 'tourist_info_interior') html += '<h2>観光案内所</h2><p>パンフレットがある。</p><button onclick="handleMenuSelect(\'note\')">戻る</button>';
     else if (sceneId === 'yumado_street_map') html += '<h2>湯窓通り</h2><p>商店街。</p>';
@@ -613,7 +634,6 @@ function draw() {
         for (var x = 0; x <= cam.mapPixelW; x += TILE_SIZE) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cam.mapPixelH); ctx.stroke(); }
         for (var y = 0; y <= cam.mapPixelH; y += TILE_SIZE) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cam.mapPixelW, y); ctx.stroke(); }
 
-        // グリッド(1=青, 2=赤)を描画
         ctx.fillStyle = 'rgba(0, 120, 255, 0.25)';
         for (var y = 0; y < MAP_HEIGHT; y++) {
             for (var x = 0; x < MAP_WIDTH; x++) {
@@ -629,6 +649,16 @@ function draw() {
 
         ctx.fillStyle = 'rgba(255, 230, 0, 0.45)';
         for (var k = 0; k < triggers.length; k++) ctx.fillRect(triggers[k].area.x * TILE_SIZE, triggers[k].area.y * TILE_SIZE, triggers[k].area.w * TILE_SIZE, triggers[k].area.h * TILE_SIZE);
+
+        // ★ 追加: デバッグ時の areaZones 表示
+        for (var a = 0; a < areaZones.length; a++) {
+            var z = areaZones[a].area;
+            ctx.fillStyle = 'rgba(180, 80, 255, 0.20)';
+            ctx.fillRect(z.x * TILE_SIZE, z.y * TILE_SIZE, z.w * TILE_SIZE, z.h * TILE_SIZE);
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(areaZones[a].title, z.x * TILE_SIZE + 2, z.y * TILE_SIZE + 10);
+        }
 
         if (isEditMode) {
             if (editStep === 1 && currentHoverTile) {
