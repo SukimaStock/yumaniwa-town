@@ -512,7 +512,6 @@ function setupEvents() {
         var actionFunc = function(e) { 
             e.preventDefault(); 
             e.stopPropagation(); 
-            if (isMessageOpen) return;
             handleActionTrigger(); 
         };
         btnAction.addEventListener('pointerdown', stopProp);
@@ -540,7 +539,6 @@ function setupEvents() {
         hintEl.addEventListener('pointerdown', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            if (isMessageOpen) return;
             if (!isEditMode && !debugMode) {
                 cancelTapMove();
                 handleActionTrigger();
@@ -567,13 +565,13 @@ function setupEvents() {
         if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
 
         if (isEditMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             handleEditorTap(tileX, tileY);
             return;
         }
 
         if (debugMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             currentHoverTile = { x: tileX, y: tileY };
             return;
         }
@@ -591,33 +589,57 @@ function setupEvents() {
     });
 }
 
+
 function setupMessageLayerEvents() {
     var msgWin = document.getElementById('message-window');
     var backdrop = document.getElementById('message-backdrop');
 
-    if (msgWin) {
-        msgWin.addEventListener('pointerdown', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+    function handleMessageTap(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (pendingWarp) {
+            var target = pendingWarp;
+            pendingWarp = null;
             closeMessage();
-        });
+            changeScene(target);
+            return;
+        }
+
+        closeMessage();
+    }
+
+    if (msgWin) {
+        msgWin.addEventListener('pointerdown', handleMessageTap);
     }
 
     if (backdrop) {
-        backdrop.addEventListener('pointerdown', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeMessage();
-        });
+        backdrop.addEventListener('pointerdown', handleMessageTap);
     }
 }
 
+
 function handleActionTrigger() {
     if (isEditMode) return;
-    if (!isMessageOpen && currentScene === 'station_plaza') handleAction();
-    else if (isMessageOpen && pendingWarp) { changeScene(pendingWarp); closeMessage(); pendingWarp = null; }
-    else if (isMessageOpen) closeMessage();
+
+    if (isMessageOpen) {
+        if (pendingWarp) {
+            var target = pendingWarp;
+            pendingWarp = null;
+            closeMessage();
+            changeScene(target);
+            return;
+        }
+
+        closeMessage();
+        return;
+    }
+
+    if (currentScene === 'station_plaza') {
+        handleAction();
+    }
 }
+
 
 function toggleDebugMode() {
     var panel = document.getElementById('editor-panel');
