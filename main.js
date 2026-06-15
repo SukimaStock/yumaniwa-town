@@ -5,7 +5,7 @@ var BG_IMAGE_PATH = 'assets/yumaniwa_station_mock_clean.png';
 var TILE_SIZE = 16;
 var MAP_WIDTH = 48;
 var MAP_HEIGHT = 32;
-var PLAYER_START = { x: 24, y: 22 };
+var PLAYER_START = { x: 24, y: 17 };
 
 var passableRects = [
     { x: 19, y: 7, w: 8, h: 2 }, { x: 11, y: 8, w: 5, h: 3 }, { x: 38, y: 8, w: 5, h: 7 },
