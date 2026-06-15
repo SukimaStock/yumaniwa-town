@@ -276,6 +276,12 @@ var collisionGrid = [];
 var currentAreaId = null;
 var areaTitleTimer = null;
 
+var tapMovePath = [];
+var tapMoveTargetTile = null;
+var tapMarkerTimer = 0;
+var tapMarkerPos = null;
+
+
 window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
@@ -332,6 +338,119 @@ function initGrid() {
     }
 }
 
+function getPlayerTile() {
+    var hitbox = getPlayerHitbox(player.x, player.y);
+    var cx = hitbox.x + hitbox.w / 2;
+    var cy = hitbox.y + hitbox.h / 2;
+    return {
+        x: Math.floor(cx / TILE_SIZE),
+        y: Math.floor(cy / TILE_SIZE)
+    };
+}
+
+function isWalkableTile(tx, ty) {
+    if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT) return false;
+    return collisionGrid[ty][tx] === 1;
+}
+
+function findPath(startX, startY, goalX, goalY) {
+    if (!isWalkableTile(goalX, goalY)) return null;
+    if (startX === goalX && startY === goalY) return [];
+
+    var queue = [{ x: startX, y: startY, path: [] }];
+    var visited = [];
+    for (var y = 0; y < MAP_HEIGHT; y++) {
+        var row = [];
+        for (var x = 0; x < MAP_WIDTH; x++) row.push(false);
+        visited.push(row);
+    }
+    visited[startY][startX] = true;
+
+    var dirs = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+
+    while (queue.length > 0) {
+        var cur = queue.shift();
+        
+        if (cur.x === goalX && cur.y === goalY) {
+            return cur.path;
+        }
+
+        for (var i = 0; i < dirs.length; i++) {
+            var nx = cur.x + dirs[i].dx;
+            var ny = cur.y + dirs[i].dy;
+
+            if (isWalkableTile(nx, ny) && !visited[ny][nx]) {
+                visited[ny][nx] = true;
+                var newPath = cur.path.slice();
+                newPath.push({ x: nx, y: ny });
+                queue.push({ x: nx, y: ny, path: newPath });
+            }
+        }
+    }
+    return null;
+}
+
+function startTapMoveTo(tileX, tileY) {
+    if (!isWalkableTile(tileX, tileY)) return;
+    var startTile = getPlayerTile();
+    var path = findPath(startTile.x, startTile.y, tileX, tileY);
+    if (path && path.length > 0) {
+        tapMovePath = path;
+        tapMoveTargetTile = path[0];
+        tapMarkerPos = { x: tileX, y: tileY };
+        tapMarkerTimer = 60;
+    }
+}
+
+function cancelTapMove() {
+    tapMovePath = [];
+    tapMoveTargetTile = null;
+}
+
+function updateTapMove() {
+    if (!tapMoveTargetTile) return false;
+
+    var targetPixelX = tapMoveTargetTile.x * TILE_SIZE + TILE_SIZE / 2;
+    var targetPixelY = tapMoveTargetTile.y * TILE_SIZE + TILE_SIZE / 2;
+
+    var hitbox = getPlayerHitbox(player.x, player.y);
+    var cx = hitbox.x + hitbox.w / 2;
+    var cy = hitbox.y + hitbox.h / 2;
+
+    var dx = targetPixelX - cx;
+    var dy = targetPixelY - cy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < player.speed) {
+        player.x += dx;
+        player.y += dy;
+        tapMovePath.shift();
+        if (tapMovePath.length > 0) {
+            tapMoveTargetTile = tapMovePath[0];
+        } else {
+            tapMoveTargetTile = null;
+            updateInteractionHint();
+            updateCurrentArea();
+        }
+        return true;
+    }
+
+    var moveX = (dx / dist) * player.speed;
+    var moveY = (dy / dist) * player.speed;
+
+    if (Math.abs(moveX) > Math.abs(moveY)) {
+        player.dir = moveX > 0 ? "right" : "left";
+    } else {
+        player.dir = moveY > 0 ? "down" : "up";
+    }
+
+    if (!checkCollision(player.x + moveX, player.y)) player.x += moveX;
+    if (!checkCollision(player.x, player.y + moveY)) player.y += moveY;
+    
+    return true;
+}
+
+
 // ==========================================
 // 3. カメラ計算
 // ==========================================
@@ -370,26 +489,64 @@ function setupEvents() {
     });
     window.addEventListener('keyup', function(e) { keys[e.key] = false; });
 
+    function stopProp(e) { e.stopPropagation(); }
+
     function bindTouch(id, dir) {
         var el = document.getElementById(id);
-        el.addEventListener('touchstart', function(e) { e.preventDefault(); dpad[dir] = true; }, {passive: false});
-        el.addEventListener('touchend', function(e) { e.preventDefault(); dpad[dir] = false; }, {passive: false});
+        if (!el) return;
+        el.addEventListener('pointerdown', stopProp);
+        el.addEventListener('touchstart', function(e) { e.preventDefault(); e.stopPropagation(); dpad[dir] = true; }, {passive: false});
+        el.addEventListener('touchend', function(e) { e.preventDefault(); e.stopPropagation(); dpad[dir] = false; }, {passive: false});
     }
     bindTouch('btn-up', 'up'); bindTouch('btn-down', 'down'); bindTouch('btn-left', 'left'); bindTouch('btn-right', 'right');
 
     var btnAction = document.getElementById('btn-action');
-    var actionFunc = function(e) { e.preventDefault(); handleActionTrigger(); };
-    btnAction.addEventListener('touchstart', actionFunc, {passive: false});
-    btnAction.addEventListener('click', actionFunc);
+    if (btnAction) {
+        var actionFunc = function(e) { e.preventDefault(); e.stopPropagation(); handleActionTrigger(); };
+        btnAction.addEventListener('pointerdown', stopProp);
+        btnAction.addEventListener('touchstart', actionFunc, {passive: false});
+        btnAction.addEventListener('click', actionFunc);
+    }
 
     var btnDebug = document.getElementById('btn-debug-toggle');
     if (btnDebug) {
-        btnDebug.addEventListener('touchstart', function(e) { e.preventDefault(); toggleDebugMode(); }, {passive: false});
-        btnDebug.addEventListener('click', function(e) { e.preventDefault(); toggleDebugMode(); });
+        btnDebug.addEventListener('pointerdown', stopProp);
+        btnDebug.addEventListener('touchstart', function(e) { e.preventDefault(); e.stopPropagation(); toggleDebugMode(); }, {passive: false});
+        btnDebug.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); toggleDebugMode(); });
+    }
+
+    var msgWin = document.getElementById('message-window');
+    if (msgWin) {
+        var closeFunc = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeMessage();
+            cancelTapMove();
+        };
+        msgWin.addEventListener('pointerdown', closeFunc);
+    }
+
+    var hintEl = document.getElementById('interaction-hint');
+    if (hintEl) {
+        hintEl.addEventListener('pointerdown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isEditMode && !debugMode) {
+                cancelTapMove();
+                handleActionTrigger();
+            }
+        });
+    }
+
+    var sceneContainer = document.getElementById('scene-container');
+    if (sceneContainer) {
+        sceneContainer.addEventListener('pointerdown', stopProp);
+        sceneContainer.addEventListener('touchstart', stopProp, {passive: false});
     }
 
     canvas.addEventListener('pointerdown', function(e) {
-        if (!debugMode && !isEditMode) return;
+        if (isMessageOpen || currentScene !== 'station_plaza') return;
+
         var rect = canvas.getBoundingClientRect();
         var cam = getCamera();
         var worldX = ((e.clientX - rect.left) / cam.zoom) + cam.cameraX;
@@ -398,10 +555,20 @@ function setupEvents() {
         var tileY = Math.floor(worldY / TILE_SIZE);
 
         if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
-        document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
 
-        if (isEditMode) handleEditorTap(tileX, tileY);
-        else if (debugMode) currentHoverTile = { x: tileX, y: tileY };
+        if (isEditMode) {
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            handleEditorTap(tileX, tileY);
+            return;
+        }
+
+        if (debugMode) {
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            currentHoverTile = { x: tileX, y: tileY };
+            return;
+        }
+
+        startTapMoveTo(tileX, tileY);
     });
 
     canvas.addEventListener('pointermove', function(e) {
@@ -413,6 +580,7 @@ function setupEvents() {
         currentHoverTile = { x: Math.floor(worldX / TILE_SIZE), y: Math.floor(worldY / TILE_SIZE) };
     });
 }
+
 
 function handleActionTrigger() {
     if (isEditMode) return;
@@ -575,12 +743,16 @@ function update() {
     if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) return;
 
     var dx = 0; var dy = 0;
-    if (keys['ArrowUp'] || keys['w'] || keys['W'] || dpad.up) dy -= player.speed;
-    if (keys['ArrowDown'] || keys['s'] || keys['S'] || dpad.down) dy += player.speed;
-    if (keys['ArrowLeft'] || keys['a'] || keys['A'] || dpad.left) dx -= player.speed;
-    if (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right) dx += player.speed;
+    var manualInput = false;
 
-    if (dx !== 0 || dy !== 0) {
+    if (keys['ArrowUp'] || keys['w'] || keys['W'] || dpad.up) { dy -= player.speed; manualInput = true; }
+    if (keys['ArrowDown'] || keys['s'] || keys['S'] || dpad.down) { dy += player.speed; manualInput = true; }
+    if (keys['ArrowLeft'] || keys['a'] || keys['A'] || dpad.left) { dx -= player.speed; manualInput = true; }
+    if (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right) { dx += player.speed; manualInput = true; }
+
+    if (manualInput) {
+        cancelTapMove();
+        
         player.dir = (Math.abs(dx) > Math.abs(dy)) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
 
         if (!checkCollision(player.x + dx, player.y)) player.x += dx;
@@ -594,8 +766,20 @@ function update() {
         updateUI();
         updateInteractionHint();
         updateCurrentArea();
+    } else {
+        var moved = updateTapMove();
+        if (moved) {
+            updateUI();
+            updateInteractionHint();
+            updateCurrentArea();
+        }
+    }
+
+    if (tapMarkerTimer > 0) {
+        tapMarkerTimer--;
     }
 }
+
 
 function getPlayerHitbox(x, y) { return { x: x + 3, y: y + 10, w: 10, h: 6 }; }
 
@@ -718,11 +902,13 @@ function updateUI() {
 }
 
 function showMessage(text) {
+    cancelTapMove();
     var msg = String(text).replace(/\n/g, "<br>");
     document.getElementById('message-window').innerHTML = msg;
     document.getElementById('message-window').style.display = 'block';
     isMessageOpen = true;
 }
+
 
 function closeMessage() { document.getElementById('message-window').style.display = 'none'; isMessageOpen = false; }
 
@@ -817,6 +1003,13 @@ function draw() {
     if (bgLoaded) ctx.drawImage(bgImage, 0, 0, cam.mapPixelW, cam.mapPixelH);
     else { ctx.fillStyle = '#b0a080'; ctx.fillRect(0, 0, cam.mapPixelW, cam.mapPixelH); }
 
+    if (tapMarkerTimer > 0 && tapMarkerPos && !isEditMode && !debugMode) {
+        ctx.beginPath();
+        ctx.arc(tapMarkerPos.x * TILE_SIZE + TILE_SIZE / 2, tapMarkerPos.y * TILE_SIZE + TILE_SIZE / 2, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, " + (tapMarkerTimer / 60) + ")";
+        ctx.fill();
+    }
+
     if (debugMode || isEditMode) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; ctx.lineWidth = 1;
         for (var x = 0; x <= cam.mapPixelW; x += TILE_SIZE) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cam.mapPixelH); ctx.stroke(); }
@@ -872,3 +1065,4 @@ function draw() {
     }
     ctx.restore();
 }
+
