@@ -22,6 +22,7 @@ var passableRects = [
     { x: 14, y: 29, w: 9, h: 2 }, { x: 24, y: 29, w: 8, h: 2 }, { x: 36, y: 29, w: 6, h: 3 },
     { x: 44, y: 29, w: 4, h: 3 }, { x: 14, y: 31, w: 2, h: 1 }
 ];
+
 var blockedRects = [
     { x: 0, y: 0, w: 48, h: 7 }, { x: 0, y: 7, w: 19, h: 1 }, { x: 27, y: 7, w: 21, h: 1 },
     { x: 0, y: 8, w: 11, h: 1 }, { x: 16, y: 8, w: 3, h: 1 }, { x: 27, y: 8, w: 11, h: 5 },
@@ -37,45 +38,20 @@ var blockedRects = [
     { x: 44, y: 26, w: 3, h: 3 }, { x: 15, y: 28, w: 8, h: 1 }, { x: 24, y: 28, w: 6, h: 1 },
     { x: 16, y: 31, w: 16, h: 1 }
 ];
+
 var blockedPoints = [];
 
-// ★ 追加機能1: トリガーに label, actionLabel を追加
 var triggers = [
-    {
-        id: "station", label: "湯間庭駅", actionLabel: "調べる",
-        area: { x: 23, y: 27, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。"
-    },
-    {
-        id: "tourist_info", label: "観光案内所", actionLabel: "入る",
-        area: { x: 31, y: 13, w: 2, h: 1 }, type: "warp", target: "tourist_info_interior", text: "観光案内所に入りますか?"
-    },
-    {
-        id: "yumado_street", label: "湯窓通り", actionLabel: "進む",
-        area: { x: 38, y: 11, w: 6, h: 1 }, type: "warp", target: "yumado_street_map", text: "湯窓通りへ進みますか?"
-    },
-    {
-        id: "leisure_center", label: "湯窓レジャーセンター", actionLabel: "入る",
-        area: { x: 42, y: 26, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?"
-    },
-    {
-        id: "tomogushi_alley", label: "灯串横丁", actionLabel: "入る",
-        area: { x: 4, y: 28, w: 3, h: 2 }, type: "warp", target: "tomogushi_alley_map", text: "灯串横丁へ入りますか?"
-    },
-    {
-        id: "newspaper_board", label: "湯間庭新報", actionLabel: "読む",
-        area: { x: 5, y: 8, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?"
-    },
-    {
-        id: "tourist_map", label: "観光マップ", actionLabel: "調べる",
-        area: { x: 16, y: 14, w: 5, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。"
-    },
-    {
-        id: "onsen_construction", label: "湯間庭温泉方面", actionLabel: "調べる",
-        area: { x: 22, y: 6, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。"
-    }
+    { id: "station", label: "湯間庭駅", actionLabel: "調べる", area: { x: 23, y: 27, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。" },
+    { id: "tourist_info", label: "観光案内所", actionLabel: "入る", area: { x: 31, y: 13, w: 2, h: 1 }, type: "warp", target: "tourist_info_interior", text: "観光案内所に入りますか?" },
+    { id: "yumado_street", label: "湯窓通り", actionLabel: "進む", area: { x: 38, y: 11, w: 6, h: 1 }, type: "warp", target: "yumado_street_map", text: "湯窓通りへ進みますか?" },
+    { id: "leisure_center", label: "湯窓レジャーセンター", actionLabel: "入る", area: { x: 42, y: 26, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?" },
+    { id: "tomogushi_alley", label: "灯串横丁", actionLabel: "入る", area: { x: 4, y: 28, w: 3, h: 2 }, type: "warp", target: "tomogushi_alley_map", text: "灯串横丁へ入りますか?" },
+    { id: "newspaper_board", label: "湯間庭新報", actionLabel: "読む", area: { x: 5, y: 8, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?" },
+    { id: "tourist_map", label: "観光マップ", actionLabel: "調べる", area: { x: 16, y: 14, w: 5, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。" },
+    { id: "onsen_construction", label: "湯間庭温泉方面", actionLabel: "調べる", area: { x: 22, y: 6, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。" }
 ];
 
-// ★ 追加機能2: エリアロゴ表示用の区画データ
 var areaZones = [
     { id: "station_plaza_center", title: "湯間庭駅前", subtitle: "Station Plaza", area: { x: 14, y: 15, w: 18, h: 10 } },
     { id: "yumado_street_gate", title: "湯窓通り入口", subtitle: "Yumado Street", area: { x: 38, y: 8, w: 7, h: 8 } },
@@ -85,8 +61,82 @@ var areaZones = [
     { id: "onsen_road_closed", title: "湯間庭温泉方面", subtitle: "Under Construction", area: { x: 20, y: 6, w: 8, h: 4 } }
 ];
 
+// ★ 追加: RPG共通メニュー用データ構造 DESTINATIONS
+var DESTINATIONS = {
+    tourist_info_interior: {
+        id: "tourist_info_interior",
+        title: "観光案内所",
+        subtitle: "Information",
+        description: "木のカウンターの上に、手描きの地図と古いパンフレットが並んでいる。",
+        flavor: "係の人が、少し眠そうにこちらを見ている。",
+        menuTitle: "なにを見ますか?",
+        items: [
+            { label: "湯間庭町について", kind: "message", text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。駅前から、商店街、横丁、レジャーセンターへ歩いて行けます。" },
+            { label: "現在行ける場所", kind: "message", text: "いま歩けるのは、湯間庭駅前、観光案内所、湯間庭新報、湯窓レジャーセンター、灯串横丁、湯窓通り入口です。湯間庭温泉方面は、現在整備中です。" },
+            { label: "SukimaStockについて", kind: "message", text: "SukimaStockは、この町の外側にある制作記録庫です。ここで見つけたものの多くは、そこから湯間庭町へ運び込まれています。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    },
+    shinpo_board: {
+        id: "shinpo_board",
+        title: "湯間庭新報",
+        subtitle: "Town Bulletin",
+        description: "掲示板には、町の知らせや読みものが何枚か貼られている。",
+        flavor: "紙の端が、風で少しだけ揺れている。",
+        menuTitle: "どの記事を読みますか?",
+        items: [
+            { label: "正解のないアプリばかり作っている", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
+            { label: "コードが読めないと作れない、は本当だろうか", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
+            { label: "ゲーム未満、アプリ未満の心地よさ", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    },
+    leisure_center_map: {
+        id: "leisure_center_map",
+        title: "湯窓レジャーセンター",
+        subtitle: "Playable Works",
+        description: "少し古びた遊技場。奥の筐体から、小さな光と音がこぼれている。",
+        flavor: "入口近くの看板には『さわれるらくがき、稼働中』と書かれている。",
+        menuTitle: "どの筐体で遊びますか?",
+        items: [
+            { label: "雨の日の窓", kind: "work", url: "", emptyText: "この筐体は現在調整中です。ガラスの向こうで雨音だけが聞こえます。" },
+            { label: "絶対に押せないボタン", kind: "work", url: "", emptyText: "この筐体は現在調整中です。ボタンだけが、こちらを警戒しています。" },
+            { label: "通知バッジ増殖", kind: "work", url: "", emptyText: "この筐体は現在調整中です。赤い丸が、まだ眠っています。" },
+            { label: "誰かの歩数計", kind: "work", url: "", emptyText: "この筐体は現在調整中です。小さな数字だけが、ときどき動きます。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    },
+    tomogushi_alley_map: {
+        id: "tomogushi_alley_map",
+        title: "灯串横丁",
+        subtitle: "Yakitori Alley",
+        description: "提灯の灯りが続く小さな横丁。奥に、串焼き勝負台が置かれている。",
+        flavor: "炭のにおいと、誰かの笑い声が路地の奥から流れてくる。",
+        menuTitle: "どこへ向かいますか?",
+        items: [
+            { label: "串焼き勝負台:Yakitori Wars", kind: "game", url: "", emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。" },
+            { label: "本日の注文札", kind: "message", text: "本日の注文札には『ねぎま、つくね、かわ。焼きすぎ注意』と書かれている。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    },
+    yumado_street_map: {
+        id: "yumado_street_map",
+        title: "湯窓通り",
+        subtitle: "Shopping Street",
+        description: "湯気の向こうに、小さな店の看板が並んでいる。",
+        flavor: "まだ開いていない店も多いが、通りの奥には少しだけ気配がある。",
+        menuTitle: "どこを見ますか?",
+        items: [
+            { label: "喫茶まどべ", kind: "message", text: "窓際の席がよさそうな小さな喫茶店。まだ準備中の札がかかっている。" },
+            { label: "湯まんじゅう屋", kind: "message", text: "蒸し器から白い湯気が上がっている。開店までもう少しらしい。" },
+            { label: "古道具屋", kind: "message", text: "入口の箱に、古いボタンや謎の部品が並んでいる。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    }
+};
+
 // ==========================================
-// 2. 状態管理・初期化 (グリッド化)
+// 2. 状態管理・初期化
 // ==========================================
 var canvas, ctx;
 var bgImage = new Image();
@@ -96,14 +146,12 @@ var bgError = false;
 var player = { x: PLAYER_START.x * TILE_SIZE, y: PLAYER_START.y * TILE_SIZE, w: 16, h: 16, speed: 2, dir: 'down' };
 var currentScene = 'station_plaza';
 var isMessageOpen = false;
-var isMenuOpen = false;
 var pendingWarp = null;
 
 var debugMode = false;
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
 
-// エディタ用状態管理
 var isEditMode = false;
 var editTarget = 'passableRects';
 var editStep = 0;
@@ -113,8 +161,6 @@ var currentHoverTile = null;
 var editHistory = [];
 
 var collisionGrid = [];
-
-// エリア表示用
 var currentAreaId = null;
 var areaTitleTimer = null;
 
@@ -134,7 +180,6 @@ window.onload = function() {
     setupEditorEvents();
     requestAnimationFrame(gameLoop);
 
-    // 初期化時に最初のエリアと案内表示を更新
     setTimeout(function() {
         updateCurrentArea();
         updateInteractionHint();
@@ -204,7 +249,11 @@ function setupEvents() {
     window.addEventListener('keydown', function(e) {
         keys[e.key] = true;
         if (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D') toggleDebugMode();
-        if (e.key === 'Escape') { closeMessage(); closeMenu(); pendingWarp = null; }
+        if (e.key === 'Escape') {
+            closeMessage();
+            if (currentScene !== 'station_plaza') changeScene('station_plaza');
+            pendingWarp = null;
+        }
         if (e.key === 'Enter' || e.key === ' ') handleActionTrigger();
     });
     window.addEventListener('keyup', function(e) { keys[e.key] = false; });
@@ -255,7 +304,7 @@ function setupEvents() {
 
 function handleActionTrigger() {
     if (isEditMode) return;
-    if (!isMessageOpen && !isMenuOpen && currentScene === 'station_plaza') handleAction();
+    if (!isMessageOpen && currentScene === 'station_plaza') handleAction();
     else if (isMessageOpen && pendingWarp) { changeScene(pendingWarp); closeMessage(); pendingWarp = null; }
     else if (isMessageOpen) closeMessage();
 }
@@ -268,14 +317,13 @@ function toggleDebugMode() {
         debugMode = true; isEditMode = true;
         document.getElementById('debug-info').style.display = 'inline-block';
         updateEditorStatus("編集対象を選んでタップしてください");
-        // 編集時は邪魔なので案内とロゴを隠す
         document.getElementById('interaction-hint').classList.remove('visible');
         document.getElementById('area-title').classList.remove('visible');
     }
 }
 
 // ==========================================
-// 5. エディタ機能とイベント
+// 5. エディタ機能
 // ==========================================
 function setupEditorEvents() {
     document.getElementById('btn-close-editor').addEventListener('click', function() {
@@ -284,7 +332,7 @@ function setupEditorEvents() {
         isEditMode = false; debugMode = false;
         document.getElementById('debug-info').style.display = 'none';
         editStep = 0; currentHoverTile = null;
-        updateInteractionHint(); // 元に戻った時に再計算
+        updateInteractionHint();
     });
 
     document.getElementById('edit-target').addEventListener('change', function(e) {
@@ -308,10 +356,8 @@ function setupEditorEvents() {
     btnCopy.addEventListener('click', function() {
         var textarea = document.getElementById('export-textarea');
         textarea.select();
-        try {
-            document.execCommand('copy');
-            btnCopy.innerText = "コピー完了!"; setTimeout(function(){ btnCopy.innerText = "コピーする"; }, 2000);
-        } catch(err) { alert("コピーに失敗しました。手動でコピーしてください。"); }
+        try { document.execCommand('copy'); btnCopy.innerText = "コピー完了!"; setTimeout(function(){ btnCopy.innerText = "コピーする"; }, 2000); }
+        catch(err) { alert("コピーに失敗しました。手動でコピーしてください。"); }
     });
 }
 
@@ -358,14 +404,11 @@ function handleEditorTap(tx, ty) {
 
 function gridToRects(targetValue) {
     var rects = []; var visited = [];
-    for (var y = 0; y < MAP_HEIGHT; y++) {
-        var row = []; for (var x = 0; x < MAP_WIDTH; x++) row.push(false); visited.push(row);
-    }
+    for (var y = 0; y < MAP_HEIGHT; y++) { var row = []; for (var x = 0; x < MAP_WIDTH; x++) row.push(false); visited.push(row); }
     for (var y = 0; y < MAP_HEIGHT; y++) {
         for (var x = 0; x < MAP_WIDTH; x++) {
             if (collisionGrid[y][x] === targetValue && !visited[y][x]) {
-                var w = 0;
-                while (x + w < MAP_WIDTH && collisionGrid[y][x + w] === targetValue && !visited[y][x + w]) w++;
+                var w = 0; while (x + w < MAP_WIDTH && collisionGrid[y][x + w] === targetValue && !visited[y][x + w]) w++;
                 var h = 1; var canExpand = true;
                 while (y + h < MAP_HEIGHT && canExpand) {
                     for (var i = 0; i < w; i++) if (collisionGrid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
@@ -386,30 +429,18 @@ function showExportModal() {
         if(bAll[i].w === 1 && bAll[i].h === 1) newBlockedPoints.push({ x: bAll[i].x, y: bAll[i].y });
         else newBlockedRects.push(bAll[i]);
     }
-
     var str = "var passableRects = [\n";
-    for(var i=0; i<pRects.length; i++) {
-        str += "    { x: " + pRects[i].x + ", y: " + pRects[i].y + ", w: " + pRects[i].w + ", h: " + pRects[i].h + " }";
-        if(i < pRects.length - 1) str += ","; str += "\n";
-    }
+    for(var i=0; i<pRects.length; i++) { str += "    { x: " + pRects[i].x + ", y: " + pRects[i].y + ", w: " + pRects[i].w + ", h: " + pRects[i].h + " }"; if(i < pRects.length - 1) str += ","; str += "\n"; }
     str += "];\n\nvar blockedRects = [\n";
-    for(var i=0; i<newBlockedRects.length; i++) {
-        str += "    { x: " + newBlockedRects[i].x + ", y: " + newBlockedRects[i].y + ", w: " + newBlockedRects[i].w + ", h: " + newBlockedRects[i].h + " }";
-        if(i < newBlockedRects.length - 1) str += ","; str += "\n";
-    }
+    for(var i=0; i<newBlockedRects.length; i++) { str += "    { x: " + newBlockedRects[i].x + ", y: " + newBlockedRects[i].y + ", w: " + newBlockedRects[i].w + ", h: " + newBlockedRects[i].h + " }"; if(i < newBlockedRects.length - 1) str += ","; str += "\n"; }
     str += "];\n\nvar blockedPoints = [\n";
-    for(var i=0; i<newBlockedPoints.length; i++) {
-        str += "    { x: " + newBlockedPoints[i].x + ", y: " + newBlockedPoints[i].y + " }";
-        if(i < newBlockedPoints.length - 1) str += ","; str += "\n";
-    }
+    for(var i=0; i<newBlockedPoints.length; i++) { str += "    { x: " + newBlockedPoints[i].x + ", y: " + newBlockedPoints[i].y + " }"; if(i < newBlockedPoints.length - 1) str += ","; str += "\n"; }
     str += "];\n\nvar triggers = [\n";
     for(var i=0; i<triggers.length; i++) {
         var t = triggers[i];
         str += "    {\n        id: \"" + t.id + "\", label: \"" + (t.label||"") + "\", actionLabel: \"" + (t.actionLabel||"調べる") + "\",\n";
         str += "        area: { x: " + t.area.x + ", y: " + t.area.y + ", w: " + t.area.w + ", h: " + t.area.h + " },\n";
-        str += "        type: \"" + t.type + "\",\n";
-        if (t.target) str += "        target: \"" + t.target + "\",\n";
-        str += "        text: \"" + t.text + "\"\n    }";
+        str += "        type: \"" + t.type + "\",\n"; if (t.target) str += "        target: \"" + t.target + "\",\n"; str += "        text: \"" + t.text + "\"\n    }";
         if(i < triggers.length - 1) str += ","; str += "\n";
     }
     str += "\n];\n\nvar areaZones = [\n";
@@ -420,9 +451,7 @@ function showExportModal() {
         if(i < areaZones.length - 1) str += ","; str += "\n";
     }
     str += "\n];\n";
-
-    document.getElementById('export-textarea').value = str;
-    document.getElementById('export-modal').style.display = 'flex';
+    document.getElementById('export-textarea').value = str; document.getElementById('export-modal').style.display = 'flex';
 }
 
 // ==========================================
@@ -431,7 +460,7 @@ function showExportModal() {
 function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 
 function update() {
-    if (isMessageOpen || isMenuOpen || currentScene !== 'station_plaza' || isEditMode) return;
+    if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) return;
 
     var dx = 0; var dy = 0;
     if (keys['ArrowUp'] || keys['w'] || keys['W'] || dpad.up) dy -= player.speed;
@@ -475,7 +504,6 @@ function checkCollision(x, y) {
 
 function isColliding(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
 
-// ★ 追加機能1: 近くのトリガーを取得
 function getNearbyTrigger() {
     var checkX = player.x; var checkY = player.y; var checkSize = TILE_SIZE;
     if (player.dir === 'up') checkY -= checkSize; if (player.dir === 'down') checkY += checkSize;
@@ -487,9 +515,7 @@ function getNearbyTrigger() {
     for (var i = 0; i < triggers.length; i++) {
         var t = triggers[i];
         var tr = { x: t.area.x * TILE_SIZE, y: t.area.y * TILE_SIZE, w: t.area.w * TILE_SIZE, h: t.area.h * TILE_SIZE };
-        if (isColliding(targetRect, tr) || isColliding(pRect, tr)) {
-            return t;
-        }
+        if (isColliding(targetRect, tr) || isColliding(pRect, tr)) return t;
     }
     return null;
 }
@@ -516,7 +542,6 @@ function updateInteractionHint() {
     }
 }
 
-// ★ 追加機能2: エリア判定とロゴ表示
 function updateCurrentArea() {
     if (currentScene !== 'station_plaza') return;
 
@@ -543,76 +568,118 @@ function updateCurrentArea() {
 
 function showAreaTitle(zone) {
     if (isEditMode) return;
-
     var titleEl = document.getElementById('area-title');
     document.getElementById('area-title-main').innerText = zone.title;
     document.getElementById('area-title-sub').innerText = zone.subtitle;
 
     titleEl.classList.remove('visible');
-    
-    // アニメーションのリセットのためにわずかな遅延を入れる
-    setTimeout(function() {
-        titleEl.classList.add('visible');
-    }, 50);
+    setTimeout(function() { titleEl.classList.add('visible'); }, 50);
 
     if (areaTitleTimer) clearTimeout(areaTitleTimer);
-
-    // FadeIn(0.8s) + 表示維持(1.4s) = 2.2秒後にクラスを外してFadeOutさせる
-    areaTitleTimer = setTimeout(function() {
-        titleEl.classList.remove('visible');
-    }, 2200);
+    areaTitleTimer = setTimeout(function() { titleEl.classList.remove('visible'); }, 2200);
 }
 
 function handleAction() {
     var t = getNearbyTrigger();
     if (t) {
         if (t.type === 'inspect') showMessage(t.text);
-        else if (t.type === 'warp') { showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(移動します)</span>"); pendingWarp = t.target; }
-        else if (t.type === 'menu') { showMessage(t.text); openMenu(t.target); }
+        else if (t.type === 'warp' || t.type === 'menu') { 
+            showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(Enterで開く)</span>"); 
+            pendingWarp = t.target; 
+        }
     }
 }
 
 // ==========================================
-// 7. UIとシーン管理
+// 7. UI・シーン・RPGメニュー管理
 // ==========================================
 function updateUI() {
     var tileX = Math.floor((player.x + player.w/2) / TILE_SIZE);
     var tileY = Math.floor((player.y + player.h/2) / TILE_SIZE);
-    var sceneNameMap = { 'station_plaza': '駅前広場', 'tourist_info_interior': '観光案内所', 'yumado_street_map': '湯窓通り', 'leisure_center_map': '湯窓レジャーセンター', 'tomogushi_alley_map': '灯串横丁' };
+    var sceneNameMap = { 'station_plaza': '駅前広場' };
+    if (DESTINATIONS[currentScene]) sceneNameMap[currentScene] = DESTINATIONS[currentScene].title;
     document.getElementById('scene-name').innerText = sceneNameMap[currentScene] || currentScene;
     if (debugMode) document.getElementById('coord-display').innerText = "現在座標: (" + tileX + ", " + tileY + ")";
 }
+
 function showMessage(text) { document.getElementById('message-window').innerHTML = text; document.getElementById('message-window').style.display = 'block'; isMessageOpen = true; }
 function closeMessage() { document.getElementById('message-window').style.display = 'none'; isMessageOpen = false; }
-function openMenu(menuId) {
-    var menuWin = document.getElementById('menu-window'); var html = '';
-    if (menuId === 'shinpo_board') {
-        html += '<div class="menu-item" onclick="handleMenuSelect(\'note\')">正解のないアプリばかり作っている</div>';
-        html += '<div class="menu-item" onclick="handleMenuSelect(\'note\')">湯窓レジャーセンターに新しい筐体</div>';
-        html += '<div class="menu-item" onclick="handleMenuSelect(\'note\')">灯串横丁、本日も営業中</div>';
-    }
-    html += '<div class="menu-item" style="color:#f88;" onclick="closeMenu()">閉じる</div>';
-    menuWin.innerHTML = html; menuWin.style.display = 'block'; isMenuOpen = true;
-}
-function closeMenu() { document.getElementById('menu-window').style.display = 'none'; isMenuOpen = false; }
-window.handleMenuSelect = function(type) { closeMenu(); showMessage((type === 'note') ? "この記事は準備中です。" : "この筐体は準備中です。"); };
 
+// ★ RPG共通メニューの生成と遷移
 window.changeScene = function(sceneId) {
-    currentScene = sceneId; updateUI(); var sceneContainer = document.getElementById('scene-container');
-    
-    // エリアロゴと案内を強制的に消す
+    currentScene = sceneId;
+    updateUI();
+
+    var sceneContainer = document.getElementById('scene-container');
     document.getElementById('area-title').classList.remove('visible');
     document.getElementById('interaction-hint').classList.remove('visible');
     document.getElementById('btn-action').innerText = "調べる";
 
-    if (sceneId === 'station_plaza') { sceneContainer.style.display = 'none'; updateInteractionHint(); updateCurrentArea(); return; }
-    var html = '';
-    if (sceneId === 'tourist_info_interior') html += '<h2>観光案内所</h2><p>パンフレットがある。</p><button onclick="handleMenuSelect(\'note\')">戻る</button>';
-    else if (sceneId === 'yumado_street_map') html += '<h2>湯窓通り</h2><p>商店街。</p>';
-    else if (sceneId === 'leisure_center_map') html += '<h2>湯窓レジャーセンター</h2><p>遊技場。</p><button onclick="handleMenuSelect(\'game\')">雨の日の窓</button>';
-    else if (sceneId === 'tomogushi_alley_map') html += '<h2>灯串横丁</h2><p>小さな横丁。</p><button onclick="handleMenuSelect(\'game\')">Yakitori Wars</button>';
-    html += '<br><button onclick="changeScene(\'station_plaza\')" style="margin-top:30px; background:#222;">駅前へ戻る</button>';
-    sceneContainer.innerHTML = html; sceneContainer.style.display = 'block';
+    if (sceneId === 'station_plaza') {
+        closeDestinationScene();
+        return;
+    }
+
+    openDestination(sceneId);
+};
+
+window.openDestination = function(destId) {
+    var dest = DESTINATIONS[destId];
+    if (!dest) return;
+
+    var html = '<div class="rpg-window">';
+    html += '<div class="rpg-window-header">';
+    html += '<div class="rpg-title">' + dest.title + '</div>';
+    if (dest.subtitle) html += '<div class="rpg-subtitle">' + dest.subtitle + '</div>';
+    html += '</div>';
+
+    if (dest.description) html += '<p class="rpg-description">' + dest.description + '</p>';
+    if (dest.flavor) html += '<p class="rpg-flavor">' + dest.flavor + '</p>';
+    if (dest.menuTitle) html += '<div class="rpg-menu-title">' + dest.menuTitle + '</div>';
+
+    html += '<div class="rpg-menu-list">';
+    for (var i = 0; i < dest.items.length; i++) {
+        var item = dest.items[i];
+        var btnClass = 'rpg-menu-item';
+        if (item.kind === 'back') btnClass += ' rpg-back';
+        
+        var label = item.label;
+        if (item.kind !== 'back') label = '▶ ' + label;
+        
+        html += '<button class="' + btnClass + '" onclick="handleDestinationItem(\'' + destId + '\', ' + i + ')">' + label + '</button>';
+    }
+    html += '</div></div>';
+
+    var sceneContainer = document.getElementById('scene-container');
+    sceneContainer.innerHTML = html;
+    sceneContainer.style.display = 'block';
+};
+
+function closeDestinationScene() {
+    var sceneContainer = document.getElementById('scene-container');
+    sceneContainer.style.display = 'none';
+    sceneContainer.innerHTML = '';
+    updateInteractionHint();
+    updateCurrentArea();
+}
+
+window.handleDestinationItem = function(destId, index) {
+    var dest = DESTINATIONS[destId];
+    if (!dest) return;
+    var item = dest.items[index];
+    if (!item) return;
+
+    if (item.kind === 'message') {
+        showMessage(item.text);
+    } else if (item.kind === 'external' || item.kind === 'work' || item.kind === 'game') {
+        if (item.url && item.url !== "") {
+            window.open(item.url, '_blank');
+        } else {
+            showMessage(item.emptyText);
+        }
+    } else if (item.kind === 'back') {
+        changeScene('station_plaza');
+    }
 };
 
 // ==========================================
@@ -636,36 +703,27 @@ function draw() {
 
         ctx.fillStyle = 'rgba(0, 120, 255, 0.25)';
         for (var y = 0; y < MAP_HEIGHT; y++) {
-            for (var x = 0; x < MAP_WIDTH; x++) {
-                if (collisionGrid[y][x] === 1) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
+            for (var x = 0; x < MAP_WIDTH; x++) { if (collisionGrid[y][x] === 1) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); }
         }
         ctx.fillStyle = 'rgba(255, 0, 0, 0.35)';
         for (var y = 0; y < MAP_HEIGHT; y++) {
-            for (var x = 0; x < MAP_WIDTH; x++) {
-                if (collisionGrid[y][x] === 2) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
+            for (var x = 0; x < MAP_WIDTH; x++) { if (collisionGrid[y][x] === 2) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); }
         }
 
         ctx.fillStyle = 'rgba(255, 230, 0, 0.45)';
         for (var k = 0; k < triggers.length; k++) ctx.fillRect(triggers[k].area.x * TILE_SIZE, triggers[k].area.y * TILE_SIZE, triggers[k].area.w * TILE_SIZE, triggers[k].area.h * TILE_SIZE);
 
-        // ★ 追加: デバッグ時の areaZones 表示
         for (var a = 0; a < areaZones.length; a++) {
             var z = areaZones[a].area;
-            ctx.fillStyle = 'rgba(180, 80, 255, 0.20)';
-            ctx.fillRect(z.x * TILE_SIZE, z.y * TILE_SIZE, z.w * TILE_SIZE, z.h * TILE_SIZE);
-            ctx.fillStyle = '#fff';
-            ctx.font = '10px sans-serif';
-            ctx.fillText(areaZones[a].title, z.x * TILE_SIZE + 2, z.y * TILE_SIZE + 10);
+            ctx.fillStyle = 'rgba(180, 80, 255, 0.20)'; ctx.fillRect(z.x * TILE_SIZE, z.y * TILE_SIZE, z.w * TILE_SIZE, z.h * TILE_SIZE);
+            ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.fillText(areaZones[a].title, z.x * TILE_SIZE + 2, z.y * TILE_SIZE + 10);
         }
 
         if (isEditMode) {
             if (editStep === 1 && currentHoverTile) {
                 var minX = Math.min(editStartX, currentHoverTile.x); var minY = Math.min(editStartY, currentHoverTile.y);
                 var w = Math.max(editStartX, currentHoverTile.x) - minX + 1; var h = Math.max(editStartY, currentHoverTile.y) - minY + 1;
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
-                ctx.fillRect(minX * TILE_SIZE, minY * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.4)'; ctx.fillRect(minX * TILE_SIZE, minY * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
             }
             if (currentHoverTile && editStep === 0 && editTarget === 'blockedPoints') {
                 ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.fillRect(currentHoverTile.x * TILE_SIZE, currentHoverTile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -691,6 +749,5 @@ function draw() {
             ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 1; ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
         }
     }
-
     ctx.restore();
 }
