@@ -49,13 +49,40 @@ body, html {
 #interaction-label { font-weight: bold; font-size: 15px; }
 #interaction-action { font-size: 12px; color: #ccc; background: rgba(255, 255, 255, 0.15); padding: 3px 8px; border-radius: 12px; }
 
-/* メッセージウィンドウ */
-#message-window {
-    position: absolute; bottom: calc(180px + env(safe-area-inset-bottom)); left: 20px; right: 20px;
-    background: rgba(10, 15, 30, 0.85); color: #fff; border: 2px solid #ccc; border-radius: 8px;
-    padding: 15px; font-size: 16px; line-height: 1.5; display: none; z-index: 250; cursor: pointer;
+/* バックドロップの追加(メッセージ表示中の背面操作ブロック) */
+#message-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.12);
+    display: none;
+    pointer-events: auto;
+    touch-action: none;
 }
 
+/* メッセージウィンドウのZ-indexとイベント整理 */
+#message-window {
+    position: fixed;
+    bottom: calc(180px + env(safe-area-inset-bottom));
+    left: 20px; right: 20px;
+    background: rgba(10, 15, 30, 0.85);
+    color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 16px;
+    line-height: 1.5;
+    display: none;
+    z-index: 90;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+/* scene-containerのZ-index整理 */
+#scene-container {
+    z-index: 50;
+}
 /* スマホ用コントローラー */
 #mobile-controls {
     position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left));
