@@ -49,10 +49,10 @@ body, html {
 #interaction-label { font-weight: bold; font-size: 15px; }
 #interaction-action { font-size: 12px; color: #ccc; background: rgba(255, 255, 255, 0.15); padding: 3px 8px; border-radius: 12px; }
 
-/* ★ 追加: メッセージ用バックドロップ */
+/* メッセージ用バックドロップ */
 #message-backdrop {
     position: fixed;
-    inset: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     z-index: 900;
     background: rgba(0, 0, 0, 0.12);
     display: none;
@@ -60,14 +60,24 @@ body, html {
     touch-action: none;
 }
 
-/* メッセージウィンドウ */
+/* メッセージウィンドウ (駅前マップ上での短い会話用) */
 #message-window {
     position: fixed;
     bottom: calc(180px + env(safe-area-inset-bottom));
-    left: 20px; right: 20px;
-    background: rgba(10, 15, 30, 0.85); color: #fff; border: 2px solid #ccc; border-radius: 8px;
-    padding: 15px; font-size: 16px; line-height: 1.5; display: none; z-index: 910; cursor: pointer;
-    pointer-events: auto; touch-action: none;
+    left: 20px;
+    right: 20px;
+    z-index: 910;
+    background: rgba(10, 15, 30, 0.85);
+    color: #fff;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 16px;
+    line-height: 1.5;
+    display: none;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
 }
 
 /* スマホ用コントローラー */
@@ -110,6 +120,7 @@ body, html {
     box-sizing: border-box; z-index: 200; overflow-y: auto;
 }
 
+/* RPGメニューウィンドウ (画面内に収めスクロール対応) */
 .rpg-window {
     background: rgba(15, 25, 40, 0.95);
     border: 2px solid #ddd;
@@ -121,6 +132,10 @@ body, html {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
     box-sizing: border-box;
     color: #eee;
+    
+    max-height: calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    pointer-events: auto;
 }
 
 .rpg-window-header {

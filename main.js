@@ -279,6 +279,12 @@ var tapMoveTargetTile = null;
 var tapMarkerTimer = 0;
 var tapMarkerPos = null;
 
+// ★ 新規追加: RPGメニュー用状態変数
+var destinationViewMode = "intro"; // "intro" | "menu" | "message"
+var currentDestinationId = null;
+var currentDestinationMessage = "";
+var currentDestinationMessageTitle = "";
+
 window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
@@ -448,7 +454,6 @@ function updateTapMove() {
     return true;
 }
 
-
 // ==========================================
 // 3. カメラ計算
 // ==========================================
@@ -565,13 +570,13 @@ function setupEvents() {
         if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
 
         if (isEditMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             handleEditorTap(tileX, tileY);
             return;
         }
 
         if (debugMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
+            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
             currentHoverTile = { x: tileX, y: tileY };
             return;
         }
@@ -588,7 +593,6 @@ function setupEvents() {
         currentHoverTile = { x: Math.floor(worldX / TILE_SIZE), y: Math.floor(worldY / TILE_SIZE) };
     });
 }
-
 
 function setupMessageLayerEvents() {
     var msgWin = document.getElementById('message-window');
@@ -618,7 +622,6 @@ function setupMessageLayerEvents() {
     }
 }
 
-
 function handleActionTrigger() {
     if (isEditMode) return;
 
@@ -630,7 +633,6 @@ function handleActionTrigger() {
             changeScene(target);
             return;
         }
-
         closeMessage();
         return;
     }
@@ -639,7 +641,6 @@ function handleActionTrigger() {
         handleAction();
     }
 }
-
 
 function toggleDebugMode() {
     var panel = document.getElementById('editor-panel');
@@ -832,7 +833,6 @@ function update() {
     }
 }
 
-
 function getPlayerHitbox(x, y) { return { x: x + 3, y: y + 10, w: 10, h: 6 }; }
 
 function checkCollision(x, y) {
@@ -940,7 +940,6 @@ function handleAction() {
     }
 }
 
-
 // ==========================================
 // 7. UI・シーン・RPGメニュー管理
 // ==========================================
@@ -953,11 +952,16 @@ function updateUI() {
     if (debugMode) document.getElementById('coord-display').innerText = "現在座標: (" + tileX + ", " + tileY + ")";
 }
 
+// ★ 追加: テキストフォーマットの共通化
+function formatText(text) {
+    return String(text || "").replace(/\n/g, "<br>");
+}
+
 function showMessage(text) {
     if (typeof cancelTapMove === "function") {
         cancelTapMove();
     }
-    var msg = String(text).replace(/\n/g, "<br>");
+    var msg = formatText(text);
     var msgWin = document.getElementById('message-window');
     var backdrop = document.getElementById('message-backdrop');
 
@@ -970,7 +974,6 @@ function showMessage(text) {
 
     isMessageOpen = true;
 }
-
 
 function closeMessage() { 
     var msgWin = document.getElementById('message-window');
@@ -989,6 +992,13 @@ function closeMessage() {
     }
 }
 
+function resetDestinationState() {
+    currentDestinationId = null;
+    destinationViewMode = "intro";
+    currentDestinationMessage = "";
+    currentDestinationMessageTitle = "";
+}
+
 // ★ RPG共通メニューの生成と遷移
 window.changeScene = function(sceneId) {
     currentScene = sceneId;
@@ -997,9 +1007,13 @@ window.changeScene = function(sceneId) {
     var sceneContainer = document.getElementById('scene-container');
     document.getElementById('area-title').classList.remove('visible');
     document.getElementById('interaction-hint').classList.remove('visible');
-    document.getElementById('btn-action').innerText = "調べる";
+    var btnAction = document.getElementById('btn-action');
+    if (btnAction) {
+        btnAction.innerText = "調べる";
+    }
 
     if (sceneId === 'station_plaza') {
+        resetDestinationState();
         closeDestinationScene();
         return;
     }
@@ -1008,35 +1022,104 @@ window.changeScene = function(sceneId) {
 };
 
 window.openDestination = function(destId) {
-    var dest = DESTINATIONS[destId];
+    currentDestinationId = destId;
+    destinationViewMode = "intro";
+    currentDestinationMessage = "";
+    currentDestinationMessageTitle = "";
+    renderDestination();
+};
+
+window.renderDestination = function() {
+    var dest = DESTINATIONS[currentDestinationId];
     if (!dest) return;
 
+    var html = "";
+    if (destinationViewMode === "intro") {
+        html = renderDestinationIntro(dest);
+    } else if (destinationViewMode === "menu") {
+        html = renderDestinationMenu(dest);
+    } else if (destinationViewMode === "message") {
+        html = renderDestinationMessage(dest, currentDestinationMessageTitle, currentDestinationMessage);
+    }
+
+    var sceneContainer = document.getElementById('scene-container');
+    sceneContainer.innerHTML = html;
+    sceneContainer.style.display = 'block';
+};
+
+window.renderDestinationIntro = function(dest) {
     var html = '<div class="rpg-window">';
     html += '<div class="rpg-window-header">';
     html += '<div class="rpg-title">' + dest.title + '</div>';
     if (dest.subtitle) html += '<div class="rpg-subtitle">' + dest.subtitle + '</div>';
     html += '</div>';
 
-    if (dest.description) html += '<p class="rpg-description">' + dest.description + '</p>';
-    if (dest.flavor) html += '<p class="rpg-flavor">' + dest.flavor + '</p>';
+    if (dest.description) html += '<p class="rpg-description">' + formatText(dest.description) + '</p>';
+    if (dest.flavor) html += '<p class="rpg-flavor">' + formatText(dest.flavor) + '</p>';
+
+    html += '<div class="rpg-menu-list">';
+    html += '<button class="rpg-menu-item" onclick="returnDestinationMenu()">▶ つづける</button>';
+    html += '<button class="rpg-menu-item rpg-back" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+    html += '</div></div>';
+
+    return html;
+};
+
+window.renderDestinationMenu = function(dest) {
+    var html = '<div class="rpg-window">';
+    html += '<div class="rpg-window-header">';
+    html += '<div class="rpg-title">' + dest.title + '</div>';
+    if (dest.subtitle) html += '<div class="rpg-subtitle">' + dest.subtitle + '</div>';
+    html += '</div>';
+
     if (dest.menuTitle) html += '<div class="rpg-menu-title">' + dest.menuTitle + '</div>';
 
     html += '<div class="rpg-menu-list">';
     for (var i = 0; i < dest.items.length; i++) {
         var item = dest.items[i];
         var btnClass = 'rpg-menu-item';
-        if (item.kind === 'back') btnClass += ' rpg-back';
         
-        var label = item.label;
-        if (item.kind !== 'back') label = '▶ ' + label;
-        
-        html += '<button class="' + btnClass + '" onclick="handleDestinationItem(\'' + destId + '\', ' + i + ')">' + label + '</button>';
+        if (item.kind === 'back') {
+            btnClass += ' rpg-back';
+            html += '<button class="' + btnClass + '" onclick="changeScene(\'station_plaza\')">' + item.label + '</button>';
+        } else {
+            var label = '▶ ' + item.label;
+            html += '<button class="' + btnClass + '" onclick="handleDestinationItem(\'' + dest.id + '\', ' + i + ')">' + label + '</button>';
+        }
     }
     html += '</div></div>';
 
-    var sceneContainer = document.getElementById('scene-container');
-    sceneContainer.innerHTML = html;
-    sceneContainer.style.display = 'block';
+    return html;
+};
+
+window.renderDestinationMessage = function(dest, title, text) {
+    var html = '<div class="rpg-window">';
+    html += '<div class="rpg-window-header">';
+    html += '<div class="rpg-title">' + title + '</div>';
+    html += '</div>';
+
+    html += '<p class="rpg-description">' + formatText(text) + '</p>';
+
+    html += '<div class="rpg-menu-list" style="margin-top: 20px;">';
+    html += '<button class="rpg-menu-item" onclick="returnDestinationMenu()">▶ 選択肢へ戻る</button>';
+    html += '<button class="rpg-menu-item rpg-back" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+    html += '</div></div>';
+
+    return html;
+};
+
+window.showDestinationMessage = function(title, text) {
+    destinationViewMode = "message";
+    currentDestinationMessageTitle = title;
+    currentDestinationMessage = text;
+    renderDestination();
+};
+
+window.returnDestinationMenu = function() {
+    destinationViewMode = "menu";
+    currentDestinationMessage = "";
+    currentDestinationMessageTitle = "";
+    renderDestination();
 };
 
 function closeDestinationScene() {
@@ -1048,23 +1131,28 @@ function closeDestinationScene() {
 }
 
 window.handleDestinationItem = function(destId, index) {
-    if (isMessageOpen) return;
-
     var dest = DESTINATIONS[destId];
     if (!dest) return;
     var item = dest.items[index];
     if (!item) return;
 
     if (item.kind === 'message') {
-        showMessage(item.text);
-    } else if (item.kind === 'external' || item.kind === 'work' || item.kind === 'game') {
+        showDestinationMessage(item.label, item.text);
+        return;
+    }
+    
+    if (item.kind === 'external' || item.kind === 'work' || item.kind === 'game') {
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
-            showMessage(item.emptyText);
+            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
         }
-    } else if (item.kind === 'back') {
+        return;
+    }
+    
+    if (item.kind === 'back') {
         changeScene('station_plaza');
+        return;
     }
 };
 
