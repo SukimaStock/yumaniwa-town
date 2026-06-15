@@ -1,225 +1,171 @@
 /* 全体のリセットと背景設定 */
 body, html {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #0a0a0a;
-    color: #fff;
-    font-family: sans-serif;
-    overflow: hidden;
-    touch-action: none;
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background-color: #0a0a0a; color: #fff; font-family: sans-serif;
+    overflow: hidden; touch-action: none;
 }
 
 #game-container {
-    position: relative;
-    width: 100vw;
-    height: 100dvh;
-    background-color: #111;
-    overflow: hidden;
+    position: relative; width: 100vw; height: 100dvh;
+    background-color: #111; overflow: hidden;
 }
 
 #game-canvas {
-    display: block;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    touch-action: none;
+    display: block; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none;
 }
 
 #ui-layer {
-    position: absolute;
-    top: max(10px, env(safe-area-inset-top));
-    left: max(10px, env(safe-area-inset-left));
-    pointer-events: none;
-    text-shadow: 1px 1px 2px #000;
-    z-index: 50;
+    position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left));
+    pointer-events: none; text-shadow: 1px 1px 2px #000; z-index: 50;
 }
 
-#scene-name {
-    font-weight: bold;
-    font-size: 18px;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
-#debug-info {
-    display: inline-block;
-    margin-top: 5px;
-    background: rgba(200, 0, 0, 0.6);
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
+#scene-name { font-weight: bold; font-size: 18px; background: rgba(0, 0, 0, 0.5); padding: 4px 8px; border-radius: 4px; }
+#debug-info { display: inline-block; margin-top: 5px; background: rgba(200, 0, 0, 0.6); padding: 4px 8px; border-radius: 4px; }
 #clicked-coord {
-    color: #ffaa00;
+    color: #ffaa00; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.8);
+    padding: 4px; border-radius: 4px; display: inline-block; margin-top: 5px;
+}
+
+/* ★ エリアロゴ演出 */
+#area-title {
+    position: absolute;
+    left: 50%;
+    top: max(20%, calc(20px + env(safe-area-inset-top)));
+    transform: translateX(-50%) translateY(15px);
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 70;
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+#area-title.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+#area-title-main {
+    font-size: 24px;
     font-weight: bold;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+}
+#area-title-sub {
     font-size: 14px;
-    background: rgba(0,0,0,0.8);
-    padding: 4px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-top: 5px;
+    color: #ddd;
+    letter-spacing: 1px;
+}
+
+/* ★ 近くの調べられる対象案内 */
+#interaction-hint {
+    position: absolute;
+    left: 50%;
+    bottom: calc(140px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(10px);
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(10, 16, 24, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+#interaction-hint.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+#interaction-label {
+    font-weight: bold;
+    font-size: 15px;
+}
+#interaction-action {
+    font-size: 12px;
+    color: #ccc;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 3px 8px;
+    border-radius: 12px;
 }
 
 #message-window {
-    position: absolute;
-    bottom: calc(140px + env(safe-area-inset-bottom));
-    left: 20px;
-    right: 20px;
-    background: rgba(10, 15, 30, 0.85);
-    color: #fff;
-    border: 2px solid #ccc;
-    border-radius: 8px;
-    padding: 15px;
-    font-size: 16px;
-    line-height: 1.5;
-    display: none;
-    z-index: 100;
+    position: absolute; bottom: calc(180px + env(safe-area-inset-bottom)); left: 20px; right: 20px;
+    background: rgba(10, 15, 30, 0.85); color: #fff; border: 2px solid #ccc; border-radius: 8px;
+    padding: 15px; font-size: 16px; line-height: 1.5; display: none; z-index: 100;
 }
 
 #menu-window {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(10, 15, 30, 0.95);
-    border: 2px solid #ccc;
-    border-radius: 8px;
-    padding: 10px;
-    display: none;
-    z-index: 110;
-    min-width: 250px;
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(10, 15, 30, 0.95); border: 2px solid #ccc; border-radius: 8px;
+    padding: 10px; display: none; z-index: 110; min-width: 250px;
 }
-
-.menu-item {
-    padding: 12px 20px;
-    cursor: pointer;
-    border-bottom: 1px solid #555;
-    text-align: center;
-}
+.menu-item { padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #555; text-align: center; }
 .menu-item:hover { background: rgba(255, 255, 255, 0.2); }
 .menu-item:last-child { border-bottom: none; }
 
 #scene-container {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: #1a1a1a;
-    color: #eee;
-    display: none;
-    padding: 30px;
-    padding-top: max(30px, env(safe-area-inset-top));
-    box-sizing: border-box;
-    z-index: 200;
-    overflow-y: auto;
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: #1a1a1a; color: #eee; display: none; padding: 30px;
+    padding-top: max(30px, env(safe-area-inset-top)); box-sizing: border-box; z-index: 200; overflow-y: auto;
 }
-
 #scene-container h2 { margin-top: 0; border-bottom: 2px solid #555; padding-bottom: 10px; }
 #scene-container button {
     background: #444; color: #fff; border: 1px solid #777; padding: 10px 20px;
-    margin: 5px 0; border-radius: 4px; cursor: pointer; font-size: 16px;
-    display: block; width: 100%; max-width: 300px;
+    margin: 5px 0; border-radius: 4px; cursor: pointer; font-size: 16px; display: block; width: 100%; max-width: 300px;
 }
 #scene-container button:hover { background: #666; }
 
 #mobile-controls {
-    position: absolute;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    left: max(10px, env(safe-area-inset-left));
-    right: max(10px, env(safe-area-inset-right));
-    height: 120px;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 10px;
-    pointer-events: none;
-    z-index: 80;
+    position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right)); height: 120px; display: flex; justify-content: space-between;
+    padding: 0 10px; pointer-events: none; z-index: 80;
 }
-
 #dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; }
 .dpad-btn {
     position: absolute; width: 40px; height: 40px; background: rgba(20, 20, 20, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; font-size: 16px;
-    display: flex; justify-content: center; align-items: center; color: white;
-    user-select: none; touch-action: none;
+    display: flex; justify-content: center; align-items: center; color: white; user-select: none; touch-action: none;
 }
 .dpad-btn:active { background: rgba(255, 255, 255, 0.4); }
-.up { top: 0; left: 40px; }
-.down { bottom: 0; left: 40px; }
-.left { top: 40px; left: 0; }
-.right { top: 40px; right: 40px; }
+.up { top: 0; left: 40px; } .down { bottom: 0; left: 40px; } .left { top: 40px; left: 0; } .right { top: 40px; right: 40px; }
 
 #action-btns { display: flex; align-items: flex-end; padding-bottom: 10px; }
 #btn-action {
-    pointer-events: auto; width: 70px; height: 70px; border-radius: 50%;
-    background: rgba(255, 100, 100, 0.6); border: 2px solid rgba(255, 150, 150, 0.6);
-    color: white; font-size: 14px; font-weight: bold; touch-action: none;
+    pointer-events: auto; width: 70px; height: 70px; border-radius: 50%; background: rgba(255, 100, 100, 0.6);
+    border: 2px solid rgba(255, 150, 150, 0.6); color: white; font-size: 14px; font-weight: bold; touch-action: none;
+    transition: background 0.2s, font-size 0.2s;
 }
 #btn-action:active { background: rgba(255, 100, 100, 0.9); }
 
 #btn-debug-toggle {
-    position: absolute;
-    top: max(10px, env(safe-area-inset-top));
-    right: max(10px, env(safe-area-inset-right));
-    background: rgba(50, 50, 50, 0.8);
-    color: #fff; border: 1px solid #aaa; border-radius: 6px;
-    padding: 10px 15px; font-size: 16px; font-weight: bold;
-    z-index: 300; cursor: pointer; touch-action: none;
+    position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
+    background: rgba(50, 50, 50, 0.8); color: #fff; border: 1px solid #aaa; border-radius: 6px;
+    padding: 10px 15px; font-size: 16px; font-weight: bold; z-index: 300; cursor: pointer; touch-action: none;
 }
 
 /* マップエディタパネル */
 #editor-panel {
-    position: absolute;
-    top: max(10px, env(safe-area-inset-top));
-    right: max(10px, env(safe-area-inset-right));
-    width: 280px;
-    background: rgba(20, 20, 25, 0.95);
-    border: 2px solid #666;
-    border-radius: 8px;
-    z-index: 350;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
+    width: 280px; background: rgba(20, 20, 25, 0.95); border: 2px solid #666; border-radius: 8px;
+    z-index: 350; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
-
-.editor-header {
-    background: #333;
-    padding: 10px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.editor-header button {
-    background: transparent; color: white; border: none; font-size: 16px; padding: 5px;
-}
-
+.editor-header { background: #333; padding: 10px; border-top-left-radius: 6px; border-top-right-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+.editor-header button { background: transparent; color: white; border: none; font-size: 16px; padding: 5px; }
 .editor-content { padding: 10px; font-size: 14px; }
 .editor-content label { display: block; margin-bottom: 8px; }
 .editor-content select, .editor-content input {
-    width: 100%; padding: 6px; margin-top: 4px;
-    background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
+    width: 100%; padding: 6px; margin-top: 4px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
 }
-
-.editor-actions {
-    display: flex; justify-content: space-between; margin-top: 15px;
-}
-.editor-actions button {
-    flex: 1; padding: 8px; border: none; border-radius: 4px; color: white; font-weight: bold; margin: 0 5px;
-}
+.editor-actions { display: flex; justify-content: space-between; margin-top: 15px; }
+.editor-actions button { flex: 1; padding: 8px; border: none; border-radius: 4px; color: white; font-weight: bold; margin: 0 5px; }
 
 /* Exportモーダル */
 #export-modal {
-    position: absolute;
-    top: 5%; left: 5%; right: 5%; bottom: 5%;
-    background: #111;
-    border: 2px solid #888;
-    border-radius: 8px;
-    z-index: 400;
-    display: flex;
-    flex-direction: column;
-    padding: 10px;
+    position: absolute; top: 5%; left: 5%; right: 5%; bottom: 5%; background: #111;
+    border: 2px solid #888; border-radius: 8px; z-index: 400; display: flex; flex-direction: column; padding: 10px;
 }
 .export-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
 .export-header button { background: #555; color: white; border: none; padding: 5px 10px; border-radius: 4px; }
@@ -227,8 +173,6 @@ body, html {
     flex: 1; width: 100%; background: #222; color: #0f0; border: 1px solid #555;
     padding: 10px; font-family: monospace; font-size: 12px; resize: none; user-select: all; box-sizing: border-box;
 }
-#btn-copy-export {
-    margin-top: 10px; background: #38f; color: white; border: none; padding: 15px; font-size: 16px; border-radius: 4px; font-weight: bold;
-}
+#btn-copy-export { margin-top: 10px; background: #38f; color: white; border: none; padding: 15px; font-size: 16px; border-radius: 4px; font-weight: bold; }
 
 @media (min-width: 769px) { #message-window { bottom: 20px; } }
