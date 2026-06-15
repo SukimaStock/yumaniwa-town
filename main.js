@@ -42,15 +42,16 @@ var blockedRects = [
 var blockedPoints = [];
 
 var triggers = [
-    { id: "station", label: "湯間庭駅", actionLabel: "調べる", area: { x: 23, y: 27, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。のんびりしたローカル線の小さな駅だ。町を歩いてみよう。" },
+    { id: "station", label: "湯間庭駅", actionLabel: "調べる", area: { x: 23, y: 27, w: 2, h: 1 }, type: "inspect", text: "湯間庭駅。\n\nのんびりしたローカル線の小さな駅だ。\nここから、湯気と看板の町歩きが始まる。" },
     { id: "tourist_info", label: "観光案内所", actionLabel: "入る", area: { x: 31, y: 13, w: 2, h: 1 }, type: "warp", target: "tourist_info_interior", text: "観光案内所に入りますか?" },
     { id: "yumado_street", label: "湯窓通り", actionLabel: "進む", area: { x: 38, y: 11, w: 6, h: 1 }, type: "warp", target: "yumado_street_map", text: "湯窓通りへ進みますか?" },
-    { id: "leisure_center", label: "湯窓レジャーセンター", actionLabel: "入る", area: { x: 42, y: 26, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?" },
+    { id: "leisure_center", label: "湯窓レジャーセンター", actionLabel: "入る", area: { x: 42, y: 26, w: 3, h: 1 }, type: "warp", target: "leisure_center_map", text: "湯窓レジャーセンターに入りますか?" },
     { id: "tomogushi_alley", label: "灯串横丁", actionLabel: "入る", area: { x: 4, y: 28, w: 3, h: 2 }, type: "warp", target: "tomogushi_alley_map", text: "灯串横丁へ入りますか?" },
-    { id: "newspaper_board", label: "湯間庭新報", actionLabel: "読む", area: { x: 5, y: 8, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?" },
-    { id: "tourist_map", label: "観光マップ", actionLabel: "調べる", area: { x: 16, y: 14, w: 5, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。" },
-    { id: "onsen_construction", label: "湯間庭温泉方面", actionLabel: "調べる", area: { x: 22, y: 6, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。現在整備中です。またのお越しをお待ちください。" }
+    { id: "newspaper_board", label: "湯間庭新報", actionLabel: "読む", area: { x: 5, y: 8, w: 4, h: 1 }, type: "menu", target: "shinpo_board", text: "湯間庭新報の掲示板だ。記事を読んでみますか?" },
+    { id: "tourist_map", label: "観光マップ", actionLabel: "調べる", area: { x: 16, y: 14, w: 5, h: 1 }, type: "inspect", text: "湯間庭観光マップだ。町の見どころが載っている。" },
+    { id: "onsen_construction", label: "湯間庭温泉方面", actionLabel: "調べる", area: { x: 22, y: 6, w: 4, h: 1 }, type: "inspect", text: "この先、湯間庭温泉。\n\n現在、石段と湯けむりの整備中です。\nもう少し町が広がったら、入れるようになるかもしれません。" }
 ];
+
 
 var areaZones = [
     { id: "station_plaza_center", title: "湯間庭駅前", subtitle: "Station Plaza", area: { x: 14, y: 15, w: 18, h: 10 } },
@@ -67,73 +68,184 @@ var DESTINATIONS = {
         id: "tourist_info_interior",
         title: "観光案内所",
         subtitle: "Information",
-        description: "木のカウンターの上に、手描きの地図と古いパンフレットが並んでいる。",
-        flavor: "係の人が、少し眠そうにこちらを見ている。",
-        menuTitle: "なにを見ますか?",
+        description: "木のカウンターの上に、手描きの地図と古いパンフレットが並んでいる。",
+        flavor: "係の人が、少し眠そうにこちらを見ている。",
+        menuTitle: "なにを見ますか？",
         items: [
-            { label: "湯間庭町について", kind: "message", text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。駅前から、商店街、横丁、レジャーセンターへ歩いて行けます。" },
-            { label: "現在行ける場所", kind: "message", text: "いま歩けるのは、湯間庭駅前、観光案内所、湯間庭新報、湯窓レジャーセンター、灯串横丁、湯窓通り入口です。湯間庭温泉方面は、現在整備中です。" },
-            { label: "SukimaStockについて", kind: "message", text: "SukimaStockは、この町の外側にある制作記録庫です。ここで見つけたものの多くは、そこから湯間庭町へ運び込まれています。" },
-            { label: "駅前へ戻る", kind: "back" }
+            {
+                label: "湯間庭町について",
+                kind: "message",
+                text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。駅前から、商店街、横丁、レジャーセンターへ歩いて行けます。まだ開いていない場所もありますが、町は少しずつ広がっていく予定です。"
+            },
+            {
+                label: "現在行ける場所",
+                kind: "message",
+                text: "いま歩けるのは、湯間庭駅前、観光案内所、湯間庭新報、湯窓レジャーセンター、灯串横丁、湯窓通り入口です。湯間庭温泉方面は、現在整備中です。"
+            },
+            {
+                label: "この町の作り手について",
+                kind: "message",
+                text: "この町は、SukimaStockの制作記録から少しずつ運び込まれたものたちでできています。アプリ、文章、ゲーム未満の小さな作品たちが、町の施設として並びはじめています。"
+            },
+            {
+                label: "更新履歴",
+                kind: "message",
+                text: "駅前広場を歩けるようになりました。観光案内、掲示板、レジャーセンター、横丁の入口が開きました。町内の案内表示とエリア名表示も追加されています。"
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
         ]
     },
     shinpo_board: {
         id: "shinpo_board",
         title: "湯間庭新報",
         subtitle: "Town Bulletin",
-        description: "掲示板には、町の知らせや読みものが何枚か貼られている。",
-        flavor: "紙の端が、風で少しだけ揺れている。",
-        menuTitle: "どの記事を読みますか?",
+        description: "掲示板には、町の知らせや読みものが何枚か貼られている。",
+        flavor: "紙の端が、風で少しだけ揺れている。",
+        menuTitle: "どの記事を読みますか？",
         items: [
-            { label: "正解のないアプリばかり作っている", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
-            { label: "コードが読めないと作れない、は本当だろうか", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
-            { label: "ゲーム未満、アプリ未満の心地よさ", kind: "external", url: "", emptyText: "この記事はまだ掲示準備中です。" },
-            { label: "駅前へ戻る", kind: "back" }
+            {
+                label: "正解のないアプリばかり作っている",
+                kind: "external",
+                url: "",
+                emptyText: "この記事はまだ掲示準備中です。掲示板には、白い押しピンだけが残っている。"
+            },
+            {
+                label: "コードが読めないと作れない、は本当だろうか",
+                kind: "external",
+                url: "",
+                emptyText: "この記事はまだ掲示準備中です。掲示板には、白い押しピンだけが残っている。"
+            },
+            {
+                label: "ゲーム未満、アプリ未満の心地よさ",
+                kind: "external",
+                url: "",
+                emptyText: "この記事はまだ掲示準備中です。掲示板には、白い押しピンだけが残っている。"
+            },
+            {
+                label: "Yakitori Wars おいしさアップデート",
+                kind: "external",
+                url: "",
+                emptyText: "この記事はまだ掲示準備中です。掲示板には、白い押しピンだけが残っている。"
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
         ]
     },
     leisure_center_map: {
         id: "leisure_center_map",
-        title: "湯窓レジャーセンター",
+        title: "湯窓レジャーセンター",
         subtitle: "Playable Works",
-        description: "少し古びた遊技場。奥の筐体から、小さな光と音がこぼれている。",
-        flavor: "入口近くの看板には『さわれるらくがき、稼働中』と書かれている。",
-        menuTitle: "どの筐体で遊びますか?",
+        description: "少し古びた遊技場。奥の筐体から、小さな光と音がこぼれている。",
+        flavor: "入口近くの看板には『さわれるらくがき、稼働中』と書かれている。",
+        menuTitle: "どの筐体で遊びますか？",
         items: [
-            { label: "雨の日の窓", kind: "work", url: "", emptyText: "この筐体は現在調整中です。ガラスの向こうで雨音だけが聞こえます。" },
-            { label: "絶対に押せないボタン", kind: "work", url: "", emptyText: "この筐体は現在調整中です。ボタンだけが、こちらを警戒しています。" },
-            { label: "通知バッジ増殖", kind: "work", url: "", emptyText: "この筐体は現在調整中です。赤い丸が、まだ眠っています。" },
-            { label: "誰かの歩数計", kind: "work", url: "", emptyText: "この筐体は現在調整中です。小さな数字だけが、ときどき動きます。" },
-            { label: "駅前へ戻る", kind: "back" }
+            {
+                label: "雨の日の窓",
+                kind: "work",
+                url: "",
+                emptyText: "この筐体は現在調整中です。ガラスの向こうで、雨音だけが聞こえます。"
+            },
+            {
+                label: "絶対に押せないボタン",
+                kind: "work",
+                url: "",
+                emptyText: "この筐体は現在調整中です。ボタンだけが、こちらを警戒しています。"
+            },
+            {
+                label: "通知バッジ増殖",
+                kind: "work",
+                url: "",
+                emptyText: "この筐体は現在調整中です。赤い丸が、まだ眠っています。"
+            },
+            {
+                label: "誰かの歩数計",
+                kind: "work",
+                url: "",
+                emptyText: "この筐体は現在調整中です。小さな数字だけが、ときどき動きます。"
+            },
+            {
+                label: "Fast-Forward Clock",
+                kind: "work",
+                url: "",
+                emptyText: "この筐体は現在調整中です。針だけが、少し先の時間を見ているようです。"
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
         ]
     },
     tomogushi_alley_map: {
         id: "tomogushi_alley_map",
         title: "灯串横丁",
         subtitle: "Yakitori Alley",
-        description: "提灯の灯りが続く小さな横丁。奥に、串焼き勝負台が置かれている。",
-        flavor: "炭のにおいと、誰かの笑い声が路地の奥から流れてくる。",
-        menuTitle: "どこへ向かいますか?",
+        description: "提灯の灯りが続く小さな横丁。奥に、串焼き勝負台が置かれている。",
+        flavor: "炭のにおいと、誰かの笑い声が路地の奥から流れてくる。",
+        menuTitle: "どこへ向かいますか？",
         items: [
-            { label: "串焼き勝負台:Yakitori Wars", kind: "game", url: "", emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。" },
-            { label: "本日の注文札", kind: "message", text: "本日の注文札には『ねぎま、つくね、かわ。焼きすぎ注意』と書かれている。" },
-            { label: "駅前へ戻る", kind: "back" }
+            {
+                label: "串焼き勝負台：Yakitori Wars",
+                kind: "game",
+                url: "",
+                emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。"
+            },
+            {
+                label: "本日の注文札",
+                kind: "message",
+                text: "本日の注文札には、\n\n『ねぎま、つくね、かわ。\n焼きすぎ注意』\n\nと書かれている。"
+            },
+            {
+                label: "灯串横丁について",
+                kind: "message",
+                text: "灯串横丁は、駅前のはずれにある小さな横丁です。まだ店は多くありませんが、夕方になると提灯が灯り、どこからか焼き鳥のにおいがしてきます。"
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
         ]
     },
     yumado_street_map: {
         id: "yumado_street_map",
         title: "湯窓通り",
         subtitle: "Shopping Street",
-        description: "湯気の向こうに、小さな店の看板が並んでいる。",
-        flavor: "まだ開いていない店も多いが、通りの奥には少しだけ気配がある。",
-        menuTitle: "どこを見ますか?",
+        description: "湯気の向こうに、小さな店の看板が並んでいる。",
+        flavor: "まだ開いていない店も多いが、通りの奥には少しだけ気配がある。",
+        menuTitle: "どこを見ますか？",
         items: [
-            { label: "喫茶まどべ", kind: "message", text: "窓際の席がよさそうな小さな喫茶店。まだ準備中の札がかかっている。" },
-            { label: "湯まんじゅう屋", kind: "message", text: "蒸し器から白い湯気が上がっている。開店までもう少しらしい。" },
-            { label: "古道具屋", kind: "message", text: "入口の箱に、古いボタンや謎の部品が並んでいる。" },
-            { label: "駅前へ戻る", kind: "back" }
+            {
+                label: "喫茶まどべ",
+                kind: "message",
+                text: "窓際の席がよさそうな小さな喫茶店。まだ準備中の札がかかっている。"
+            },
+            {
+                label: "湯まんじゅう屋",
+                kind: "message",
+                text: "蒸し器から白い湯気が上がっている。開店までもう少しらしい。"
+            },
+            {
+                label: "古道具屋",
+                kind: "message",
+                text: "入口の箱に、古いボタンや謎の部品が並んでいる。何に使うものかは分からないが、少しだけ気になる。"
+            },
+            {
+                label: "まだ閉まっている店",
+                kind: "message",
+                text: "シャッターの奥から、小さな物音がした気がする。この通りは、まだ少しずつ準備をしている。"
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
         ]
     }
 };
+
 
 // ==========================================
 // 2. 状態管理・初期化
@@ -582,13 +694,16 @@ function showAreaTitle(zone) {
 function handleAction() {
     var t = getNearbyTrigger();
     if (t) {
-        if (t.type === 'inspect') showMessage(t.text);
-        else if (t.type === 'warp' || t.type === 'menu') { 
-            showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(Enterで開く)</span>"); 
+        if (t.type === 'inspect') {
+            showMessage(t.text);
+        } else if (t.type === 'warp' || t.type === 'menu') {
+            var actionName = t.actionLabel || "調べる";
+            showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(もう一度「" + actionName + "」で開く)</span>"); 
             pendingWarp = t.target; 
         }
     }
 }
+
 
 // ==========================================
 // 7. UI・シーン・RPGメニュー管理
@@ -602,7 +717,13 @@ function updateUI() {
     if (debugMode) document.getElementById('coord-display').innerText = "現在座標: (" + tileX + ", " + tileY + ")";
 }
 
-function showMessage(text) { document.getElementById('message-window').innerHTML = text; document.getElementById('message-window').style.display = 'block'; isMessageOpen = true; }
+function showMessage(text) {
+    var msg = String(text).replace(/\n/g, "<br>");
+    document.getElementById('message-window').innerHTML = msg;
+    document.getElementById('message-window').style.display = 'block';
+    isMessageOpen = true;
+}
+
 function closeMessage() { document.getElementById('message-window').style.display = 'none'; isMessageOpen = false; }
 
 // ★ RPG共通メニューの生成と遷移
