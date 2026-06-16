@@ -148,49 +148,49 @@ var triggers = [
         text: "この先、湯間庭温泉。\n\n現在、石段と湯けむりの整備中です。\nもう少し町が広がったら、入れるようになるかもしれません。"
     },
     {
-        id: "Kanban1", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban1", label: "看板", actionLabel: "調べる",
         area: { x: 10, y: 9, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
         text: "「急がば回れ」と書いてある。"
     },
     {
-        id: "Kanban2", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban2", label: "ポスター", actionLabel: "調べる",
         area: { x: 26, y: 14, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
         text: "「湯間庭まつり」のポスターだ。"
     },
     {
-        id: "Kanban3", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban3", label: "看板", actionLabel: "調べる",
         area: { x: 29, y: 16, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
         text: "「観光案内所」はこちら"
     },
     {
-        id: "Kanban4", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban4", label: "ポスター", actionLabel: "調べる",
         area: { x: 13, y: 22, w: 1, h: 2 },
         type: "inspect",
         target: "看板",
         text: "来月、新しいカフェがオープン予定らしい。"
     },
     {
-        id: "Kanban5", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban5", label: "ポスター", actionLabel: "調べる",
         area: { x: 38, y: 28, w: 2, h: 1 },
         type: "inspect",
         target: "看板",
         text: "「うれしい！たのしい！湯窓レジャーセンター！」と書いてある。"
     },
     {
-        id: "Kanban6", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban6", label: "貼り紙", actionLabel: "調べる",
         area: { x: 26, y: 28, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "電車はたまにしか来ないらしい"
+        text: "電車はめったに来ないらしい"
     },
     {
-        id: "Kanban7", label: "新規トリガー", actionLabel: "調べる",
+        id: "Kanban7", label: "ポスター", actionLabel: "調べる",
         area: { x: 8, y: 28, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
