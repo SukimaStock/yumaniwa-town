@@ -1,0 +1,176 @@
+// ==========================================
+// 湯間庭町 / 施設と固定文章
+// 施設の世界観や固定メニューはここで管理します。
+// 新しい作品・記事・更新履歴は他の data ファイルだけを触ります。
+// ==========================================
+
+var DESTINATIONS = {
+    tourist_info_interior: {
+        id: "tourist_info_interior",
+        title: "観光案内所",
+        subtitle: "Information",
+        description: "木のカウンターの上に、手描きの地図と古いパンフレットが並んでいる。",
+        flavor: "係の人が、少し眠そうにこちらを見ている。",
+        menuTitle: "なにを見ますか?",
+        items: [
+            {
+                label: "湯間庭町について",
+                kind: "message",
+                text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。駅前から、商店街、横丁、レジャーセンターへ歩いて行けます。まだ開いていない場所もありますが、町は少しずつ広がっていく予定です。"
+            },
+            {
+                label: "現在行ける場所",
+                kind: "message",
+                text: "いま歩けるのは、湯間庭駅前、観光案内所、湯間庭新報、湯窓レジャーセンター、灯串横丁、湯窓通り入口です。湯間庭温泉方面は、現在整備中です。"
+            },
+            {
+                label: "この町の作り手について",
+                kind: "message",
+                text: "この町は、SukimaStockの制作記録から少しずつ運び込まれたものたちでできています。アプリ、文章、ゲーム未満の小さな作品たちが、町の施設として並びはじめています。"
+            },
+            {
+                label: "更新履歴",
+                kind: "message",
+                text: ""
+            },
+            {
+                label: "駅前へ戻る",
+                kind: "back"
+            }
+        ]
+    },
+    shinpo_board: {
+        id: "shinpo_board",
+        title: "湯間庭新報",
+        subtitle: "Town Bulletin",
+        description: "掲示板には、その日ごとに違う読みものが何枚か貼られている。",
+        flavor: "紙の端が、風で少しだけ揺れている。",
+        menuTitle: "今日はどの記事を読みますか?",
+        items: []
+    },
+    leisure_center_map: {
+        id: "leisure_center_map",
+        title: "湯窓レジャーセンター",
+        subtitle: "Playable Works",
+        description: "少し古びた遊技場。奥の筐体から、小さな光と音がこぼれている。",
+        flavor: "入口近くの看板には『さわれるらくがき、稼働中』と書かれている。",
+        menuTitle: "どの筐体で遊びますか?",
+        items: []
+    },
+    tomogushi_alley_map: {
+        id: "tomogushi_alley_map",
+        title: "灯串横丁",
+        subtitle: "Yakitori Alley",
+        description: "提灯の灯りが続く小さな横丁。奥に、串焼き勝負台が置かれている。",
+        flavor: "炭のにおいと、誰かの笑い声が路地の奥から流れてくる。",
+        menuTitle: "どこへ向かいますか?",
+        items: []
+    },
+    yumado_street_map: {
+        id: "yumado_street_map",
+        title: "湯窓通り",
+        subtitle: "Shopping Street",
+        description: "湯気の向こうに、小さな店の看板が並んでいる。",
+        flavor: "まだ開いていない店も多いが、通りの奥には少しだけ気配がある。",
+        menuTitle: "どこを見ますか?",
+        items: [
+            { label: "喫茶まどべ", kind: "message", text: "窓際の席がよさそうな小さな喫茶店。まだ準備中の札がかかっている。" },
+            { label: "湯まんじゅう屋", kind: "message", text: "蒸し器から白い湯気が上がっている。開店までもう少しらしい。" },
+            { label: "古道具屋", kind: "message", text: "入口の箱に、古いボタンや謎の部品が並んでいる。何に使うものかは分からないが、少しだけ気になる。" },
+            { label: "まだ閉まっている店", kind: "message", text: "シャッターの奥から、小さな物音がした気がする。この通りは、まだ少しずつ準備をしている。" },
+            { label: "駅前へ戻る", kind: "back" }
+        ]
+    }
+};
+
+function sortNotesNewestFirst(articles) {
+    return articles.slice().sort(function(a, b) {
+        var aDate = getNotePublishDate(a);
+        var bDate = getNotePublishDate(b);
+        if (aDate < bDate) return 1;
+        if (aDate > bDate) return -1;
+        return 0;
+    });
+}
+
+function shuffleCopy(items) {
+    var copy = items.slice();
+    for (var i = copy.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = temp;
+    }
+    return copy;
+}
+
+function buildShinpoBoardItems(count) {
+    var maxCount = count || 5;
+    var articles = sortNotesNewestFirst(getVisibleNoteArticles());
+    var featured = [];
+    var newest = [];
+    var remaining = [];
+
+    for (var i = 0; i < articles.length; i++) {
+        if (articles[i].featured) featured.push(articles[i]);
+        else if (newest.length < 2) newest.push(articles[i]);
+        else remaining.push(articles[i]);
+    }
+
+    var picked = featured.concat(newest);
+    var mixed = shuffleCopy(remaining);
+    for (var j = 0; picked.length < maxCount && j < mixed.length; j++) {
+        picked.push(mixed[j]);
+    }
+
+    var items = [];
+    for (var k = 0; k < picked.length; k++) {
+        items.push({
+            label: picked[k].title,
+            kind: "external",
+            url: picked[k].url,
+            emptyText: "この記事はまだ掲示準備中です。掲示板には、白い押しピンだけが残っている。"
+        });
+    }
+    items.push({ label: "駅前へ戻る", kind: "back" });
+    return items;
+}
+
+function refreshShinpoBoard() {
+    if (!DESTINATIONS.shinpo_board) return;
+    DESTINATIONS.shinpo_board.items = buildShinpoBoardItems(5);
+}
+
+function refreshTownContent() {
+    refreshShinpoBoard();
+
+    if (DESTINATIONS.tourist_info_interior) {
+        var infoItems = DESTINATIONS.tourist_info_interior.items;
+        for (var i = 0; i < infoItems.length; i++) {
+            if (infoItems[i].label === "更新履歴") {
+                infoItems[i].text = buildTownUpdateHistoryText(6);
+            }
+        }
+    }
+
+    if (DESTINATIONS.leisure_center_map) {
+        DESTINATIONS.leisure_center_map.items = buildWorkMenuItems("leisure_center");
+        DESTINATIONS.leisure_center_map.items.push({ label: "駅前へ戻る", kind: "back" });
+    }
+
+    if (DESTINATIONS.tomogushi_alley_map) {
+        var alleyItems = buildWorkMenuItems("tomogushi_alley");
+        alleyItems.push({
+            label: "本日の注文札",
+            kind: "message",
+            text: "本日の注文札には、\n\n『ねぎま、つくね、かわ。\n焼きすぎ注意』\n\nと書かれている。"
+        });
+        alleyItems.push({
+            label: "灯串横丁について",
+            kind: "message",
+            text: "灯串横丁は、駅前のはずれにある小さな横丁です。まだ店は多くありませんが、夕方になると提灯が灯り、どこからか焼き鳥のにおいがしてきます。"
+        });
+        alleyItems.push({ label: "駅前へ戻る", kind: "back" });
+        DESTINATIONS.tomogushi_alley_map.items = alleyItems;
+    }
+}
