@@ -691,6 +691,8 @@ var currentScene = 'station_plaza';
 var isMessageOpen = false;
 var pendingWarp = null;
 
+// 開発モードを戻すときは、この値だけ true にしてください。
+var DEV_MODE_ENABLED = false;
 var debugMode = false;
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
@@ -742,10 +744,27 @@ function updateControlVisibility() {
     }
 }
 
+function applyDeveloperModeVisibility() {
+    if (DEV_MODE_ENABLED) return;
+
+    var panel = document.getElementById('editor-panel');
+    var button = document.getElementById('btn-debug-toggle');
+    var info = document.getElementById('debug-info');
+
+    if (panel) panel.style.display = 'none';
+    if (button) button.style.display = 'none';
+    if (info) info.style.display = 'none';
+
+    debugMode = false;
+    isEditMode = false;
+}
+
+
 
 window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
+    applyDeveloperModeVisibility();
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
@@ -940,7 +959,7 @@ function getCamera() {
 function setupEvents() {
     window.addEventListener('keydown', function(e) {
         keys[e.key] = true;
-        if (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D') toggleDebugMode();
+        if (DEV_MODE_ENABLED && (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D')) toggleDebugMode();
         if (e.key === 'Escape') {
             closeMessage();
             if (currentScene !== 'station_plaza') changeScene('station_plaza');
@@ -1018,7 +1037,7 @@ function setupEvents() {
     }
 
     var btnDebug = document.getElementById('btn-debug-toggle');
-    if (btnDebug) {
+    if (DEV_MODE_ENABLED && btnDebug) {
         btnDebug.addEventListener('pointerdown', stopProp);
         btnDebug.addEventListener('touchstart', function(e) { 
             e.preventDefault(); 
@@ -1137,6 +1156,8 @@ function handleActionTrigger() {
 }
 
 function toggleDebugMode() {
+    if (!DEV_MODE_ENABLED) return;
+
     var panel = document.getElementById('editor-panel');
     var btn = document.getElementById('btn-debug-toggle');
     if (panel.style.display === 'none') {
@@ -1158,7 +1179,7 @@ function toggleDebugMode() {
 function setupEditorEvents() {
     document.getElementById('btn-close-editor').addEventListener('click', function() {
         document.getElementById('editor-panel').style.display = 'none';
-        document.getElementById('btn-debug-toggle').style.display = 'block';
+        document.getElementById('btn-debug-toggle').style.display = DEV_MODE_ENABLED ? 'block' : 'none';
         isEditMode = false; debugMode = false;
         document.getElementById('debug-info').style.display = 'none';
         editStep = 0; currentHoverTile = null;
