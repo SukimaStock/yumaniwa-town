@@ -1,103 +1,101 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>湯間庭町 駅前プロトタイプ</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>湯間庭町</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-        
-        <div id="ui-layer">
-            <div id="info-display">
-                <span id="scene-name">駅前広場</span><br>
-                <span id="debug-info" style="display: none;">
-                    <span id="coord-display">現在座標: (24, 22)</span><br>
-                    <span id="clicked-coord">タップ座標: --</span>
-                </span>
-            </div>
-        </div>
+  <div id="game-container">
+    <canvas id="game-canvas" aria-label="湯間庭町"></canvas>
 
-        <div id="area-title">
-            <div id="area-title-main"></div>
-            <div id="area-title-sub"></div>
-        </div>
-
-        <div id="interaction-hint">
-            <div id="interaction-label"></div>
-            <div id="interaction-action"></div>
-        </div>
-
-        <div id="message-backdrop"></div>
-        <div id="message-window"></div>
-
-        <div id="scene-container"></div>
-
-        <div id="mobile-controls">
-            <div id="dpad">
-                <div id="btn-up" class="dpad-btn up">▲</div>
-                <div id="btn-left" class="dpad-btn left">◀</div>
-                <div id="dpad-center"></div>
-                <div id="btn-right" class="dpad-btn right">▶</div>
-                <div id="btn-down" class="dpad-btn down">▼</div>
-            </div>
-
-            <div id="action-btns">
-                <button id="btn-action">調べる</button>
-            </div>
-        </div>
-
-        <button id="btn-debug-toggle">🔧 開発</button>
-
-        <div id="editor-panel" style="display: none;">
-            <div class="editor-header">
-                <strong>マップエディタ</strong>
-                <button id="btn-close-editor">✖</button>
-            </div>
-            <div class="editor-content">
-                <label>編集対象:
-                    <select id="edit-target">
-                        <option value="passableRects">通行可能エリア(青)</option>
-                        <option value="blockedRects">通行不可エリア(赤矩形)</option>
-                        <option value="blockedPoints">通行不可ポイント(赤点)</option>
-                        <option value="triggers">トリガー(黄)</option>
-                    </select>
-                </label>
-
-                <div id="trigger-form" style="display: none; border-top: 1px solid #555; padding-top: 10px; margin-top: 10px;">
-                    <label>種類:
-                        <select id="trigger-type">
-                            <option value="inspect">調べる(inspect)</option>
-                            <option value="warp">移動(warp)</option>
-                            <option value="menu">メニュー(menu)</option>
-                        </select>
-                    </label>
-                    <label>ID: <input type="text" id="trigger-id" value="new_trigger"></label>
-                    <label>テキスト: <input type="text" id="trigger-text" value="ここを調べた"></label>
-                    <label>ターゲット(ID): <input type="text" id="trigger-target" value=""></label>
-                </div>
-
-                <div class="editor-actions">
-                    <button id="btn-editor-undo" style="background: #a55;">1つ戻す(Undo)</button>
-                    <button id="btn-editor-export" style="background: #5a5;">Export出力</button>
-                </div>
-                <div id="editor-status" style="margin-top: 10px; color: #ffaa00; font-size: 12px;">編集対象を選んでタップしてください</div>
-            </div>
-        </div>
-
-        <div id="export-modal" style="display: none;">
-            <div class="export-header">
-                <strong>Export Data</strong>
-                <button id="btn-close-export">閉じる</button>
-            </div>
-            <textarea id="export-textarea" readonly></textarea>
-            <button id="btn-copy-export">コピーする</button>
-        </div>
-
+    <div id="ui-layer">
+      <div id="scene-name">駅前広場</div>
+      <div id="debug-info" style="display:none;">
+        <div id="coord-display">現在座標: (-, -)</div>
+        <div id="clicked-coord">タップ: x=-, y=-</div>
+      </div>
     </div>
-    
-    <script src="main.js"></script>
+
+    <div id="area-title">
+      <div id="area-title-main"></div>
+      <div id="area-title-sub"></div>
+    </div>
+
+    <button id="interaction-hint" type="button" aria-label="近くを調べる">
+      <span id="interaction-label"></span>
+      <span id="interaction-action"></span>
+    </button>
+
+    <div id="message-backdrop"></div>
+    <div id="message-window" role="dialog" aria-live="polite"></div>
+    <div id="scene-container"></div>
+
+    <div id="mobile-controls">
+      <div id="dpad" aria-label="移動コントローラー">
+        <button id="btn-up" class="dpad-btn up" type="button" aria-label="上へ">▲</button>
+        <button id="btn-left" class="dpad-btn left" type="button" aria-label="左へ">◀</button>
+        <button id="btn-right" class="dpad-btn right" type="button" aria-label="右へ">▶</button>
+        <button id="btn-down" class="dpad-btn down" type="button" aria-label="下へ">▼</button>
+      </div>
+      <div id="action-btns">
+        <button id="btn-action" type="button">調べる</button>
+      </div>
+    </div>
+
+    <button id="btn-debug-toggle" type="button">開発</button>
+
+    <div id="editor-panel" style="display:none;">
+      <div class="editor-header">
+        <strong>マップ編集</strong>
+        <button id="btn-close-editor" type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="editor-content">
+        <label>編集対象
+          <select id="edit-target">
+            <option value="passableRects">通行可能エリア</option>
+            <option value="blockedRects">通行不可エリア</option>
+            <option value="blockedPoints">通行不可ポイント</option>
+            <option value="triggers">調べる場所</option>
+          </select>
+        </label>
+        <div id="trigger-form" style="display:none;">
+          <label>種類
+            <select id="trigger-type">
+              <option value="inspect">調べる</option>
+              <option value="warp">移動する</option>
+              <option value="menu">メニューを開く</option>
+            </select>
+          </label>
+          <label>ID <input id="trigger-id" type="text" value="new_trigger"></label>
+          <label>遷移先 <input id="trigger-target" type="text" value=""></label>
+          <label>文章 <input id="trigger-text" type="text" value="新しい場所です。"></label>
+        </div>
+        <div id="editor-status">編集対象を選んでタップしてください</div>
+        <div class="editor-actions">
+          <button id="btn-editor-undo" type="button">Undo</button>
+          <button id="btn-editor-export" type="button">書き出す</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="export-modal" style="display:none;">
+      <div class="export-header">
+        <strong>マップ設定を書き出す</strong>
+        <button id="btn-close-export" type="button">閉じる</button>
+      </div>
+      <textarea id="export-textarea" spellcheck="false"></textarea>
+      <button id="btn-copy-export" type="button">コピーする</button>
+    </div>
+  </div>
+
+  <script src="./data/station-plaza.js"></script>
+  <script src="./data/notes.js"></script>
+  <script src="./data/works.js"></script>
+  <script src="./data/updates.js"></script>
+  <script src="./data/places.js"></script>
+  <script src="./main.js"></script>
 </body>
 </html>
