@@ -87,21 +87,43 @@ function applyDeveloperModeVisibility() {
 }
 
 function setupTouchSelectionGuards() {
-    document.addEventListener("selectstart", function(e) {
-        var target = e.target;
-        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-        e.preventDefault();
-    });
+    var gameTouchSelector =
+        "#game-canvas, #mobile-controls, #interaction-hint, " +
+        "#message-window, #message-backdrop";
 
-    document.addEventListener("dragstart", function(e) {
-        e.preventDefault();
-    });
+    function isEditableTarget(target) {
+        return (
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLSelectElement ||
+            (target && target.isContentEditable)
+        );
+    }
 
-    document.addEventListener("contextmenu", function(e) {
-        var target = e.target;
-        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-        e.preventDefault();
-    });
+    function isGameTouchTarget(target) {
+        if (!target || isEditableTarget(target)) return false;
+        if (!target.closest) return false;
+
+        return !!target.closest(gameTouchSelector);
+    }
+
+    function blockNativeGameTouch(e) {
+        if (isGameTouchTarget(e.target)) {
+            e.preventDefault();
+        }
+    }
+
+    document.addEventListener("selectstart", blockNativeGameTouch);
+
+    document.addEventListener("dragstart", blockNativeGameTouch);
+
+    document.addEventListener("contextmenu", blockNativeGameTouch);
+
+    document.addEventListener(
+        "touchstart",
+        blockNativeGameTouch,
+        { passive: false }
+    );
 }
 
 
