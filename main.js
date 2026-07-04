@@ -744,6 +744,66 @@ function updateControlVisibility() {
     }
 }
 
+function setupTouchSelectionGuards() {
+    var style = document.createElement("style");
+
+    style.textContent = `
+        html,
+        body,
+        #game-canvas,
+        #mobile-controls,
+        #interaction-hint,
+        #message-layer,
+        #scene-container,
+        button {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        input,
+        textarea {
+            -webkit-user-select: text;
+            user-select: text;
+            -webkit-touch-callout: default;
+        }
+    `;
+
+    document.head.appendChild(style);
+
+    document.addEventListener("selectstart", function(e) {
+        var target = e.target;
+
+        if (
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement
+        ) {
+            return;
+        }
+
+        e.preventDefault();
+    });
+
+    document.addEventListener("dragstart", function(e) {
+        e.preventDefault();
+    });
+
+    document.addEventListener("contextmenu", function(e) {
+        var target = e.target;
+
+        if (
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement
+        ) {
+            return;
+        }
+
+        e.preventDefault();
+    });
+}
+
+
 function applyDeveloperModeVisibility() {
     if (DEV_MODE_ENABLED) return;
 
@@ -765,6 +825,7 @@ window.onload = function() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
     applyDeveloperModeVisibility();
+    setupTouchSelectionGuards();
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
