@@ -109,14 +109,22 @@ function getWorkPlayerReturnLabel(work) {
     }
 
     if (work && work.venue === "tomogushi_alley") {
-        return "灯串横丁へ戻る";
+        return "灯串横丁";
     }
 
     if (work && work.venue === "leisure_center") {
-        return "レジャーセンターへ戻る";
+        return "湯窓レジャーセンター";
     }
 
-    return "町へ戻る";
+    return "町";
+}
+
+function getWorkPlayerFrameTitle(work) {
+    if (work && work.frameTitle) {
+        return work.frameTitle;
+    }
+
+    return (work && work.title) || "湯間庭町";
 }
 
 
@@ -1367,6 +1375,7 @@ window.openWorkPlayer = function(work) {
     var frame = document.getElementById("work-player-frame");
     var title = document.getElementById("work-player-title");
     var closeButton = document.getElementById("btn-close-work");
+    var returnLabel = document.getElementById("work-player-return-label");
 
     if (!playerLayer || !frame || !title) return;
 
@@ -1378,7 +1387,11 @@ window.openWorkPlayer = function(work) {
     workPlayerReturnDestinationId = currentDestinationId;
     isWorkPlayerOpen = true;
 
-    title.innerText = work.title || "町内コンテンツ";
+    // 作品ごとに見せ方を選べるよう、フレームのモードをデータとして保持する。
+    // 現在は standard が基本。将来、らくがきだけ控えめな soft 表示にもできる。
+    playerLayer.dataset.frameMode = work.frameMode || "standard";
+
+    title.innerText = getWorkPlayerFrameTitle(work);
     frame.title = work.title || "町内コンテンツ";
 
     // itch.ioの埋め込みゲームでも、音・全画面・ゲームパッド利用を許可する。
@@ -1386,8 +1399,12 @@ window.openWorkPlayer = function(work) {
     frame.setAttribute("allowfullscreen", "");
     frame.allowFullscreen = true;
 
+    var destinationLabel = getWorkPlayerReturnLabel(work);
+    if (returnLabel) {
+        returnLabel.innerText = destinationLabel;
+    }
     if (closeButton) {
-        closeButton.innerText = getWorkPlayerReturnLabel(work);
+        closeButton.setAttribute("aria-label", destinationLabel + "へ戻る");
     }
 
     setWorkPlayerLoading(true, "作品を準備しています…");
@@ -1414,11 +1431,21 @@ window.closeWorkPlayer = function() {
     }
 
     var closeButton = document.getElementById("btn-close-work");
+    var returnLabel = document.getElementById("work-player-return-label");
+    var title = document.getElementById("work-player-title");
+
+    if (returnLabel) {
+        returnLabel.innerText = "町";
+    }
     if (closeButton) {
-        closeButton.innerText = "レジャーセンターへ戻る";
+        closeButton.setAttribute("aria-label", "町へ戻る");
+    }
+    if (title) {
+        title.innerText = "";
     }
 
     if (playerLayer) {
+        playerLayer.dataset.frameMode = "standard";
         playerLayer.classList.remove("visible");
         playerLayer.setAttribute("aria-hidden", "true");
     }

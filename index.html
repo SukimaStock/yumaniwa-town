@@ -33,24 +33,32 @@
     <div id="message-window" role="dialog" aria-live="polite"></div>
     <div id="scene-container"></div>
 
-    <!-- 触れるらくがき用: 作品はiframe内で独立して動かす -->
-    <div id="work-player" aria-hidden="true">
-      <iframe
-        id="work-player-frame"
-        title="町内コンテンツ"
-        allow="autoplay; fullscreen; gamepad"
-        allowfullscreen
-        scrolling="no"
-      ></iframe>
-      <div id="work-player-loading" aria-hidden="true">
-        <div class="work-player-loading-card" role="status" aria-live="polite">
-          <div class="work-player-loading-mark" aria-hidden="true"></div>
-          <div id="work-player-loading-label">作品を準備しています…</div>
-        </div>
+    <!-- 湯間庭フレーム: ゲーム・触れるらくがき・将来の読書室を町の中で見せる共通の額縁 -->
+    <div id="work-player" aria-hidden="true" data-frame-mode="standard">
+      <div id="work-player-controls" class="town-frame-header">
+        <button id="btn-close-work" type="button" aria-label="町へ戻る">
+          <span class="town-frame-back-arrow" aria-hidden="true">←</span>
+          <span id="work-player-return-label">町</span>
+        </button>
+        <div id="work-player-title" aria-live="polite"></div>
+        <div class="town-frame-header-balance" aria-hidden="true"></div>
       </div>
-      <div id="work-player-controls">
-        <div id="work-player-title"></div>
-        <button id="btn-close-work" type="button">レジャーセンターへ戻る</button>
+
+      <div id="work-player-content">
+        <iframe
+          id="work-player-frame"
+          title="町内コンテンツ"
+          allow="autoplay; fullscreen; gamepad"
+          allowfullscreen
+          scrolling="no"
+        ></iframe>
+
+        <div id="work-player-loading" aria-hidden="true">
+          <div class="work-player-loading-card" role="status" aria-live="polite">
+            <div class="work-player-loading-mark" aria-hidden="true"></div>
+            <div id="work-player-loading-label">作品を準備しています…</div>
+          </div>
+        </div>
       </div>
     </div>
 
