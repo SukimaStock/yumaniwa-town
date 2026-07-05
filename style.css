@@ -30,7 +30,7 @@ input, textarea {
 #area-title-main { font-size: 24px; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
 #area-title-sub { font-size: 14px; color: #ddd; letter-spacing: 1px; }
 
-#interaction-hint { position: absolute; left: 50%; bottom: calc(140px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(10px); padding: 8px 16px; border-radius: 20px; background: rgba(10, 16, 24, 0.85); border: 1px solid rgba(255, 255, 255, 0.3); color: #fff; pointer-events: none; opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease; z-index: 60; display: flex; align-items: center; gap: 12px; }
+#interaction-hint { position: absolute; left: 50%; bottom: calc(162px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(10px); padding: 8px 16px; border-radius: 20px; background: rgba(10, 16, 24, 0.85); border: 1px solid rgba(255, 255, 255, 0.3); color: #fff; pointer-events: none; opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease; z-index: 60; display: flex; align-items: center; gap: 12px; }
 #interaction-hint.visible { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; cursor: pointer; }
 #interaction-label { font-weight: bold; font-size: 15px; }
 #interaction-action { font-size: 12px; color: #ccc; background: rgba(255, 255, 255, 0.15); padding: 3px 8px; border-radius: 12px; }
@@ -38,13 +38,17 @@ input, textarea {
 #message-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.12); display: none; pointer-events: auto; touch-action: none; }
 #message-window { position: fixed; bottom: calc(180px + env(safe-area-inset-bottom)); left: 20px; right: 20px; background: rgba(10, 15, 30, 0.85); color: #fff; border: 2px solid #ccc; border-radius: 8px; padding: 15px; font-size: 16px; line-height: 1.5; display: none; z-index: 90; cursor: pointer; pointer-events: auto; touch-action: none; }
 
-#mobile-controls { position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); height: 120px; display: flex; justify-content: space-between; padding: 0 10px; pointer-events: none; z-index: 80; transition: opacity 0.2s ease; }
+#mobile-controls { position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); height: 142px; display: flex; justify-content: space-between; padding: 0 10px; pointer-events: none; z-index: 80; transition: opacity 0.2s ease; }
 #mobile-controls.disabled { opacity: 0; pointer-events: none; }
-#dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; opacity: 0.55; transition: opacity 0.2s; }
+/* 十字キーは中央を空け、上下左右のボタンが触れ合わない配置にする。 */
+#dpad { position: relative; width: 142px; height: 142px; pointer-events: auto; opacity: 0.55; transition: opacity 0.2s; }
 #dpad:active { opacity: 1; }
-.dpad-btn { position: absolute; width: 40px; height: 40px; background: rgba(20, 20, 20, 0.5); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; font-size: 16px; display: flex; justify-content: center; align-items: center; color: white; touch-action: none; }
+.dpad-btn { position: absolute; width: 42px; height: 42px; background: rgba(20, 20, 20, 0.5); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; font-size: 16px; display: flex; justify-content: center; align-items: center; color: white; touch-action: none; }
 .dpad-btn:active, .dpad-btn.pressed { background: rgba(255, 255, 255, 0.4); }
-.up { top: 0; left: 40px; } .down { bottom: 0; left: 40px; } .left { top: 40px; left: 0; } .right { top: 40px; right: 40px; }
+.up { top: 0; left: 50%; transform: translateX(-50%); }
+.down { bottom: 0; left: 50%; transform: translateX(-50%); }
+.left { top: 50%; left: 0; transform: translateY(-50%); }
+.right { top: 50%; right: 0; transform: translateY(-50%); }
 #action-btns { display: flex; align-items: flex-end; padding-bottom: 10px; }
 #btn-action { pointer-events: auto; width: 70px; height: 70px; border-radius: 50%; background: rgba(255, 100, 100, 0.6); border: 2px solid rgba(255, 150, 150, 0.6); color: white; font-size: 14px; font-weight: bold; touch-action: none; transition: background 0.2s, font-size 0.2s; }
 #btn-action:active { background: rgba(255, 100, 100, 0.9); }
