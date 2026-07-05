@@ -88,10 +88,37 @@ var currentDestinationId = null;
 var currentDestinationMessage = "";
 var currentDestinationMessageTitle = "";
 
-// 触れるらくがき用: 作品ごとに独立した iframe を開く共通プレイヤー
+// 町内コンテンツ用: 触れるらくがき・itch.ioゲームを iframe 内で開く共通プレイヤー
 var isWorkPlayerOpen = false;
 var currentWorkId = null;
 var workPlayerReturnDestinationId = null;
+
+function getWorkPlayerSource(work) {
+    if (!work) return "";
+
+    if (work.launch === "itch_embed") {
+        return work.embedUrl || "";
+    }
+
+    return work.entry || "";
+}
+
+function getWorkPlayerReturnLabel(work) {
+    if (work && work.returnLabel) {
+        return work.returnLabel;
+    }
+
+    if (work && work.venue === "tomogushi_alley") {
+        return "灯串横丁へ戻る";
+    }
+
+    if (work && work.venue === "leisure_center") {
+        return "レジャーセンターへ戻る";
+    }
+
+    return "町へ戻る";
+}
+
 
 function clearDpadInput() {
     dpad.up = false;
@@ -1326,7 +1353,9 @@ function setupWorkPlayerEvents() {
 }
 
 window.openWorkPlayer = function(work) {
-    if (!work || !work.entry) {
+    var source = getWorkPlayerSource(work);
+
+    if (!work || !source) {
         showDestinationMessage(
             work && work.title ? work.title : "作品",
             work && work.emptyText ? work.emptyText : "この作品は、まだ準備中です。"
@@ -1337,19 +1366,32 @@ window.openWorkPlayer = function(work) {
     var playerLayer = document.getElementById("work-player");
     var frame = document.getElementById("work-player-frame");
     var title = document.getElementById("work-player-title");
+    var closeButton = document.getElementById("btn-close-work");
 
     if (!playerLayer || !frame || !title) return;
 
-    if (typeof cancelTapMove === "function") cancelTapMove();
+    if (typeof cancelTapMove === "function") {
+        cancelTapMove();
+    }
 
     currentWorkId = work.id || null;
     workPlayerReturnDestinationId = currentDestinationId;
     isWorkPlayerOpen = true;
 
-    title.innerText = work.title || "触れるらくがき";
-    frame.title = work.title || "触れるらくがき";
+    title.innerText = work.title || "町内コンテンツ";
+    frame.title = work.title || "町内コンテンツ";
+
+    // itch.ioの埋め込みゲームでも、音・全画面・ゲームパッド利用を許可する。
+    frame.setAttribute("allow", "autoplay; fullscreen; gamepad");
+    frame.setAttribute("allowfullscreen", "");
+    frame.allowFullscreen = true;
+
+    if (closeButton) {
+        closeButton.innerText = getWorkPlayerReturnLabel(work);
+    }
+
     setWorkPlayerLoading(true, "作品を準備しています…");
-    frame.src = work.entry;
+    frame.src = source;
 
     playerLayer.classList.add("visible");
     playerLayer.setAttribute("aria-hidden", "false");
@@ -1369,6 +1411,11 @@ window.closeWorkPlayer = function() {
     if (frame) {
         // iframe を空ページへ戻して、作品側のアニメーション・音・入力を確実に止める。
         frame.src = "about:blank";
+    }
+
+    var closeButton = document.getElementById("btn-close-work");
+    if (closeButton) {
+        closeButton.innerText = "レジャーセンターへ戻る";
     }
 
     if (playerLayer) {
@@ -1399,13 +1446,16 @@ window.launchWork = function(work) {
     }
 
     if (work.status !== "open") {
-        showDestinationMessage(work.title, work.emptyText || "この作品は、まだ準備中です。");
+        showDestinationMessage(
+            work.title,
+            work.emptyText || "この作品は、まだ準備中です。"
+        );
         return;
     }
 
     var launch = work.launch || (work.url ? "external" : "embedded");
 
-    if (launch === "embedded") {
+    if (launch === "embedded" || launch === "itch_embed") {
         openWorkPlayer(work);
         return;
     }
@@ -1415,7 +1465,10 @@ window.launchWork = function(work) {
         return;
     }
 
-    showDestinationMessage(work.title, work.emptyText || "この作品は、まだ準備中です。");
+    showDestinationMessage(
+        work.title,
+        work.emptyText || "この作品は、まだ準備中です。"
+    );
 };
 
 window.handleDestinationItem = function(destId, index) {
