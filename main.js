@@ -34,8 +34,13 @@ var playerSprites = {
     walk: { down: null, left: null, up: null, right: null }
 };
 
-// 絵の大きさだけを微調整したいときは、ここだけ変える。
-var PLAYER_SPRITE_DRAW = { width: 20, height: 28 };
+// スプライト画像の本来の縦横比を保ったまま描く。
+// height を上げると、町の中での人物の存在感も上がる。
+var PLAYER_SPRITE_DRAW = { height: 32 };
+
+// stand と walk を切り替える間隔。
+// 数字を小さくすると速足、大きくするとゆっくり歩く。
+var PLAYER_WALK_FRAME_MS = 150;
 
 
 var player = {
@@ -45,7 +50,9 @@ var player = {
     h: 16,
     speed: 2,
     dir: 'down',
-    isMoving: false
+    isMoving: false,
+    walkTime: 0,
+    walkLastTime: 0
 };
 var currentScene = 'station_plaza';
 var isMessageOpen = false;
@@ -235,8 +242,33 @@ function drawFallbackPlayer(px, py) {
     }
 }
 
+function updatePlayerWalkAnimation() {
+    var now = performance.now();
+
+    if (!player.walkLastTime) {
+        player.walkLastTime = now;
+        return;
+    }
+
+    var delta = Math.min(50, now - player.walkLastTime);
+    player.walkLastTime = now;
+
+    if (player.isMoving) {
+        player.walkTime += delta;
+    } else {
+        player.walkTime = 0;
+    }
+}
+
+function getPlayerSpritePose() {
+    if (!player.isMoving) return 'stand';
+
+    var frame = Math.floor(player.walkTime / PLAYER_WALK_FRAME_MS);
+    return (frame % 2 === 0) ? 'stand' : 'walk';
+}
+
 function drawPlayerSprite(px, py) {
-    var pose = player.isMoving ? 'walk' : 'stand';
+    var pose = getPlayerSpritePose();
     var sprite = playerSprites[pose] && playerSprites[pose][player.dir];
 
     if (!sprite || !sprite.complete || !sprite.naturalWidth) {
@@ -244,8 +276,13 @@ function drawPlayerSprite(px, py) {
         return;
     }
 
-    var drawW = PLAYER_SPRITE_DRAW.width;
+    // PNGの自然な縦横比を維持する。
+    // 正方形PNGなら32×32、縦長PNGなら自然に縦長のまま描かれる。
     var drawH = PLAYER_SPRITE_DRAW.height;
+    var sourceRatio = sprite.naturalWidth / sprite.naturalHeight;
+    var drawW = Math.round(drawH * sourceRatio);
+
+    // 足元を従来の16pxプレイヤー枠の下端に合わせる。
     var drawX = Math.round(px + (player.w - drawW) / 2);
     var drawY = Math.round(py + player.h - drawH);
 
@@ -785,6 +822,8 @@ function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 function update() {
     if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) {
         player.isMoving = false;
+        player.walkTime = 0;
+        player.walkLastTime = performance.now();
         return;
     }
 
@@ -797,7 +836,9 @@ function update() {
     if (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right) { dx += player.speed; manualInput = true; }
 
     if (manualInput) {
-        player.isMoving = true;
+        var beforeManualX = player.x;
+        var beforeManualY = player.y;
+
         cancelTapMove();
         
         if (dx !== 0 && dy !== 0) {
@@ -814,19 +855,32 @@ function update() {
         if (player.x + player.w > MAP_WIDTH * TILE_SIZE) player.x = MAP_WIDTH * TILE_SIZE - player.w;
         if (player.y < 0) player.y = 0;
         if (player.y + player.h > MAP_HEIGHT * TILE_SIZE) player.y = MAP_HEIGHT * TILE_SIZE - player.h;
+
+        // 壁に当たって動いていない時は、足踏みしない。
+        player.isMoving =
+            Math.abs(player.x - beforeManualX) > 0.01 ||
+            Math.abs(player.y - beforeManualY) > 0.01;
         
         updateUI();
         updateInteractionHint();
         updateCurrentArea();
     } else {
+        var beforeTapX = player.x;
+        var beforeTapY = player.y;
         var moved = updateTapMove();
-        player.isMoving = !!tapMoveTargetTile;
+
+        player.isMoving =
+            Math.abs(player.x - beforeTapX) > 0.01 ||
+            Math.abs(player.y - beforeTapY) > 0.01;
+
         if (moved) {
             updateUI();
             updateInteractionHint();
             updateCurrentArea();
         }
     }
+
+    updatePlayerWalkAnimation();
 
     if (tapMarkerTimer > 0) {
         tapMarkerTimer--;
