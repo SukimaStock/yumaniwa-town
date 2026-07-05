@@ -38,9 +38,9 @@ var playerSprites = {
 // height を上げると、町の中での人物の存在感も上がる。
 var PLAYER_SPRITE_DRAW = { height: 32 };
 
-// stand と walk を切り替える間隔。
-// 数字を小さくすると速足、大きくするとゆっくり歩く。
-var PLAYER_WALK_FRAME_MS = 150;
+// 実際に何px歩いたら、stand / walk を切り替えるか。
+// 時間ではなく移動距離で判定するので、タップ移動でも確実に動く。
+var PLAYER_WALK_STEP_PX = 8;
 
 
 var player = {
@@ -51,8 +51,9 @@ var player = {
     speed: 2,
     dir: 'down',
     isMoving: false,
-    walkTime: 0,
-    walkLastTime: 0
+    walkDistance: 0,
+    walkFrame: 0,
+    walkWasMoving: false
 };
 var currentScene = 'station_plaza';
 var isMessageOpen = false;
@@ -242,31 +243,33 @@ function drawFallbackPlayer(px, py) {
     }
 }
 
-function updatePlayerWalkAnimation() {
-    var now = performance.now();
-
-    if (!player.walkLastTime) {
-        player.walkLastTime = now;
+function updatePlayerWalkAnimation(movedDistance) {
+    if (!player.isMoving) {
+        player.walkDistance = 0;
+        player.walkFrame = 0;
+        player.walkWasMoving = false;
         return;
     }
 
-    var delta = Math.min(50, now - player.walkLastTime);
-    player.walkLastTime = now;
+    // 動き始めた最初のフレームから walk を出す。
+    if (!player.walkWasMoving) {
+        player.walkWasMoving = true;
+        player.walkFrame = 1;
+        player.walkDistance = 0;
+        return;
+    }
 
-    if (player.isMoving) {
-        player.walkTime += delta;
-    } else {
-        player.walkTime = 0;
+    player.walkDistance += Math.max(0, movedDistance || 0);
+
+    while (player.walkDistance >= PLAYER_WALK_STEP_PX) {
+        player.walkDistance -= PLAYER_WALK_STEP_PX;
+        player.walkFrame = player.walkFrame === 0 ? 1 : 0;
     }
 }
 
 function getPlayerSpritePose() {
     if (!player.isMoving) return 'stand';
-
-    // 動き始めた瞬間から walk を見せる。
-    // 短いタップ移動でも、歩いたことが視覚的に分かる。
-    var frame = Math.floor(player.walkTime / PLAYER_WALK_FRAME_MS);
-    return (frame % 2 === 0) ? 'walk' : 'stand';
+    return player.walkFrame === 1 ? 'walk' : 'stand';
 }
 
 function drawPlayerSprite(px, py) {
@@ -581,12 +584,28 @@ function setupEvents() {
     // Safariの虫眼鏡・長押し選択を、ゲームCanvas自身で確実に抑止する。
     // 施設メニューや作品プレイヤーのボタンには触れない。
     function suppressCanvasNativeGesture(e) {
-        e.preventDefault();
+        if (e.cancelable) {
+            e.preventDefault();
+        }
     }
 
-    canvas.addEventListener('contextmenu', suppressCanvasNativeGesture);
+    // CSSだけではSafariの長押し虫眼鏡が残る場合があるため、
+    // Canvas本体にも明示的に指定する。
+    canvas.style.webkitTouchCallout = 'none';
+    canvas.style.webkitUserSelect = 'none';
+    canvas.style.userSelect = 'none';
+    canvas.oncontextmenu = function() {
+        return false;
+    };
+
+    canvas.addEventListener('selectstart', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('dragstart', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('contextmenu', suppressCanvasNativeGesture, { passive: false });
     canvas.addEventListener('touchstart', suppressCanvasNativeGesture, { passive: false });
     canvas.addEventListener('touchmove', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('gesturestart', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('gesturechange', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('gestureend', suppressCanvasNativeGesture, { passive: false });
 
     canvas.addEventListener('pointerdown', function(e) {
         e.preventDefault();
@@ -838,13 +857,13 @@ function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 function update() {
     if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) {
         player.isMoving = false;
-        player.walkTime = 0;
-        player.walkLastTime = performance.now();
+        updatePlayerWalkAnimation(0);
         return;
     }
 
     var dx = 0; var dy = 0;
     var manualInput = false;
+    var movedDistance = 0;
 
     if (keys['ArrowUp'] || keys['w'] || keys['W'] || dpad.up) { dy -= player.speed; manualInput = true; }
     if (keys['ArrowDown'] || keys['s'] || keys['S'] || dpad.down) { dy += player.speed; manualInput = true; }
@@ -872,10 +891,16 @@ function update() {
         if (player.y < 0) player.y = 0;
         if (player.y + player.h > MAP_HEIGHT * TILE_SIZE) player.y = MAP_HEIGHT * TILE_SIZE - player.h;
 
+        var manualMovedX = player.x - beforeManualX;
+        var manualMovedY = player.y - beforeManualY;
+
+        movedDistance = Math.sqrt(
+            manualMovedX * manualMovedX +
+            manualMovedY * manualMovedY
+        );
+
         // 壁に当たって動いていない時は、足踏みしない。
-        player.isMoving =
-            Math.abs(player.x - beforeManualX) > 0.01 ||
-            Math.abs(player.y - beforeManualY) > 0.01;
+        player.isMoving = movedDistance > 0.01;
         
         updateUI();
         updateInteractionHint();
@@ -887,10 +912,17 @@ function update() {
         var beforeTapY = player.y;
         var moved = updateTapMove();
 
-        var movedThisFrame =
-            Math.abs(player.x - beforeTapX) > 0.01 ||
-            Math.abs(player.y - beforeTapY) > 0.01;
+        var tapMovedX = player.x - beforeTapX;
+        var tapMovedY = player.y - beforeTapY;
 
+        movedDistance = Math.sqrt(
+            tapMovedX * tapMovedX +
+            tapMovedY * tapMovedY
+        );
+
+        var movedThisFrame = movedDistance > 0.01;
+
+        // 経路が続いている間は、タップ移動の歩行ポーズを保つ。
         player.isMoving =
             movedThisFrame ||
             tapPathWasActive ||
@@ -903,7 +935,7 @@ function update() {
         }
     }
 
-    updatePlayerWalkAnimation();
+    updatePlayerWalkAnimation(movedDistance);
 
     if (tapMarkerTimer > 0) {
         tapMarkerTimer--;
