@@ -5,6 +5,12 @@
 
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
+    {
+        date: "2026-07-05",
+        title: "レジャーセンターに『雨の日の窓』を設置",
+        body: "指で曇りガラスをなぞる、最初の実働筐体が稼働しました。",
+        tags: ["leisure-center", "rakugaki", "open"]
+    },
     // {
     //     date: "2026-07-04",
     //     title: "更新タイトル",

@@ -62,9 +62,10 @@ var WORKS = [
         title: "雨の日の窓",
         venue: "leisure_center",
         kind: "work",
-        status: "preparing",
+        status: "open",
         launch: "embedded",
         entry: "./works/rainy-window/index.html",
+        description: "窓についた雨粒を、指でなぞる小さな作品。",
         emptyText: "この筐体は現在調整中です。ガラスの向こうで、雨音だけが聞こえます。"
     },
     {
