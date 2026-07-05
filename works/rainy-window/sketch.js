@@ -4,6 +4,10 @@
 // Codea版を、湯間庭町のRakugaki Engine用に移植した作品です。
 // ==========================================
 
+// 移植直後の一度だけ true にして、タッチ位置と座標の上下を確認します。
+// 公開時は必ず false のままにします。
+var COORDINATE_CHECK = false;
+
 var CONFIG = {
   tinyDropCount: 520,
   maxDrops: 54,
@@ -23,8 +27,9 @@ var drops = [];
 var trails = [];
 var touchPaths = {};
 
+// Codea座標で扱えるオフスクリーン層。
+// ブラウザCanvasの左上原点への変換はRakugaki Engineが吸収する。
 var fogLayer = null;
-var fogCtx = null;
 var fogScale = 0.58;
 var lastWidth = 0;
 var lastHeight = 0;
@@ -53,13 +58,13 @@ function rebuildWindow() {
   lastWidth = Math.max(1, WIDTH);
   lastHeight = Math.max(1, HEIGHT);
 
-  fogLayer = document.createElement("canvas");
-  fogLayer.width = Math.max(1, Math.round(lastWidth * fogScale));
-  fogLayer.height = Math.max(1, Math.round(lastHeight * fogScale));
-  fogCtx = fogLayer.getContext("2d");
+  fogLayer = CodeaLite.createCodeaLayer(lastWidth, lastHeight, fogScale);
 
-  fogCtx.fillStyle = "rgba(179, 201, 217," + CONFIG.fogBaseAlpha + ")";
-  fogCtx.fillRect(0, 0, fogLayer.width, fogLayer.height);
+  fogLayer.withCodeaContext(function(ctx) {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(179, 201, 217," + CONFIG.fogBaseAlpha + ")";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  });
 
   addFogTexture();
   tinyDrops = [];
@@ -70,20 +75,22 @@ function rebuildWindow() {
 }
 
 function addFogTexture() {
-  if (!fogCtx) return;
+  if (!fogLayer) return;
 
-  for (var i = 0; i < 18; i++) {
-    var x = Math.random() * fogLayer.width;
-    var y = Math.random() * fogLayer.height;
-    var r = (Math.min(fogLayer.width, fogLayer.height) * (0.18 + Math.random() * 0.32));
-    var grad = fogCtx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, "rgba(220, 231, 238, 0.055)");
-    grad.addColorStop(1, "rgba(220, 231, 238, 0)");
-    fogCtx.fillStyle = grad;
-    fogCtx.beginPath();
-    fogCtx.arc(x, y, r, 0, Math.PI * 2);
-    fogCtx.fill();
-  }
+  fogLayer.withCodeaContext(function(ctx) {
+    for (var i = 0; i < 18; i++) {
+      var x = Math.random() * WIDTH;
+      var y = Math.random() * HEIGHT;
+      var r = Math.min(WIDTH, HEIGHT) * (0.18 + Math.random() * 0.32);
+      var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, "rgba(220, 231, 238, 0.055)");
+      grad.addColorStop(1, "rgba(220, 231, 238, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
 }
 
 function initTinyDrops() {
@@ -113,6 +120,12 @@ function draw() {
   drawTinyDrops();
   drawTrails(dt);
   drawDrops();
+
+  if (COORDINATE_CHECK) {
+    CodeaLite.drawCoordinateGuide({
+      label: "Codea座標確認：下 = y 0 / 上 = y HEIGHT"
+    });
+  }
 }
 
 function drawNightBackground() {
@@ -158,52 +171,23 @@ function drawBokeh(x, y, radius, r, g, b, alpha) {
 }
 
 function restoreFog(dt) {
-  if (!fogCtx) return;
+  if (!fogLayer) return;
 
-  fogCtx.save();
-  fogCtx.globalCompositeOperation = "source-over";
-  fogCtx.fillStyle = "rgba(179, 201, 217," + (CONFIG.fogReturnPerSecond * dt) + ")";
-  fogCtx.fillRect(0, 0, fogLayer.width, fogLayer.height);
-  fogCtx.restore();
+  fogLayer.withCodeaContext(function(ctx) {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(179, 201, 217," + (CONFIG.fogReturnPerSecond * dt) + ")";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  });
 }
 
 function drawFogLayer() {
   if (!fogLayer) return;
-
-  withCanvasContext(function(ctx) {
-    ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(fogLayer, 0, 0, WIDTH, HEIGHT);
-    ctx.restore();
-  });
+  fogLayer.drawToScreen(0, 0, WIDTH, HEIGHT, { smoothing: true });
 }
 
 function eraseFogEllipse(x, y, rx, ry, amount) {
-  if (!fogCtx) return;
-
-  var sx = x * fogScale;
-  var sy = (HEIGHT - y) * fogScale;
-  var srx = Math.max(1, rx * fogScale);
-  var sry = Math.max(1, ry * fogScale);
-  var maxR = Math.max(srx, sry);
-
-  fogCtx.save();
-  fogCtx.globalCompositeOperation = "destination-out";
-  fogCtx.translate(sx, sy);
-  fogCtx.scale(srx / maxR, sry / maxR);
-
-  var grad = fogCtx.createRadialGradient(0, 0, 0, 0, 0, maxR);
-  grad.addColorStop(0, "rgba(0, 0, 0," + Math.min(1, amount || 0.8) + ")");
-  grad.addColorStop(0.62, "rgba(0, 0, 0," + Math.min(0.74, (amount || 0.8) * 0.66) + ")");
-  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-
-  fogCtx.fillStyle = grad;
-  fogCtx.beginPath();
-  fogCtx.arc(0, 0, maxR, 0, Math.PI * 2);
-  fogCtx.fill();
-  fogCtx.restore();
+  if (!fogLayer) return;
+  fogLayer.eraseSoftEllipse(x, y, rx, ry, amount);
 }
 
 function eraseFogSegment(x1, y1, x2, y2, radius, amount) {
