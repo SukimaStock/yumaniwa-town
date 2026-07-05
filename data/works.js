@@ -11,6 +11,10 @@
 // embedded   : 町の共通プレイヤー内で開く。entry に作品の index.html を指定
 // itch_embed : itch.ioの埋め込みURLを、町の共通プレイヤー内で開く。embedUrl を指定
 // external   : 外部ページを別タブで開く。url を指定
+//
+// frameTitle  : 湯間庭フレーム上部に表示する町内での呼び名
+// returnLabel : 左側の戻り先表示（例: "灯串横丁"）
+// frameMode   : "standard" | "soft"。現在はどちらも上部バーを確保する
 // ==========================================
 
 var WORKS = [
@@ -25,7 +29,9 @@ var WORKS = [
     //     entry: "./works/work-id/index.html",
     //     embedUrl: "",
     //     url: "",
+    //     frameTitle: "",
     //     returnLabel: "",
+    //     frameMode: "standard",
     //     emptyText: "この作品は準備中です。"
     // },
 
@@ -63,7 +69,9 @@ var WORKS = [
         // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/yakitori-wars",
 
-        returnLabel: "灯串横丁へ戻る",
+        frameTitle: "串焼き勝負台",
+        returnLabel: "灯串横丁",
+        frameMode: "standard",
         emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。"
     },
     {
@@ -75,6 +83,9 @@ var WORKS = [
         launch: "embedded",
         entry: "./works/rainy-window/index.html",
         description: "窓についた雨粒を、指でなぞる小さな作品。",
+        frameTitle: "雨の日の窓",
+        returnLabel: "湯窓レジャーセンター",
+        frameMode: "soft",
         emptyText: "この筐体は現在調整中です。ガラスの向こうで、雨音だけが聞こえます。"
     },
     {
@@ -149,7 +160,11 @@ function buildWorkMenuItems(venue) {
             workId: work.id,
             launch: work.launch || (work.url ? "external" : "embedded"),
             entry: work.entry || "",
+            embedUrl: work.embedUrl || "",
             url: work.url || "",
+            frameTitle: work.frameTitle || work.title,
+            returnLabel: work.returnLabel || "",
+            frameMode: work.frameMode || "standard",
             emptyText: work.emptyText || "この作品は、まだ準備中です。"
         });
     }
