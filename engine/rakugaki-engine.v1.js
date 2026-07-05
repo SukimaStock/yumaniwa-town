@@ -41,13 +41,20 @@
     tweens: new Set(),
     clipActive: false,
     clipDepth: 0,
+    blendMode: "source-over",
+    styleStack: [],
+    noiseSeed: 0,
 };
 
 
   const BEGAN = "BEGAN";
   const MOVING = "MOVING";
+  const CHANGED = MOVING;
   const ENDED = "ENDED";
   const CANCELLED = "CANCELLED";
+
+  const NORMAL = "NORMAL";
+  const ADDITIVE = "ADDITIVE";
 
   const CORNER = "CORNER";
   const CENTER = "CENTER";
@@ -190,6 +197,7 @@ const MITER = "MITER";
     const ctx = C.ctx;
     ctx.save();
     ctx.setTransform(C.dpr, 0, 0, C.dpr, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = rgba(c);
     ctx.fillRect(0, 0, C.width, C.height);
     ctx.restore();
@@ -217,6 +225,97 @@ const MITER = "MITER";
     C.lineWidth = w;
   }
 
+  function cloneColor(c) {
+    return { r: c.r, g: c.g, b: c.b, a: c.a };
+  }
+
+  function pushStyle() {
+    C.styleStack.push({
+      fillStyle: cloneColor(C.fillStyle),
+      strokeStyle: cloneColor(C.strokeStyle),
+      hasFill: C.hasFill,
+      hasStroke: C.hasStroke,
+      lineWidth: C.lineWidth,
+      lineCap: C.lineCap,
+      lineJoin: C.lineJoin,
+      rectMode: C.rectMode,
+      ellipseMode: C.ellipseMode,
+      textAlign: C.textAlign,
+      textSize: C.textSize,
+      fontName: C.fontName,
+      blendMode: C.blendMode,
+    });
+  }
+
+  function popStyle() {
+    const saved = C.styleStack.pop();
+    if (!saved) return false;
+
+    C.fillStyle = cloneColor(saved.fillStyle);
+    C.strokeStyle = cloneColor(saved.strokeStyle);
+    C.hasFill = saved.hasFill;
+    C.hasStroke = saved.hasStroke;
+    C.lineWidth = saved.lineWidth;
+    C.lineCap = saved.lineCap;
+    C.lineJoin = saved.lineJoin;
+    C.rectMode = saved.rectMode;
+    C.ellipseMode = saved.ellipseMode;
+    C.textAlign = saved.textAlign;
+    C.textSize = saved.textSize;
+    C.fontName = saved.fontName;
+    C.blendMode = saved.blendMode;
+    return true;
+  }
+
+  function blendMode(mode) {
+    const value = String(mode || NORMAL).toUpperCase();
+    C.blendMode = value === ADDITIVE || value === "LIGHTER"
+      ? "lighter"
+      : "source-over";
+    return C.blendMode;
+  }
+
+  function smoothNoise(t) {
+    return t * t * (3 - 2 * t);
+  }
+
+  function hashNoise(x, y, z) {
+    const v = Math.sin(
+      x * 127.1 + y * 311.7 + z * 74.7 + C.noiseSeed * 0.173
+    ) * 43758.5453123;
+    return v - Math.floor(v);
+  }
+
+  function noise(x = 0, y = 0, z = 0) {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const zi = Math.floor(z);
+    const xf = smoothNoise(x - xi);
+    const yf = smoothNoise(y - yi);
+    const zf = smoothNoise(z - zi);
+
+    const n000 = hashNoise(xi, yi, zi);
+    const n100 = hashNoise(xi + 1, yi, zi);
+    const n010 = hashNoise(xi, yi + 1, zi);
+    const n110 = hashNoise(xi + 1, yi + 1, zi);
+    const n001 = hashNoise(xi, yi, zi + 1);
+    const n101 = hashNoise(xi + 1, yi, zi + 1);
+    const n011 = hashNoise(xi, yi + 1, zi + 1);
+    const n111 = hashNoise(xi + 1, yi + 1, zi + 1);
+
+    const nx00 = lerp(n000, n100, xf);
+    const nx10 = lerp(n010, n110, xf);
+    const nx01 = lerp(n001, n101, xf);
+    const nx11 = lerp(n011, n111, xf);
+    const nxy0 = lerp(nx00, nx10, yf);
+    const nxy1 = lerp(nx01, nx11, yf);
+    return lerp(nxy0, nxy1, zf);
+  }
+
+  function noiseSeed(seed) {
+    C.noiseSeed = Number(seed) || 0;
+  }
+
   function rectMode(mode) {
     C.rectMode = mode;
   }
@@ -242,6 +341,9 @@ const MITER = "MITER";
 
     ctx.lineJoin =
         C.lineJoin;
+
+    ctx.globalCompositeOperation =
+        C.blendMode;
 }
 
 function normalizeStrokeCap(mode) {
@@ -882,9 +984,16 @@ Object.assign(window, {
     PROJECT,
     BEVEL,
     MITER,
+    NORMAL,
+    ADDITIVE,
     strokeCap,
     strokeJoin,
     font,
+    pushStyle,
+    popStyle,
+    blendMode,
+    noise,
+    noiseSeed,
     withCanvasContext,
     pushClip,
     popClip,
@@ -903,6 +1012,7 @@ Object.assign(window, {
     CodeaLite: { start, state: C },
     BEGAN,
     MOVING,
+    CHANGED,
     ENDED,
     CANCELLED,
     CORNER,
