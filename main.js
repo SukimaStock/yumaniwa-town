@@ -263,8 +263,10 @@ function updatePlayerWalkAnimation() {
 function getPlayerSpritePose() {
     if (!player.isMoving) return 'stand';
 
+    // 動き始めた瞬間から walk を見せる。
+    // 短いタップ移動でも、歩いたことが視覚的に分かる。
     var frame = Math.floor(player.walkTime / PLAYER_WALK_FRAME_MS);
-    return (frame % 2 === 0) ? 'stand' : 'walk';
+    return (frame % 2 === 0) ? 'walk' : 'stand';
 }
 
 function drawPlayerSprite(px, py) {
@@ -576,7 +578,19 @@ function setupEvents() {
         sceneContainer.addEventListener('touchstart', stopProp, {passive: false});
     }
 
+    // Safariの虫眼鏡・長押し選択を、ゲームCanvas自身で確実に抑止する。
+    // 施設メニューや作品プレイヤーのボタンには触れない。
+    function suppressCanvasNativeGesture(e) {
+        e.preventDefault();
+    }
+
+    canvas.addEventListener('contextmenu', suppressCanvasNativeGesture);
+    canvas.addEventListener('touchstart', suppressCanvasNativeGesture, { passive: false });
+    canvas.addEventListener('touchmove', suppressCanvasNativeGesture, { passive: false });
+
     canvas.addEventListener('pointerdown', function(e) {
+        e.preventDefault();
+
         if (isMessageOpen || currentScene !== 'station_plaza') return;
 
         var rect = canvas.getBoundingClientRect();
@@ -604,6 +618,8 @@ function setupEvents() {
     });
 
     canvas.addEventListener('pointermove', function(e) {
+        e.preventDefault();
+
         if (!isEditMode || editStep !== 1) return;
         var rect = canvas.getBoundingClientRect();
         var cam = getCamera();
@@ -865,13 +881,20 @@ function update() {
         updateInteractionHint();
         updateCurrentArea();
     } else {
+        // 経路の最初・最後の短い一歩も含め、タップ移動中は歩行アニメを維持する。
+        var tapPathWasActive = !!tapMoveTargetTile;
         var beforeTapX = player.x;
         var beforeTapY = player.y;
         var moved = updateTapMove();
 
-        player.isMoving =
+        var movedThisFrame =
             Math.abs(player.x - beforeTapX) > 0.01 ||
             Math.abs(player.y - beforeTapY) > 0.01;
+
+        player.isMoving =
+            movedThisFrame ||
+            tapPathWasActive ||
+            !!tapMoveTargetTile;
 
         if (moved) {
             updateUI();
