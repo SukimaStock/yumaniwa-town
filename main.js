@@ -39,8 +39,8 @@ var playerSprites = {
 var PLAYER_SPRITE_DRAW = { height: 32 };
 
 // 実際に何px歩いたら、stand / walk を切り替えるか。
-// 時間ではなく移動距離で判定するので、タップ移動でも確実に動く。
-var PLAYER_WALK_STEP_PX = 8;
+// 1タイル（16px）ごとに切り替え、町歩きらしい落ち着いた歩幅にする。
+var PLAYER_WALK_STEP_PX = 16;
 
 
 var player = {
