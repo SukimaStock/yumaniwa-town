@@ -8,6 +8,11 @@
 // Rakugaki engine
 // A tiny compatibility layer for moving Codea-style sketches to HTML Canvas.
 // Goal: keep sketch code close to Codea: setup(), draw(), touched(touch), WIDTH, HEIGHT.
+//
+// 座標契約（v1で固定）
+// - 作品側は常に Codea 座標：左下が (0, 0)、右上が (WIDTH, HEIGHT)、Y は上向き。
+// - DOM Canvas / オフスクリーン描画は createCodeaLayer() を経由し、
+//   ブラウザ標準の左上原点との変換をエンジン内へ閉じ込める。
 
 (function () {
   "use strict";
@@ -44,6 +49,7 @@
     blendMode: "source-over",
     styleStack: [],
     noiseSeed: 0,
+    lastTouch: null,
 };
 
 
@@ -646,6 +652,206 @@ function withCanvasContext(drawFunction) {
     }
 }
 
+
+// ----------------------------------------------------------
+// Codea coordinates for offscreen / DOM canvas layers
+// ----------------------------------------------------------
+// Browser canvas APIs use a top-left origin, but sketches in this engine
+// use Codea coordinates. This adapter keeps every conversion in one place.
+function createCodeaLayer(width, height, pixelScale) {
+    var layer = {
+        canvas: document.createElement("canvas"),
+        ctx: null,
+        width: 0,
+        height: 0,
+        pixelScale: 1,
+
+        resize: function(newWidth, newHeight, newPixelScale) {
+            this.width = Math.max(1, Number(newWidth) || 1);
+            this.height = Math.max(1, Number(newHeight) || 1);
+            this.pixelScale = clamp(
+                Number(newPixelScale === undefined ? this.pixelScale : newPixelScale) || 1,
+                0.1,
+                4
+            );
+
+            this.canvas.width = Math.max(1, Math.round(this.width * this.pixelScale));
+            this.canvas.height = Math.max(1, Math.round(this.height * this.pixelScale));
+            this.ctx = this.canvas.getContext("2d");
+            return this;
+        },
+
+        clear: function() {
+            if (!this.ctx) return;
+            this.ctx.save();
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.restore();
+        },
+
+        // callback(ctx, layer) receives a CanvasRenderingContext2D whose
+        // coordinate space is Codea-style: left-bottom origin, Y upward.
+        withCodeaContext: function(callback) {
+            if (!this.ctx || typeof callback !== "function") return;
+
+            var ctx = this.ctx;
+            ctx.save();
+            ctx.setTransform(
+                this.pixelScale,
+                0,
+                0,
+                -this.pixelScale,
+                0,
+                this.canvas.height
+            );
+
+            try {
+                return callback(ctx, this);
+            } finally {
+                ctx.restore();
+            }
+        },
+
+        // Useful for rare diagnostics. Most sketches should prefer
+        // withCodeaContext() and never need this conversion directly.
+        worldToCanvas: function(x, y) {
+            return {
+                x: x * this.pixelScale,
+                y: this.canvas.height - y * this.pixelScale
+            };
+        },
+
+        canvasToWorld: function(x, y) {
+            return {
+                x: x / this.pixelScale,
+                y: (this.canvas.height - y) / this.pixelScale
+            };
+        },
+
+        eraseSoftEllipse: function(x, y, radiusX, radiusY, amount) {
+            var rx = Math.max(0.01, Number(radiusX) || 0.01);
+            var ry = Math.max(0.01, Number(radiusY) || 0.01);
+            var alpha = clamp(Number(amount === undefined ? 0.8 : amount) || 0, 0, 1);
+            var maxRadius = Math.max(rx, ry);
+
+            return this.withCodeaContext(function(ctx) {
+                ctx.save();
+                ctx.globalCompositeOperation = "destination-out";
+                ctx.translate(x, y);
+                ctx.scale(rx / maxRadius, ry / maxRadius);
+
+                var gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, maxRadius);
+                gradient.addColorStop(0, "rgba(0, 0, 0, " + alpha + ")");
+                gradient.addColorStop(0.62, "rgba(0, 0, 0, " + Math.min(0.74, alpha * 0.66) + ")");
+                gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, maxRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        },
+
+        // Draw the browser-backed layer into the main Codea canvas without
+        // requiring the sketch to flip Y manually.
+        drawToScreen: function(x, y, drawWidth, drawHeight, options) {
+            if (!C.ctx || !this.canvas) return;
+
+            var dx = x === undefined ? 0 : x;
+            var dy = y === undefined ? 0 : y;
+            var dw = drawWidth === undefined ? C.width : drawWidth;
+            var dh = drawHeight === undefined ? C.height : drawHeight;
+            var opts = options || {};
+            var alpha = opts.alpha === undefined ? 1 : clamp(Number(opts.alpha) || 0, 0, 1);
+
+            var ctx = C.ctx;
+            ctx.save();
+            ctx.globalCompositeOperation = opts.compositeOperation || "source-over";
+            ctx.globalAlpha = alpha;
+
+            if (opts.smoothing !== undefined) {
+                ctx.imageSmoothingEnabled = !!opts.smoothing;
+            }
+
+            // Source canvas is top-left origin. Map it into a Codea rect
+            // whose lower-left corner is (dx, dy).
+            ctx.translate(dx, dy + dh);
+            ctx.scale(dw / this.canvas.width, -dh / this.canvas.height);
+            ctx.drawImage(this.canvas, 0, 0);
+            ctx.restore();
+        }
+    };
+
+    return layer.resize(width, height, pixelScale === undefined ? 1 : pixelScale);
+}
+
+// Compatibility alias promised during the first offscreen-layer migration.
+// New sketches should use createCodeaLayer(), which describes the public
+// coordinate contract more clearly.
+function createTopLeftLayer(width, height, pixelScale) {
+    return createCodeaLayer(width, height, pixelScale);
+}
+
+function drawCoordinateGuide(options) {
+    var opts = options || {};
+    var margin = Math.max(16, Math.min(WIDTH, HEIGHT) * 0.035);
+    var touch = C.lastTouch;
+
+    pushStyle();
+    blendMode(NORMAL);
+
+    noFill();
+    stroke(255, 151, 103, 180);
+    strokeWidth(1.5);
+    line(0, 0, WIDTH, 0);
+    line(0, HEIGHT, WIDTH, HEIGHT);
+
+    stroke(100, 212, 238, 180);
+    line(0, 0, 0, HEIGHT);
+    line(WIDTH, 0, WIDTH, HEIGHT);
+
+    noStroke();
+    fill(255, 151, 103, 220);
+    ellipse(margin, margin, 9, 9);
+    fill(100, 212, 238, 220);
+    ellipse(margin, HEIGHT - margin, 9, 9);
+
+    textAlign(LEFT);
+    textSize(12);
+    fill(255, 237, 225, 230);
+    text("(0, 0)", margin + 9, margin + 3);
+    fill(218, 247, 255, 230);
+    text("(0, HEIGHT)", margin + 9, HEIGHT - margin - 3);
+
+    if (touch && opts.showTouch !== false) {
+        noFill();
+        stroke(255, 242, 130, 220);
+        strokeWidth(2);
+        ellipse(touch.x, touch.y, 28, 28);
+        line(touch.x - 18, touch.y, touch.x + 18, touch.y);
+        line(touch.x, touch.y - 18, touch.x, touch.y + 18);
+
+        noStroke();
+        fill(255, 249, 201, 235);
+        textAlign(LEFT);
+        textSize(12);
+        var labelX = Math.min(Math.max(8, touch.x + 16), Math.max(8, WIDTH - 120));
+        var labelY = Math.min(Math.max(14, touch.y + 18), Math.max(14, HEIGHT - 14));
+        text("x:" + Math.round(touch.x) + "  y:" + Math.round(touch.y), labelX, labelY);
+    }
+
+    if (opts.label) {
+        noStroke();
+        fill(255, 255, 255, 190);
+        textAlign(CENTER);
+        textSize(12);
+        text(String(opts.label), WIDTH * 0.5, HEIGHT - margin - 2);
+    }
+
+    popStyle();
+}
+
 function pushClip(x, y, w, h) {
     const ctx = C.ctx;
 
@@ -864,6 +1070,8 @@ function withClip(
       state,
     };
 
+    C.lastTouch = { x: pos.x, y: pos.y, state: state };
+
     if (state === BEGAN || state === MOVING) {
       C.pointers.set(e.pointerId, pos);
     } else {
@@ -995,6 +1203,9 @@ Object.assign(window, {
     noise,
     noiseSeed,
     withCanvasContext,
+    createCodeaLayer,
+    createTopLeftLayer,
+    drawCoordinateGuide,
     pushClip,
     popClip,
     withClip,
@@ -1009,7 +1220,13 @@ Object.assign(window, {
   });
 
   Object.assign(window, {
-    CodeaLite: { start, state: C },
+    CodeaLite: {
+      start,
+      state: C,
+      createCodeaLayer,
+      createTopLeftLayer,
+      drawCoordinateGuide
+    },
     BEGAN,
     MOVING,
     CHANGED,
