@@ -94,9 +94,10 @@ function applyDeveloperModeVisibility() {
 function setupTouchSelectionGuards() {
     // 町の操作領域だけ、iPhone Safari の長押し選択・虫眼鏡を抑止する。
     // scene-container は除外し、施設メニューの縦スクロールは残す。
+    // 作品プレイヤーの「戻る」ボタンは、Safari の click を確実に受け取れるよう除外する。
     var gameTouchSelector =
         "#game-canvas, #mobile-controls, #interaction-hint, " +
-        "#message-window, #message-backdrop, #work-player";
+        "#message-window, #message-backdrop, #work-player-frame, #work-player-loading";
 
     function isEditableTarget(target) {
         return (
@@ -107,8 +108,16 @@ function setupTouchSelectionGuards() {
         );
     }
 
+    function isInteractiveControl(target) {
+        return !!(
+            target &&
+            target.closest &&
+            target.closest("button, a, input, textarea, select, [role=button]")
+        );
+    }
+
     function isGameTouchTarget(target) {
-        if (!target || isEditableTarget(target) || !target.closest) return false;
+        if (!target || isEditableTarget(target) || isInteractiveControl(target) || !target.closest) return false;
         return !!target.closest(gameTouchSelector);
     }
 
@@ -1043,19 +1052,48 @@ function closeDestinationScene() {
     updateCurrentArea();
 }
 
+function setWorkPlayerLoading(isLoading, label) {
+    var loading = document.getElementById("work-player-loading");
+    var loadingLabel = document.getElementById("work-player-loading-label");
+
+    if (!loading) return;
+
+    if (loadingLabel && label) {
+        loadingLabel.innerText = label;
+    }
+
+    loading.classList.toggle("visible", !!isLoading);
+    loading.setAttribute("aria-hidden", isLoading ? "false" : "true");
+}
+
 function setupWorkPlayerEvents() {
     var closeButton = document.getElementById("btn-close-work");
+    var frame = document.getElementById("work-player-frame");
 
     if (closeButton) {
-        closeButton.addEventListener("pointerdown", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }, { passive: false });
-
-        closeButton.addEventListener("click", function(e) {
+        // pointerup と click の両方を受ける。iPhone Safari で click が遅延・欠落しても戻れるようにする。
+        var closeFromControl = function(e) {
             e.preventDefault();
             e.stopPropagation();
             closeWorkPlayer();
+        };
+
+        closeButton.addEventListener("pointerup", closeFromControl, { passive: false });
+        closeButton.addEventListener("click", closeFromControl);
+    }
+
+    if (frame) {
+        frame.addEventListener("load", function() {
+            if (!isWorkPlayerOpen) return;
+
+            // about:blank ではなく、指定した作品が読み込まれた時だけローディングを閉じる。
+            if (frame.src && frame.src !== "about:blank") {
+                window.setTimeout(function() {
+                    if (isWorkPlayerOpen) {
+                        setWorkPlayerLoading(false);
+                    }
+                }, 120);
+            }
         });
     }
 
@@ -1092,6 +1130,7 @@ window.openWorkPlayer = function(work) {
 
     title.innerText = work.title || "触れるらくがき";
     frame.title = work.title || "触れるらくがき";
+    setWorkPlayerLoading(true, "作品を準備しています…");
     frame.src = work.entry;
 
     playerLayer.classList.add("visible");
@@ -1106,6 +1145,8 @@ window.closeWorkPlayer = function() {
 
     var playerLayer = document.getElementById("work-player");
     var frame = document.getElementById("work-player-frame");
+
+    setWorkPlayerLoading(false);
 
     if (frame) {
         // iframe を空ページへ戻して、作品側のアニメーション・音・入力を確実に止める。

@@ -24,7 +24,7 @@
 - `venue: "leisure_center"` → 湯窓レジャーセンター
 - `venue: "tomogushi_alley"` → 灯串横丁
 - `status: "open"` → URLを開く
-- `status: "preparing"` → 準備中メッセージを表示
+- `status: "preparing"` → 制作メモとして保持し、町の選択肢には出さない
 - `status: "hidden"` → 町には置かない
 
 ### 町を更新した
@@ -73,3 +73,35 @@ var DEV_MODE_ENABLED = false;
 ```
 
 公開中の外部ゲームは、従来どおり `launch: "external"` と `url` を使います。
+
+
+## レジャーセンター：最初の実働筐体
+
+`works/rainy-window/` に、Web移植版の **雨の日の窓** を設置しました。
+
+- `data/works.js` の `rainy-window` は現在 `status: "open"` です。
+- 町からはレジャーセンターを開き、「雨の日の窓」を選ぶと共通プレイヤー内で起動します。
+- 作品を閉じると、レジャーセンターの一覧に戻ります。
+- 作品固有の調整は `works/rainy-window/sketch.js` 冒頭の `CONFIG` にまとめています。
+
+### Rakugaki Engine v1 の小さな追加
+
+Web移植で繰り返し使いやすいよう、`engine/rakugaki-engine.v1.js` に以下を追加しました。
+
+- `CHANGED`（`MOVING` の互換名）
+- `pushStyle()` / `popStyle()`
+- `blendMode(NORMAL / ADDITIVE)`
+- `noise()` / `noiseSeed()`
+
+Luaのクラスやベクター演算子まで再現するのではなく、作品側では通常のJavaScriptを使う方針です。
+
+## 触れるらくがきの座標ルール
+
+Rakugaki Engineの作品座標は全てCodea式です。左下が `(0, 0)`、Yは上向きです。ブラウザCanvasを使う作品は `engine/README.md` の `createCodeaLayer()` を使い、作品側にY反転処理を書かないでください。
+
+
+## 作品プレイヤーの読み込み表示
+
+iframe で作品を開く際は、町側が `作品を準備しています…` を表示します。
+`iframe` の load 完了後に自動で消え、上部の「レジャーセンターへ戻る」は読み込み中でも使えます。
+

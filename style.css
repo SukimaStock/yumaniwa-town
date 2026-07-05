@@ -89,6 +89,43 @@ input, textarea {
     display: block;
     background: #080a0d;
 }
+#work-player-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: #080a0d;
+    pointer-events: auto;
+}
+#work-player-loading.visible {
+    display: flex;
+}
+.work-player-loading-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(17, 23, 31, 0.88);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
+}
+.work-player-loading-mark {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    border-top-color: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    animation: work-player-spin 0.8s linear infinite;
+}
+@keyframes work-player-spin {
+    to { transform: rotate(360deg); }
+}
 #work-player-controls {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
