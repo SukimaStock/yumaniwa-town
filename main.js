@@ -46,6 +46,11 @@ var currentDestinationId = null;
 var currentDestinationMessage = "";
 var currentDestinationMessageTitle = "";
 
+// 触れるらくがき用: 作品ごとに独立した iframe を開く共通プレイヤー
+var isWorkPlayerOpen = false;
+var currentWorkId = null;
+var workPlayerReturnDestinationId = null;
+
 function clearDpadInput() {
     dpad.up = false;
     dpad.down = false;
@@ -63,7 +68,7 @@ function updateControlVisibility() {
     var controls = document.getElementById("mobile-controls");
     if (!controls) return;
 
-    if (isMessageOpen || isEditMode || debugMode || currentScene !== "station_plaza") {
+    if (isMessageOpen || isEditMode || debugMode || isWorkPlayerOpen || currentScene !== "station_plaza") {
         controls.classList.add("disabled");
     } else {
         controls.classList.remove("disabled");
@@ -87,9 +92,11 @@ function applyDeveloperModeVisibility() {
 }
 
 function setupTouchSelectionGuards() {
+    // 町の操作領域だけ、iPhone Safari の長押し選択・虫眼鏡を抑止する。
+    // scene-container は除外し、施設メニューの縦スクロールは残す。
     var gameTouchSelector =
         "#game-canvas, #mobile-controls, #interaction-hint, " +
-        "#message-window, #message-backdrop";
+        "#message-window, #message-backdrop, #work-player";
 
     function isEditableTarget(target) {
         return (
@@ -101,9 +108,7 @@ function setupTouchSelectionGuards() {
     }
 
     function isGameTouchTarget(target) {
-        if (!target || isEditableTarget(target)) return false;
-        if (!target.closest) return false;
-
+        if (!target || isEditableTarget(target) || !target.closest) return false;
         return !!target.closest(gameTouchSelector);
     }
 
@@ -114,16 +119,10 @@ function setupTouchSelectionGuards() {
     }
 
     document.addEventListener("selectstart", blockNativeGameTouch);
-
     document.addEventListener("dragstart", blockNativeGameTouch);
-
     document.addEventListener("contextmenu", blockNativeGameTouch);
-
-    document.addEventListener(
-        "touchstart",
-        blockNativeGameTouch,
-        { passive: false }
-    );
+    document.addEventListener("touchstart", blockNativeGameTouch, { passive: false });
+    document.addEventListener("touchmove", blockNativeGameTouch, { passive: false });
 }
 
 
@@ -145,6 +144,7 @@ window.onload = function() {
     setupEvents();
     setupEditorEvents();
     setupMessageLayerEvents();
+    setupWorkPlayerEvents();
     requestAnimationFrame(gameLoop);
 
     setTimeout(function() {
@@ -329,6 +329,10 @@ function setupEvents() {
         keys[e.key] = true;
         if (DEV_MODE_ENABLED && (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D')) toggleDebugMode();
         if (e.key === 'Escape') {
+            if (isWorkPlayerOpen) {
+                closeWorkPlayer();
+                return;
+            }
             closeMessage();
             if (currentScene !== 'station_plaza') changeScene('station_plaza');
             pendingWarp = null;
@@ -1039,6 +1043,122 @@ function closeDestinationScene() {
     updateCurrentArea();
 }
 
+function setupWorkPlayerEvents() {
+    var closeButton = document.getElementById("btn-close-work");
+
+    if (closeButton) {
+        closeButton.addEventListener("pointerdown", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }, { passive: false });
+
+        closeButton.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeWorkPlayer();
+        });
+    }
+
+    window.addEventListener("message", function(e) {
+        var frame = document.getElementById("work-player-frame");
+        if (!isWorkPlayerOpen || !frame || e.source !== frame.contentWindow) return;
+
+        if (e.data && e.data.type === "yumaniwa:close-work") {
+            closeWorkPlayer();
+        }
+    });
+}
+
+window.openWorkPlayer = function(work) {
+    if (!work || !work.entry) {
+        showDestinationMessage(
+            work && work.title ? work.title : "作品",
+            work && work.emptyText ? work.emptyText : "この作品は、まだ準備中です。"
+        );
+        return;
+    }
+
+    var playerLayer = document.getElementById("work-player");
+    var frame = document.getElementById("work-player-frame");
+    var title = document.getElementById("work-player-title");
+
+    if (!playerLayer || !frame || !title) return;
+
+    if (typeof cancelTapMove === "function") cancelTapMove();
+
+    currentWorkId = work.id || null;
+    workPlayerReturnDestinationId = currentDestinationId;
+    isWorkPlayerOpen = true;
+
+    title.innerText = work.title || "触れるらくがき";
+    frame.title = work.title || "触れるらくがき";
+    frame.src = work.entry;
+
+    playerLayer.classList.add("visible");
+    playerLayer.setAttribute("aria-hidden", "false");
+
+    clearDpadInput();
+    updateControlVisibility();
+};
+
+window.closeWorkPlayer = function() {
+    if (!isWorkPlayerOpen) return;
+
+    var playerLayer = document.getElementById("work-player");
+    var frame = document.getElementById("work-player-frame");
+
+    if (frame) {
+        // iframe を空ページへ戻して、作品側のアニメーション・音・入力を確実に止める。
+        frame.src = "about:blank";
+    }
+
+    if (playerLayer) {
+        playerLayer.classList.remove("visible");
+        playerLayer.setAttribute("aria-hidden", "true");
+    }
+
+    isWorkPlayerOpen = false;
+    currentWorkId = null;
+
+    if (workPlayerReturnDestinationId && DESTINATIONS[workPlayerReturnDestinationId]) {
+        currentDestinationId = workPlayerReturnDestinationId;
+        destinationViewMode = "menu";
+        currentDestinationMessage = "";
+        currentDestinationMessageTitle = "";
+        renderDestination();
+    }
+
+    workPlayerReturnDestinationId = null;
+    clearDpadInput();
+    updateControlVisibility();
+};
+
+window.launchWork = function(work) {
+    if (!work) {
+        showDestinationMessage("作品", "作品データが見つかりませんでした。");
+        return;
+    }
+
+    if (work.status !== "open") {
+        showDestinationMessage(work.title, work.emptyText || "この作品は、まだ準備中です。");
+        return;
+    }
+
+    var launch = work.launch || (work.url ? "external" : "embedded");
+
+    if (launch === "embedded") {
+        openWorkPlayer(work);
+        return;
+    }
+
+    if (launch === "external" && work.url) {
+        window.open(work.url, "_blank");
+        return;
+    }
+
+    showDestinationMessage(work.title, work.emptyText || "この作品は、まだ準備中です。");
+};
+
 window.handleDestinationItem = function(destId, index) {
     var dest = DESTINATIONS[destId];
     if (!dest) return;
@@ -1049,16 +1169,21 @@ window.handleDestinationItem = function(destId, index) {
         showDestinationMessage(item.label, item.text);
         return;
     }
-    
-    if (item.kind === 'external' || item.kind === 'work' || item.kind === 'game') {
+
+    if (item.workId) {
+        launchWork(getWorkById(item.workId));
+        return;
+    }
+
+    if (item.kind === 'external') {
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
-            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
+            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
         }
         return;
     }
-    
+
     if (item.kind === 'back') {
         changeScene('station_plaza');
         return;

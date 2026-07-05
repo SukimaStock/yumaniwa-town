@@ -33,6 +33,20 @@
     <div id="message-window" role="dialog" aria-live="polite"></div>
     <div id="scene-container"></div>
 
+    <!-- 触れるらくがき用: 作品はiframe内で独立して動かす -->
+    <div id="work-player" aria-hidden="true">
+      <iframe
+        id="work-player-frame"
+        title="触れるらくがき"
+        allow="autoplay"
+        scrolling="no"
+      ></iframe>
+      <div id="work-player-controls">
+        <div id="work-player-title"></div>
+        <button id="btn-close-work" type="button">レジャーセンターへ戻る</button>
+      </div>
+    </div>
+
     <div id="mobile-controls">
       <div id="dpad" aria-label="移動コントローラー">
         <button id="btn-up" class="dpad-btn up" type="button" aria-label="上へ">▲</button>
