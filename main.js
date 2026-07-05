@@ -12,7 +12,41 @@ var bgImage = new Image();
 var bgLoaded = false;
 var bgError = false;
 
-var player = { x: PLAYER_START.x * TILE_SIZE, y: PLAYER_START.y * TILE_SIZE, w: 16, h: 16, speed: 2, dir: 'down' };
+// スプライト番号: 1=下, 2=左, 3=上, 4=右
+// 当たり判定は従来どおり player の 16×16 のまま使う。
+var PLAYER_SPRITE_PATHS = {
+    stand: {
+        down: 'assets/stand-1.png',
+        left: 'assets/stand-2.png',
+        up: 'assets/stand-3.png',
+        right: 'assets/stand-4.png'
+    },
+    walk: {
+        down: 'assets/walk-1.png',
+        left: 'assets/walk-2.png',
+        up: 'assets/walk-3.png',
+        right: 'assets/walk-4.png'
+    }
+};
+
+var playerSprites = {
+    stand: { down: null, left: null, up: null, right: null },
+    walk: { down: null, left: null, up: null, right: null }
+};
+
+// 絵の大きさだけを微調整したいときは、ここだけ変える。
+var PLAYER_SPRITE_DRAW = { width: 20, height: 28 };
+
+
+var player = {
+    x: PLAYER_START.x * TILE_SIZE,
+    y: PLAYER_START.y * TILE_SIZE,
+    w: 16,
+    h: 16,
+    speed: 2,
+    dir: 'down',
+    isMoving: false
+};
 var currentScene = 'station_plaza';
 var isMessageOpen = false;
 var pendingWarp = null;
@@ -149,6 +183,7 @@ window.onload = function() {
     bgImage.onload = function() { bgLoaded = true; };
     bgImage.onerror = function() { bgError = true; };
     bgImage.src = BG_IMAGE_PATH;
+    loadPlayerSprites();
 
     setupEvents();
     setupEditorEvents();
@@ -166,6 +201,60 @@ function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
+
+function loadPlayerSprites() {
+    var poses = ['stand', 'walk'];
+    var dirs = ['down', 'left', 'up', 'right'];
+
+    for (var p = 0; p < poses.length; p++) {
+        for (var d = 0; d < dirs.length; d++) {
+            var pose = poses[p];
+            var dir = dirs[d];
+            var image = new Image();
+
+            image.src = PLAYER_SPRITE_PATHS[pose][dir];
+            playerSprites[pose][dir] = image;
+        }
+    }
+}
+
+function drawFallbackPlayer(px, py) {
+    ctx.fillStyle = '#f4c2c2';
+    ctx.fillRect(px + 2, py - 8, 12, 12);
+    ctx.fillStyle = '#4a90e2';
+    ctx.fillRect(px, py + 4, 16, 12);
+    ctx.fillStyle = '#ffffff';
+
+    if (player.dir === 'down') {
+        ctx.fillRect(px + 3, py - 4, 3, 3);
+        ctx.fillRect(px + 10, py - 4, 3, 3);
+    } else if (player.dir === 'left') {
+        ctx.fillRect(px + 1, py - 4, 3, 3);
+    } else if (player.dir === 'right') {
+        ctx.fillRect(px + 12, py - 4, 3, 3);
+    }
+}
+
+function drawPlayerSprite(px, py) {
+    var pose = player.isMoving ? 'walk' : 'stand';
+    var sprite = playerSprites[pose] && playerSprites[pose][player.dir];
+
+    if (!sprite || !sprite.complete || !sprite.naturalWidth) {
+        drawFallbackPlayer(px, py);
+        return;
+    }
+
+    var drawW = PLAYER_SPRITE_DRAW.width;
+    var drawH = PLAYER_SPRITE_DRAW.height;
+    var drawX = Math.round(px + (player.w - drawW) / 2);
+    var drawY = Math.round(py + player.h - drawH);
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sprite, drawX, drawY, drawW, drawH);
+    ctx.restore();
+}
+
 
 function initGrid() {
     collisionGrid = [];
@@ -694,7 +783,10 @@ function showExportModal() {
 function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 
 function update() {
-    if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) return;
+    if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) {
+        player.isMoving = false;
+        return;
+    }
 
     var dx = 0; var dy = 0;
     var manualInput = false;
@@ -705,6 +797,7 @@ function update() {
     if (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right) { dx += player.speed; manualInput = true; }
 
     if (manualInput) {
+        player.isMoving = true;
         cancelTapMove();
         
         if (dx !== 0 && dy !== 0) {
@@ -727,6 +820,7 @@ function update() {
         updateCurrentArea();
     } else {
         var moved = updateTapMove();
+        player.isMoving = !!tapMoveTargetTile;
         if (moved) {
             updateUI();
             updateInteractionHint();
@@ -1292,17 +1386,16 @@ function draw() {
     }
 
     if (currentScene === 'station_plaza') {
-        var px = player.x; var py = player.y;
-        ctx.fillStyle = '#f4c2c2'; ctx.fillRect(px + 2, py - 8, 12, 12);
-        ctx.fillStyle = '#4a90e2'; ctx.fillRect(px, py + 4, 16, 12);
-        ctx.fillStyle = '#ffffff';
-        if (player.dir === 'down') { ctx.fillRect(px + 3, py - 4, 3, 3); ctx.fillRect(px + 10, py - 4, 3, 3); }
-        else if (player.dir === 'left') { ctx.fillRect(px + 1, py - 4, 3, 3); }
-        else if (player.dir === 'right') { ctx.fillRect(px + 12, py - 4, 3, 3); }
+        var px = player.x;
+        var py = player.y;
+
+        drawPlayerSprite(px, py);
 
         if (debugMode || isEditMode) {
             var hitbox = getPlayerHitbox(px, py);
-            ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 1; ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
+            ctx.strokeStyle = '#00ff66';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
         }
     }
     ctx.restore();
