@@ -39,8 +39,8 @@ var playerSprites = {
 var PLAYER_SPRITE_DRAW = { height: 32 };
 
 // 実際に何px歩いたら、stand / walk を切り替えるか。
-// 1タイル（16px）ごとに切り替え、町歩きらしい落ち着いた歩幅にする。
-var PLAYER_WALK_STEP_PX = 16;
+// さらにゆっくり見せるため、1.5タイルぶん（24px）で切り替える。
+var PLAYER_WALK_STEP_PX = 24;
 
 
 var player = {
@@ -589,23 +589,38 @@ function setupEvents() {
         }
     }
 
-    // CSSだけではSafariの長押し虫眼鏡が残る場合があるため、
-    // Canvas本体にも明示的に指定する。
-    canvas.style.webkitTouchCallout = 'none';
-    canvas.style.webkitUserSelect = 'none';
-    canvas.style.userSelect = 'none';
-    canvas.oncontextmenu = function() {
-        return false;
-    };
+    function applyNativeGestureSuppression(el) {
+        if (!el) return;
 
-    canvas.addEventListener('selectstart', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('dragstart', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('contextmenu', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('touchstart', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('touchmove', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('gesturestart', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('gesturechange', suppressCanvasNativeGesture, { passive: false });
-    canvas.addEventListener('gestureend', suppressCanvasNativeGesture, { passive: false });
+        el.style.webkitTouchCallout = 'none';
+        el.style.webkitUserSelect = 'none';
+        el.style.userSelect = 'none';
+        el.oncontextmenu = function() {
+            return false;
+        };
+
+        el.addEventListener('selectstart', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('dragstart', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('contextmenu', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('touchstart', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('touchmove', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('gesturestart', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('gesturechange', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener('gestureend', suppressCanvasNativeGesture, { passive: false });
+    }
+
+    // Canvas本体
+    applyNativeGestureSuppression(canvas);
+
+    // 十字キー・調べるボタン側でも虫眼鏡を抑止する
+    applyNativeGestureSuppression(document.getElementById('mobile-controls'));
+    applyNativeGestureSuppression(document.getElementById('dpad'));
+    applyNativeGestureSuppression(document.getElementById('btn-action'));
+
+    var dpadButtons = document.querySelectorAll('.dpad-btn');
+    dpadButtons.forEach(function(btn) {
+        applyNativeGestureSuppression(btn);
+    });
 
     canvas.addEventListener('pointerdown', function(e) {
         e.preventDefault();
