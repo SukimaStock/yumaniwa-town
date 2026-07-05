@@ -154,8 +154,22 @@ function refreshTownContent() {
     }
 
     if (DESTINATIONS.leisure_center_map) {
-        DESTINATIONS.leisure_center_map.items = buildWorkMenuItems("leisure_center");
-        DESTINATIONS.leisure_center_map.items.push({ label: "駅前へ戻る", kind: "back" });
+        var leisureCenter = DESTINATIONS.leisure_center_map;
+        var leisureItems = buildWorkMenuItems("leisure_center");
+
+        // 稼働中の作品がない間は、準備中の筐体を選択肢として出さない。
+        if (leisureItems.length === 0) {
+            leisureCenter.description = "少し古びた遊技場。奥の筐体は、まだ開店準備中だ。";
+            leisureCenter.flavor = "入口近くの看板には『次のらくがき、調整中』と書かれている。";
+            leisureCenter.menuTitle = "稼働中の筐体はありません。";
+        } else {
+            leisureCenter.description = "少し古びた遊技場。奥の筐体から、小さな光と音がこぼれている。";
+            leisureCenter.flavor = "入口近くの看板には『さわれるらくがき、稼働中』と書かれている。";
+            leisureCenter.menuTitle = "どの筐体で遊びますか?";
+        }
+
+        leisureCenter.items = leisureItems;
+        leisureCenter.items.push({ label: "駅前へ戻る", kind: "back" });
     }
 
     if (DESTINATIONS.tomogushi_alley_map) {
