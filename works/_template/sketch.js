@@ -1,8 +1,11 @@
 // ==========================================
 // 新しい触れるらくがき / 下書き
 // Codea 風の setup(), draw(), touched(touch) をここに書きます。
-// y座標は Codea と同じく、画面下が 0 です。
+// 座標は全て Codea 式：左下が (0, 0)、Y は上向き。
 // ==========================================
+
+// 初回移植時だけ true にして、上下・タッチ位置を確認します。
+var COORDINATE_CHECK = false;
 
 var touchPoint = null;
 var pulse = 0;
@@ -33,6 +36,12 @@ function draw() {
   }
 
   pulse *= 0.94;
+
+  if (COORDINATE_CHECK) {
+    CodeaLite.drawCoordinateGuide({
+      label: "Codea座標確認：下 = y 0 / 上 = y HEIGHT"
+    });
+  }
 }
 
 function touched(touch) {
