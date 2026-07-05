@@ -51,9 +51,18 @@ var WORKS = [
         title: "MIDNIGHT COLA",
         venue: "tomogushi_alley",
         kind: "game",
-        status: "preparing",
-        launch: "external",
-        url: "",
+        status: "open",
+
+        launch: "itch_embed",
+        embedUrl: "https://itch.io/embed-upload/18206711?color=743f39",
+
+        // 町内表示で問題が出た際に確認できる通常ページURL。
+        url: "https://sukimastock.itch.io/midnight-cola",
+
+        frameTitle: "夜の工房",
+        returnLabel: "灯串横丁",
+        frameMode: "standard",
+        description: "夜の工房で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
     },
     {
