@@ -7,9 +7,10 @@
 // preparing : 制作中。データは残すが、町にはまだ表示しない
 // hidden    : データは残しつつ、町には置かない
 //
-// launch: "embedded" | "external"
-// embedded : 町の共通プレイヤー内で開く。entry に作品の index.html を指定
-// external : itch.io など、別タブで開く。url を指定
+// launch: "embedded" | "itch_embed" | "external"
+// embedded   : 町の共通プレイヤー内で開く。entry に作品の index.html を指定
+// itch_embed : itch.ioの埋め込みURLを、町の共通プレイヤー内で開く。embedUrl を指定
+// external   : 外部ページを別タブで開く。url を指定
 // ==========================================
 
 var WORKS = [
@@ -22,7 +23,9 @@ var WORKS = [
     //     status: "preparing",
     //     launch: "embedded",
     //     entry: "./works/work-id/index.html",
+    //     embedUrl: "",
     //     url: "",
+    //     returnLabel: "",
     //     emptyText: "この作品は準備中です。"
     // },
 
@@ -53,8 +56,14 @@ var WORKS = [
         venue: "tomogushi_alley",
         kind: "game",
         status: "open",
-        launch: "external",
+
+        launch: "itch_embed",
+        embedUrl: "https://itch.io/embed-upload/17899376?color=3f2832",
+
+        // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/yakitori-wars",
+
+        returnLabel: "灯串横丁へ戻る",
         emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。"
     },
     {
