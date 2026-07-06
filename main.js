@@ -93,6 +93,10 @@ var isWorkPlayerOpen = false;
 var currentWorkId = null;
 var workPlayerReturnDestinationId = null;
 
+// 湯間庭フレームで表示中の元ページ。
+// 現在はnote読書室だけが右上の「noteで開く」に使う。
+var currentFrameSourceUrl = "";
+
 function getWorkPlayerSource(work) {
     if (!work) return "";
 
@@ -1240,6 +1244,37 @@ window.renderDestinationIntro = function(dest) {
     return html;
 };
 
+// 施設メニュー内の作品一覧は、DESTINATIONSに固定で書かず WORKS から組み立てる。
+// 既存の最初の作品項目を「差し込み位置」として使うため、
+// 作品を追加・公開しただけで同じ施設の一覧に自動で反映される。
+function getDestinationMenuItems(dest) {
+    var baseItems = (dest && dest.items) ? dest.items : [];
+    var result = [];
+    var insertedVenues = {};
+
+    for (var i = 0; i < baseItems.length; i++) {
+        var item = baseItems[i];
+        var work = item && item.workId ? getWorkById(item.workId) : null;
+        var venue = work && work.venue ? work.venue : "";
+
+        if (venue) {
+            if (!insertedVenues[venue]) {
+                var visibleWorks = buildWorkMenuItems(venue);
+                for (var w = 0; w < visibleWorks.length; w++) {
+                    result.push(visibleWorks[w]);
+                }
+                insertedVenues[venue] = true;
+            }
+            // 古い個別の作品項目は、上で生成した一覧に置き換える。
+            continue;
+        }
+
+        result.push(item);
+    }
+
+    return result;
+}
+
 window.renderDestinationMenu = function(dest) {
     var html = '<div class="rpg-window">';
     html += '<div class="rpg-window-header">';
@@ -1250,8 +1285,9 @@ window.renderDestinationMenu = function(dest) {
     if (dest.menuTitle) html += '<div class="rpg-menu-title">' + dest.menuTitle + '</div>';
 
     html += '<div class="rpg-menu-list">';
-    for (var i = 0; i < dest.items.length; i++) {
-        var item = dest.items[i];
+    var menuItems = getDestinationMenuItems(dest);
+    for (var i = 0; i < menuItems.length; i++) {
+        var item = menuItems[i];
         var btnClass = 'rpg-menu-item';
         
         if (item.kind === 'back') {
@@ -1259,7 +1295,9 @@ window.renderDestinationMenu = function(dest) {
             html += '<button class="' + btnClass + '" onclick="changeScene(\'station_plaza\')">' + item.label + '</button>';
         } else {
             var label = '▶ ' + item.label;
-            html += '<button class="' + btnClass + '" onclick="handleDestinationItem(\'' + dest.id + '\', ' + i + ')">' + label + '</button>';
+            // 生成済みのメニュー配列を直接渡すことで、
+            // works.jsの並びと表示内容を必ず一致させる。
+            html += '<button class="' + btnClass + '" onclick="handleDestinationMenuItem(\'' + dest.id + '\', ' + i + ')">' + label + '</button>';
         }
     }
     html += '</div></div>';
@@ -1305,6 +1343,98 @@ function closeDestinationScene() {
     updateCurrentArea();
 }
 
+
+// ==========================================
+// 湯間庭新報 / note読書室
+// noteは通常ページを直接iframeへ入れず、note公式の埋め込みURLを使う。
+// 記事URLの /n/ 以降から埋め込みURLを組み立てるため、日々の更新ではnotes.jsに
+// 通常のurlだけ追加すればよい。
+function getNoteArticleByUrl(url) {
+    var target = String(url || "").split("?")[0].replace(/\/+$/, "");
+    if (!target) return null;
+
+    var source = (typeof getVisibleNoteArticles === "function")
+        ? getVisibleNoteArticles()
+        : (typeof NOTE_ARTICLES !== "undefined" ? NOTE_ARTICLES : []);
+
+    for (var i = 0; i < source.length; i++) {
+        var article = source[i];
+        var articleUrl = String((article && article.url) || "").split("?")[0].replace(/\/+$/, "");
+        if (articleUrl === target) return article;
+    }
+    return null;
+}
+
+function getNoteEmbedUrl(article) {
+    if (!article) return "";
+
+    // 将来、note側で専用URLが必要になった場合も、notes.jsの embedUrl を優先できる。
+    if (article.embedUrl) return article.embedUrl;
+
+    var url = String(article.url || "");
+    var match = url.match(/\/n\/(n[a-z0-9]+)(?:[/?#]|$)/i);
+    if (!match) return "";
+
+    return "https://note.com/embed/notes/" + match[1];
+}
+
+window.openNoteReader = function(article) {
+    var embedUrl = getNoteEmbedUrl(article);
+
+    if (!article || !embedUrl) {
+        showDestinationMessage(
+            article && article.title ? article.title : "読書室",
+            "この記事は、まだ読書室に並べる準備中です。"
+        );
+        return;
+    }
+
+    var playerLayer = document.getElementById("work-player");
+    var frame = document.getElementById("work-player-frame");
+    var title = document.getElementById("work-player-title");
+    var returnLabel = document.getElementById("work-player-return-label");
+    var sourceButton = document.getElementById("btn-open-frame-source");
+
+    if (!playerLayer || !frame || !title) return;
+
+    if (typeof cancelTapMove === "function") {
+        cancelTapMove();
+    }
+
+    currentWorkId = null;
+    currentFrameSourceUrl = article.url || "";
+    workPlayerReturnDestinationId = currentDestinationId;
+    isWorkPlayerOpen = true;
+
+    // 読書室は白い紙面に近い背景を使い、ゲームやらくがきとは見せ方を分ける。
+    playerLayer.dataset.frameMode = "reader";
+
+    title.innerText = "読書室";
+    frame.title = article.title || "湯間庭新報";
+    frame.setAttribute("allow", "");
+    frame.removeAttribute("allowfullscreen");
+    frame.allowFullscreen = false;
+    frame.setAttribute("scrolling", "yes");
+
+    if (returnLabel) {
+        returnLabel.innerText = "湯間庭新報";
+    }
+
+    if (sourceButton) {
+        sourceButton.hidden = false;
+        sourceButton.setAttribute("aria-label", "noteで全文を開く");
+    }
+
+    setWorkPlayerLoading(true, "記事を開いています…");
+    frame.src = embedUrl;
+
+    playerLayer.classList.add("visible");
+    playerLayer.setAttribute("aria-hidden", "false");
+
+    clearDpadInput();
+    updateControlVisibility();
+};
+
 function setWorkPlayerLoading(isLoading, label) {
     var loading = document.getElementById("work-player-loading");
     var loadingLabel = document.getElementById("work-player-loading-label");
@@ -1321,6 +1451,7 @@ function setWorkPlayerLoading(isLoading, label) {
 
 function setupWorkPlayerEvents() {
     var closeButton = document.getElementById("btn-close-work");
+    var sourceButton = document.getElementById("btn-open-frame-source");
     var frame = document.getElementById("work-player-frame");
 
     if (closeButton) {
@@ -1333,6 +1464,17 @@ function setupWorkPlayerEvents() {
 
         closeButton.addEventListener("pointerup", closeFromControl, { passive: false });
         closeButton.addEventListener("click", closeFromControl);
+    }
+
+    if (sourceButton) {
+        sourceButton.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (currentFrameSourceUrl) {
+                window.open(currentFrameSourceUrl, "_blank");
+            }
+        });
     }
 
     if (frame) {
@@ -1376,6 +1518,7 @@ window.openWorkPlayer = function(work) {
     var title = document.getElementById("work-player-title");
     var closeButton = document.getElementById("btn-close-work");
     var returnLabel = document.getElementById("work-player-return-label");
+    var sourceButton = document.getElementById("btn-open-frame-source");
 
     if (!playerLayer || !frame || !title) return;
 
@@ -1384,6 +1527,7 @@ window.openWorkPlayer = function(work) {
     }
 
     currentWorkId = work.id || null;
+    currentFrameSourceUrl = "";
     workPlayerReturnDestinationId = currentDestinationId;
     isWorkPlayerOpen = true;
 
@@ -1398,6 +1542,11 @@ window.openWorkPlayer = function(work) {
     frame.setAttribute("allow", "autoplay; fullscreen; gamepad");
     frame.setAttribute("allowfullscreen", "");
     frame.allowFullscreen = true;
+    frame.setAttribute("scrolling", "no");
+
+    if (sourceButton) {
+        sourceButton.hidden = true;
+    }
 
     var destinationLabel = getWorkPlayerReturnLabel(work);
     if (returnLabel) {
@@ -1433,6 +1582,7 @@ window.closeWorkPlayer = function() {
     var closeButton = document.getElementById("btn-close-work");
     var returnLabel = document.getElementById("work-player-return-label");
     var title = document.getElementById("work-player-title");
+    var sourceButton = document.getElementById("btn-open-frame-source");
 
     if (returnLabel) {
         returnLabel.innerText = "町";
@@ -1443,6 +1593,9 @@ window.closeWorkPlayer = function() {
     if (title) {
         title.innerText = "";
     }
+    if (sourceButton) {
+        sourceButton.hidden = true;
+    }
 
     if (playerLayer) {
         playerLayer.dataset.frameMode = "standard";
@@ -1452,6 +1605,7 @@ window.closeWorkPlayer = function() {
 
     isWorkPlayerOpen = false;
     currentWorkId = null;
+    currentFrameSourceUrl = "";
 
     if (workPlayerReturnDestinationId && DESTINATIONS[workPlayerReturnDestinationId]) {
         currentDestinationId = workPlayerReturnDestinationId;
@@ -1498,6 +1652,46 @@ window.launchWork = function(work) {
     );
 };
 
+window.handleDestinationMenuItem = function(destId, index) {
+    var dest = DESTINATIONS[destId];
+    if (!dest) return;
+
+    var menuItems = getDestinationMenuItems(dest);
+    var item = menuItems[index];
+    if (!item) return;
+
+    if (item.kind === 'message') {
+        showDestinationMessage(item.label, item.text);
+        return;
+    }
+
+    if (item.workId) {
+        launchWork(getWorkById(item.workId));
+        return;
+    }
+
+    if (item.kind === 'external') {
+        // 湯間庭新報の記事だけは、まず町内の読書室で開く。
+        // 記事の全文は読書室右上の「noteで開く」から元ページへ進める。
+        var noteArticle = (destId === "shinpo_board") ? getNoteArticleByUrl(item.url) : null;
+        if (noteArticle) {
+            openNoteReader(noteArticle);
+            return;
+        }
+
+        if (item.url && item.url !== "") {
+            window.open(item.url, '_blank');
+        } else {
+            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
+        }
+        return;
+    }
+
+    if (item.kind === 'back') {
+        changeScene('station_plaza');
+    }
+};
+
 window.handleDestinationItem = function(destId, index) {
     var dest = DESTINATIONS[destId];
     if (!dest) return;
@@ -1515,6 +1709,14 @@ window.handleDestinationItem = function(destId, index) {
     }
 
     if (item.kind === 'external') {
+        // 湯間庭新報の記事だけは、まず町内の読書室で開く。
+        // 記事の全文は読書室右上の「noteで開く」から元ページへ進める。
+        var noteArticle = (destId === "shinpo_board") ? getNoteArticleByUrl(item.url) : null;
+        if (noteArticle) {
+            openNoteReader(noteArticle);
+            return;
+        }
+
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
