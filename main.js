@@ -83,7 +83,7 @@ var tapMarkerTimer = 0;
 var tapMarkerPos = null;
 
 // ★ 新規追加: RPGメニュー用状態変数
-var destinationViewMode = "intro"; // "intro" | "menu" | "message"
+var destinationViewMode = "intro"; // "intro" | "menu" | "message" | "note_rack"
 var currentDestinationId = null;
 var currentDestinationMessage = "";
 var currentDestinationMessageTitle = "";
@@ -1202,7 +1202,10 @@ window.changeScene = function(sceneId) {
 
 window.openDestination = function(destId) {
     currentDestinationId = destId;
-    destinationViewMode = "intro";
+
+    // 湯間庭新報は、タイトル一覧を一度挟まずに
+    // 記事カードが並ぶ「新聞ラック」を直接開く。
+    destinationViewMode = (destId === "shinpo_board") ? "note_rack" : "intro";
     currentDestinationMessage = "";
     currentDestinationMessageTitle = "";
     renderDestination();
@@ -1219,9 +1222,12 @@ window.renderDestination = function() {
         html = renderDestinationMenu(dest);
     } else if (destinationViewMode === "message") {
         html = renderDestinationMessage(dest, currentDestinationMessageTitle, currentDestinationMessage);
+    } else if (destinationViewMode === "note_rack") {
+        html = renderNoteCardRack(dest);
     }
 
     var sceneContainer = document.getElementById('scene-container');
+    sceneContainer.classList.toggle('newspaper-rack', destinationViewMode === "note_rack");
     sceneContainer.innerHTML = html;
     sceneContainer.style.display = 'block';
 };
@@ -1337,6 +1343,7 @@ window.returnDestinationMenu = function() {
 
 function closeDestinationScene() {
     var sceneContainer = document.getElementById('scene-container');
+    sceneContainer.classList.remove('newspaper-rack');
     sceneContainer.style.display = 'none';
     sceneContainer.innerHTML = '';
     updateInteractionHint();
@@ -1377,6 +1384,102 @@ function getNoteEmbedUrl(article) {
 
     return "https://note.com/embed/notes/" + match[1];
 }
+
+
+// 湯間庭新報 / noteカードラック
+// title → カード → 本文という段階を作らず、新聞の棚へ直接カードを並べる。
+function getSortedNoteArticlesForRack() {
+    var source = (typeof getVisibleNoteArticles === "function")
+        ? getVisibleNoteArticles()
+        : (typeof NOTE_ARTICLES !== "undefined" ? NOTE_ARTICLES : []);
+
+    var articles = [];
+    for (var i = 0; i < source.length; i++) {
+        if (source[i] && source[i].title && source[i].url) {
+            articles.push(source[i]);
+        }
+    }
+
+    // notes.js の並びに依存せず、新しい記事から見せる。
+    articles.sort(function(a, b) {
+        var aDate = (typeof getNotePublishDate === "function") ? getNotePublishDate(a) : "";
+        var bDate = (typeof getNotePublishDate === "function") ? getNotePublishDate(b) : "";
+        return String(bDate).localeCompare(String(aDate));
+    });
+
+    return articles;
+}
+
+function escapeNoteRackHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+window.openNoteArticleFromRack = function(index) {
+    var articles = getSortedNoteArticlesForRack();
+    var article = articles[index];
+
+    if (!article || !article.url) return;
+
+    // カードを選んだ瞬間だけ、正式なnote記事へ進む。
+    window.open(article.url, "_blank");
+};
+
+window.renderNoteCardRack = function(dest) {
+    var articles = getSortedNoteArticlesForRack();
+    var html = '<div class="shinpo-rack">';
+
+    html += '<div class="shinpo-rack-header">';
+    html += '<div class="shinpo-rack-heading">';
+    html += '<div class="shinpo-rack-title">' + escapeNoteRackHtml(dest.title || "湯間庭新報") + '</div>';
+    if (dest.subtitle) {
+        html += '<div class="shinpo-rack-subtitle">' + escapeNoteRackHtml(dest.subtitle) + '</div>';
+    }
+    html += '</div>';
+    html += '<button class="shinpo-rack-back" type="button" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+    html += '</div>';
+
+    html += '<p class="shinpo-rack-lead">気になる一枚を選ぶと、noteの記事を開きます。</p>';
+
+    if (articles.length === 0) {
+        html += '<div class="shinpo-rack-empty">今日はまだ、新しい紙面が届いていません。</div>';
+    } else {
+        html += '<div class="note-card-rack-list">';
+
+        for (var i = 0; i < articles.length; i++) {
+            var article = articles[i];
+            var embedUrl = getNoteEmbedUrl(article);
+            var title = escapeNoteRackHtml(article.title);
+            var date = (typeof getNotePublishDate === "function") ? getNotePublishDate(article) : "";
+
+            // URL形式が例外的な記事だけは、棚の中でタイトル札として残す。
+            if (!embedUrl) {
+                html += '<article class="note-rack-card note-rack-card-fallback">';
+                html += '<div class="note-rack-fallback-title">' + title + '</div>';
+                if (date) html += '<div class="note-rack-fallback-date">' + escapeNoteRackHtml(date) + '</div>';
+                html += '<div class="note-rack-card-footer"><span>noteで読む</span><span aria-hidden="true">↗</span></div>';
+                html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(' + i + ')"></button>';
+                html += '</article>';
+                continue;
+            }
+
+            html += '<article class="note-rack-card">';
+            html += '<iframe class="note-rack-card-frame" title="' + title + ' の紹介" src="' + escapeNoteRackHtml(embedUrl) + '" loading="lazy" scrolling="no" tabindex="-1" aria-hidden="true"></iframe>';
+            html += '<div class="note-rack-card-footer"><span>noteで読む</span><span aria-hidden="true">↗</span></div>';
+            html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(' + i + ')"></button>';
+            html += '</article>';
+        }
+
+        html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+};
 
 window.openNoteReader = function(article) {
     var embedUrl = getNoteEmbedUrl(article);
@@ -1671,14 +1774,6 @@ window.handleDestinationMenuItem = function(destId, index) {
     }
 
     if (item.kind === 'external') {
-        // 湯間庭新報の記事だけは、まず町内の読書室で開く。
-        // 記事の全文は読書室右上の「noteで開く」から元ページへ進める。
-        var noteArticle = (destId === "shinpo_board") ? getNoteArticleByUrl(item.url) : null;
-        if (noteArticle) {
-            openNoteReader(noteArticle);
-            return;
-        }
-
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
@@ -1709,14 +1804,6 @@ window.handleDestinationItem = function(destId, index) {
     }
 
     if (item.kind === 'external') {
-        // 湯間庭新報の記事だけは、まず町内の読書室で開く。
-        // 記事の全文は読書室右上の「noteで開く」から元ページへ進める。
-        var noteArticle = (destId === "shinpo_board") ? getNoteArticleByUrl(item.url) : null;
-        if (noteArticle) {
-            openNoteReader(noteArticle);
-            return;
-        }
-
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
