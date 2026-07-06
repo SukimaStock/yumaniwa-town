@@ -65,8 +65,8 @@ var WORKS = [
         returnLabel: "灯串横丁",
         frameMode: "phone-cola",
         playerLayout: "phone",
-        playerWidth: 390,
-        playerHeight: 864,
+        playerWidth: 360,
+        playerHeight: 660,
         description: "夜の研究所で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
     },
