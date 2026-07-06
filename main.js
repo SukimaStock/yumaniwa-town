@@ -137,6 +137,58 @@ function getWorkPlayerFrameTitle(work) {
 }
 
 
+// 作品ごとに、町のフレーム内での表示器を選ぶ。
+// responsive : コンテンツ領域をそのまま使う（触れるらくがき向け）
+// phone      : iPhone相当の縦長画面を中央に置く（縦長ゲーム向け）
+function getWorkPlayerLayout(work) {
+    return (work && work.playerLayout === "phone") ? "phone" : "responsive";
+}
+
+function setWorkPlayerLayout(work, playerLayer) {
+    if (!playerLayer) return;
+
+    var layout = getWorkPlayerLayout(work);
+    playerLayer.dataset.playerLayout = layout;
+
+    // いったん前の作品の表示器設定を消す。
+    playerLayer.style.removeProperty("--town-player-render-width");
+    playerLayer.style.removeProperty("--town-player-render-height");
+    delete playerLayer.dataset.playerWidth;
+    delete playerLayer.dataset.playerHeight;
+
+    if (layout !== "phone") return;
+
+    // itch.ioで指定した本来の縦横サイズを基準にする。
+    // 画面に収まらない時だけ、縦横比を保ったまま縮小する。
+    var width = Number(work && work.playerWidth) || 390;
+    var height = Number(work && work.playerHeight) || 844;
+
+    playerLayer.dataset.playerWidth = String(width);
+    playerLayer.dataset.playerHeight = String(height);
+}
+
+function updateWorkPlayerLayoutSize() {
+    var playerLayer = document.getElementById("work-player");
+    var content = document.getElementById("work-player-content");
+
+    if (!playerLayer || !content || playerLayer.dataset.playerLayout !== "phone") return;
+
+    var baseWidth = Number(playerLayer.dataset.playerWidth) || 390;
+    var baseHeight = Number(playerLayer.dataset.playerHeight) || 844;
+    var availableWidth = Math.max(0, content.clientWidth - 24);
+    var availableHeight = Math.max(0, content.clientHeight - 24);
+
+    if (!availableWidth || !availableHeight) return;
+
+    var scale = Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight);
+    var renderWidth = Math.max(1, Math.floor(baseWidth * scale));
+    var renderHeight = Math.max(1, Math.floor(baseHeight * scale));
+
+    playerLayer.style.setProperty("--town-player-render-width", renderWidth + "px");
+    playerLayer.style.setProperty("--town-player-render-height", renderHeight + "px");
+}
+
+
 function clearDpadInput() {
     dpad.up = false;
     dpad.down = false;
@@ -252,6 +304,11 @@ window.onload = function() {
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // iPad/PCで町のサイズが変わっても、縦長ゲームは画面内に収まる大きさを保つ。
+    if (isWorkPlayerOpen) {
+        window.requestAnimationFrame(updateWorkPlayerLayoutSize);
+    }
 }
 
 function loadPlayerSprites() {
@@ -1398,19 +1455,8 @@ function getSortedNoteArticlesForRack() {
 
     var articles = [];
     for (var i = 0; i < source.length; i++) {
-        var article = source[i];
-        // 湯間庭新報に置くと明示した記事だけを候補にする。
-        // 以前のデータとの互換用に、SHINPO_RACK が存在しない場合だけ全件を候補にする。
-        var isEligible = article && article.showInShinpo === true;
-        var useLegacyFallback = typeof SHINPO_RACK === "undefined";
-
-        if (
-            article &&
-            article.title &&
-            article.url &&
-            (isEligible || useLegacyFallback)
-        ) {
-            articles.push(article);
+        if (source[i] && source[i].title && source[i].url) {
+            articles.push(source[i]);
         }
     }
 
@@ -1494,18 +1540,12 @@ function recordShinpoArticleOpen(article) {
 }
 
 function getNoteArticleThemes(article) {
-    // notes.js 側の tags を最優先する。
-    if (article && Array.isArray(article.tags) && article.tags.length) {
-        return article.tags.slice();
-    }
-
-    // 旧データの themes も残しておく。
     if (article && Array.isArray(article.themes) && article.themes.length) {
         return article.themes.slice();
     }
 
     // 日々の更新時にタグ入力を必須にしないため、まずはタイトルから軽く推定する。
-    // notes.js に tags: ["game", "making"] を付ければ、そちらを優先できる。
+    // 将来 notes.js に themes: ["game", "making"] を付ければ、そちらを優先できる。
     var text = String((article && article.title) || "").toLowerCase();
     var themes = [];
 
@@ -1589,48 +1629,10 @@ function pickRecommendedNoteRackArticle(articles, usedIds) {
     return bestScore > 0 ? best : null;
 }
 
-function getShinpoRackSlots() {
-    // 表示枠そのものは notes.js の SHINPO_RACK で管理する。
-    if (
-        typeof SHINPO_RACK !== "undefined" &&
-        SHINPO_RACK &&
-        Array.isArray(SHINPO_RACK.slots) &&
-        SHINPO_RACK.slots.length
-    ) {
-        return SHINPO_RACK.slots;
-    }
-
-    // 古い notes.js を置いた場合だけ、従来と同じ四枠で動かす。
-    return [
-        { label: "最新", mode: "latest" },
-        { label: "今のピックアップ", mode: "random" },
-        { label: "ふらりと一枚", mode: "random" },
-        { label: "はじめましての一枚", mode: "random" }
-    ];
-}
-
-function pickNoteRackArticleForMode(mode, articles, usedIds, slot) {
-    if (mode === "latest") {
-        return getUnusedNoteRackArticles(articles, usedIds)[0] || null;
-    }
-
-    if (mode === "fixed") {
-        return getNoteArticleById(slot && slot.articleId);
-    }
-
-    if (mode === "recommended") {
-        return pickRecommendedNoteRackArticle(articles, usedIds);
-    }
-
-    // random / 不明なモードは、候補から一枚。
-    return pickRandomNoteRackArticle(articles, usedIds);
-}
-
 function buildNoteRackSelection() {
     var articles = getSortedNoteArticlesForRack();
     var slots = [];
     var usedIds = {};
-    var rackSlots = getShinpoRackSlots();
 
     function add(article, label, kind) {
         if (!article) return false;
@@ -1644,23 +1646,28 @@ function buildNoteRackSelection() {
 
     if (!articles.length) return slots;
 
-    for (var i = 0; i < rackSlots.length; i++) {
-        var slot = rackSlots[i] || {};
-        var mode = slot.mode || "random";
-        var label = slot.label || "一枚";
-        var article = pickNoteRackArticleForMode(mode, articles, usedIds, slot);
+    // 1. 町の現在地。
+    add(articles[0], "最新", "latest");
 
-        // 固定記事が候補外・重複・未指定だった時などは、notes.js の fallback に従う。
-        if (!article || usedIds[getNoteRackArticleId(article)]) {
-            if (slot.fallback) {
-                article = pickNoteRackArticleForMode(slot.fallback, articles, usedIds, slot);
-                if (article && slot.fallbackLabel) {
-                    label = slot.fallbackLabel;
-                }
-            }
+    // 2. 直近の記事群から一枚。featured / pickup を付ければ、今後はその候補を優先できる。
+    var featuredPool = [];
+    for (var i = 1; i < articles.length; i++) {
+        if (articles[i].featured === true || articles[i].pickup === true) {
+            featuredPool.push(articles[i]);
         }
+    }
+    var recentPool = articles.slice(1, Math.min(articles.length, 10));
+    add(pickRandomNoteRackArticle(featuredPool.length ? featuredPool : recentPool, usedIds), "今のピックアップ", "pickup");
 
-        add(article, label, mode);
+    // 3. 古い紙面も含め、毎回ふらりと違う一枚。
+    add(pickRandomNoteRackArticle(articles, usedIds), "ふらりと一枚", "random");
+
+    // 4. 町内で開いたカードの傾向から選ぶ。履歴がまだなければ、初めての人向けの一枚。
+    var recommended = pickRecommendedNoteRackArticle(articles, usedIds);
+    if (recommended) {
+        add(recommended, "あなたへの一枚", "recommended");
+    } else {
+        add(pickRandomNoteRackArticle(articles, usedIds), "はじめましての一枚", "welcome");
     }
 
     return slots;
@@ -1892,6 +1899,10 @@ window.openWorkPlayer = function(work) {
     // 現在は standard が基本。将来、らくがきだけ控えめな soft 表示にもできる。
     playerLayer.dataset.frameMode = work.frameMode || "standard";
 
+    // 縦長ゲームは、iPadやPCでもiPhone相当の画面として中央に置く。
+    // 触れるらくがきは playerLayout 未指定のまま、従来どおり画面全体を使う。
+    setWorkPlayerLayout(work, playerLayer);
+
     title.innerText = getWorkPlayerFrameTitle(work);
     frame.title = work.title || "町内コンテンツ";
 
@@ -1918,6 +1929,9 @@ window.openWorkPlayer = function(work) {
 
     playerLayer.classList.add("visible");
     playerLayer.setAttribute("aria-hidden", "false");
+
+    // 上部バーの高さを含めた実際の余白が確定してから、ゲーム画面をフィットさせる。
+    window.requestAnimationFrame(updateWorkPlayerLayoutSize);
 
     clearDpadInput();
     updateControlVisibility();
@@ -1956,6 +1970,11 @@ window.closeWorkPlayer = function() {
 
     if (playerLayer) {
         playerLayer.dataset.frameMode = "standard";
+        playerLayer.dataset.playerLayout = "responsive";
+        playerLayer.style.removeProperty("--town-player-render-width");
+        playerLayer.style.removeProperty("--town-player-render-height");
+        delete playerLayer.dataset.playerWidth;
+        delete playerLayer.dataset.playerHeight;
         playerLayer.classList.remove("visible");
         playerLayer.setAttribute("aria-hidden", "true");
     }
