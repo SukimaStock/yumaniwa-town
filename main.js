@@ -1398,8 +1398,19 @@ function getSortedNoteArticlesForRack() {
 
     var articles = [];
     for (var i = 0; i < source.length; i++) {
-        if (source[i] && source[i].title && source[i].url) {
-            articles.push(source[i]);
+        var article = source[i];
+        // 湯間庭新報に置くと明示した記事だけを候補にする。
+        // 以前のデータとの互換用に、SHINPO_RACK が存在しない場合だけ全件を候補にする。
+        var isEligible = article && article.showInShinpo === true;
+        var useLegacyFallback = typeof SHINPO_RACK === "undefined";
+
+        if (
+            article &&
+            article.title &&
+            article.url &&
+            (isEligible || useLegacyFallback)
+        ) {
+            articles.push(article);
         }
     }
 
@@ -1483,12 +1494,18 @@ function recordShinpoArticleOpen(article) {
 }
 
 function getNoteArticleThemes(article) {
+    // notes.js 側の tags を最優先する。
+    if (article && Array.isArray(article.tags) && article.tags.length) {
+        return article.tags.slice();
+    }
+
+    // 旧データの themes も残しておく。
     if (article && Array.isArray(article.themes) && article.themes.length) {
         return article.themes.slice();
     }
 
     // 日々の更新時にタグ入力を必須にしないため、まずはタイトルから軽く推定する。
-    // 将来 notes.js に themes: ["game", "making"] を付ければ、そちらを優先できる。
+    // notes.js に tags: ["game", "making"] を付ければ、そちらを優先できる。
     var text = String((article && article.title) || "").toLowerCase();
     var themes = [];
 
@@ -1572,10 +1589,48 @@ function pickRecommendedNoteRackArticle(articles, usedIds) {
     return bestScore > 0 ? best : null;
 }
 
+function getShinpoRackSlots() {
+    // 表示枠そのものは notes.js の SHINPO_RACK で管理する。
+    if (
+        typeof SHINPO_RACK !== "undefined" &&
+        SHINPO_RACK &&
+        Array.isArray(SHINPO_RACK.slots) &&
+        SHINPO_RACK.slots.length
+    ) {
+        return SHINPO_RACK.slots;
+    }
+
+    // 古い notes.js を置いた場合だけ、従来と同じ四枠で動かす。
+    return [
+        { label: "最新", mode: "latest" },
+        { label: "今のピックアップ", mode: "random" },
+        { label: "ふらりと一枚", mode: "random" },
+        { label: "はじめましての一枚", mode: "random" }
+    ];
+}
+
+function pickNoteRackArticleForMode(mode, articles, usedIds, slot) {
+    if (mode === "latest") {
+        return getUnusedNoteRackArticles(articles, usedIds)[0] || null;
+    }
+
+    if (mode === "fixed") {
+        return getNoteArticleById(slot && slot.articleId);
+    }
+
+    if (mode === "recommended") {
+        return pickRecommendedNoteRackArticle(articles, usedIds);
+    }
+
+    // random / 不明なモードは、候補から一枚。
+    return pickRandomNoteRackArticle(articles, usedIds);
+}
+
 function buildNoteRackSelection() {
     var articles = getSortedNoteArticlesForRack();
     var slots = [];
     var usedIds = {};
+    var rackSlots = getShinpoRackSlots();
 
     function add(article, label, kind) {
         if (!article) return false;
@@ -1589,28 +1644,23 @@ function buildNoteRackSelection() {
 
     if (!articles.length) return slots;
 
-    // 1. 町の現在地。
-    add(articles[0], "最新", "latest");
+    for (var i = 0; i < rackSlots.length; i++) {
+        var slot = rackSlots[i] || {};
+        var mode = slot.mode || "random";
+        var label = slot.label || "一枚";
+        var article = pickNoteRackArticleForMode(mode, articles, usedIds, slot);
 
-    // 2. 直近の記事群から一枚。featured / pickup を付ければ、今後はその候補を優先できる。
-    var featuredPool = [];
-    for (var i = 1; i < articles.length; i++) {
-        if (articles[i].featured === true || articles[i].pickup === true) {
-            featuredPool.push(articles[i]);
+        // 固定記事が候補外・重複・未指定だった時などは、notes.js の fallback に従う。
+        if (!article || usedIds[getNoteRackArticleId(article)]) {
+            if (slot.fallback) {
+                article = pickNoteRackArticleForMode(slot.fallback, articles, usedIds, slot);
+                if (article && slot.fallbackLabel) {
+                    label = slot.fallbackLabel;
+                }
+            }
         }
-    }
-    var recentPool = articles.slice(1, Math.min(articles.length, 10));
-    add(pickRandomNoteRackArticle(featuredPool.length ? featuredPool : recentPool, usedIds), "今のピックアップ", "pickup");
 
-    // 3. 古い紙面も含め、毎回ふらりと違う一枚。
-    add(pickRandomNoteRackArticle(articles, usedIds), "ふらりと一枚", "random");
-
-    // 4. 町内で開いたカードの傾向から選ぶ。履歴がまだなければ、初めての人向けの一枚。
-    var recommended = pickRecommendedNoteRackArticle(articles, usedIds);
-    if (recommended) {
-        add(recommended, "あなたへの一枚", "recommended");
-    } else {
-        add(pickRandomNoteRackArticle(articles, usedIds), "はじめましての一枚", "welcome");
+        add(article, label, mode);
     }
 
     return slots;
