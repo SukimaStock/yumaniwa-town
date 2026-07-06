@@ -39,6 +39,30 @@ var SHINPO_RACK = {
 
 var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
+    {
+        id: "3fbab1d8a9b14123bfdb1461a94e8098",
+        title: "ひねる、積む、なぞる。触れるらくがきの話",
+        url: "https://note.com/hamamah/n/nca6b0ef9db94",
+        publish_date: "2026-07-02",
+        showInShinpo: true,
+        tags: ["rakugaki", "making", "thoughts"]
+    },
+    {
+        id: "db3cc8a5eab74e718453c2a25ae19f07",
+        title: "コードを書く前に、手触りがある",
+        url: "https://note.com/hamamah/n/n227910eaec3a?sub_rt=share_b",
+        publish_date: "2026-06-26",
+        showInShinpo: true,
+        tags: ["making", "rakugaki", "thoughts"]
+    },
+    {
+        id: "ea784083edc146d298ba5b7c33a1b7f1",
+        title: "ゲームの中の焼き鳥を、焼き直した",
+        url: "https://note.com/hamamah/n/n8a34c550580a",
+        publish_date: "2026-06-19",
+        showInShinpo: true,
+        tags: ["game", "making", "yakitori"]
+    },
     // {
     //     id: "unique-note-id",
     //     title: "記事タイトル",
