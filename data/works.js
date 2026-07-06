@@ -14,9 +14,9 @@
 //
 // frameTitle  : 湯間庭フレーム上部に表示する町内での呼び名
 // returnLabel : 左側の戻り先表示（例: "灯串横丁"）
-// frameMode   : "standard" | "soft"。現在はどちらも上部バーを確保する
-// playerLayout : "responsive" | "phone"。phone は縦長ゲームをiPhone相当の比率で中央表示する
-// playerWidth / playerHeight : phone の基準サイズ。画面に収まらない時だけ等比縮小する
+// frameMode   : "standard" | "soft" | "phone-cola" | "phone-yakitori"
+//   phone-cola / phone-yakitori は、iPad・PCでは縦長の小型ゲーム機として中央に表示する。
+// playerLayout / playerWidth / playerHeight は、作品の本来の表示器サイズのメモとして残す。
 // ==========================================
 
 var WORKS = [
@@ -34,9 +34,6 @@ var WORKS = [
     //     frameTitle: "",
     //     returnLabel: "",
     //     frameMode: "standard",
-    //     playerLayout: "responsive",
-    //     playerWidth: 390,
-    //     playerHeight: 844,
     //     emptyText: "この作品は準備中です。"
     // },
 
@@ -66,7 +63,7 @@ var WORKS = [
 
         frameTitle: "夜の工房",
         returnLabel: "灯串横丁",
-        frameMode: "standard",
+        frameMode: "phone-cola",
         playerLayout: "phone",
         playerWidth: 390,
         playerHeight: 864,
@@ -88,7 +85,7 @@ var WORKS = [
 
         frameTitle: "串焼き勝負台",
         returnLabel: "灯串横丁",
-        frameMode: "standard",
+        frameMode: "phone-yakitori",
         playerLayout: "phone",
         playerWidth: 360,
         playerHeight: 660,
@@ -106,7 +103,6 @@ var WORKS = [
         frameTitle: "雨の日の窓",
         returnLabel: "湯窓レジャーセンター",
         frameMode: "soft",
-        playerLayout: "responsive",
         emptyText: "この筐体は現在調整中です。ガラスの向こうで、雨音だけが聞こえます。"
     },
     {
@@ -186,9 +182,6 @@ function buildWorkMenuItems(venue) {
             frameTitle: work.frameTitle || work.title,
             returnLabel: work.returnLabel || "",
             frameMode: work.frameMode || "standard",
-            playerLayout: work.playerLayout || "responsive",
-            playerWidth: work.playerWidth || 0,
-            playerHeight: work.playerHeight || 0,
             emptyText: work.emptyText || "この作品は、まだ準備中です。"
         });
     }
