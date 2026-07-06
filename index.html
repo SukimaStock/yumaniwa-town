@@ -126,7 +126,8 @@
   </div>
 
   <script src="./data/station-plaza.js"></script>
-  <script src="./data/notes.js"></script>
+  <!-- 新報だけは更新頻度が高いため、Safari / GitHub Pages の古いキャッシュを使わず毎回取り直す。 -->
+  <script>document.write('<script src="./data/notes.js?rev=' + Date.now() + '"><\/script>');</script>
   <script src="./data/works.js"></script>
   <script src="./data/updates.js"></script>
   <script src="./data/places.js"></script>
