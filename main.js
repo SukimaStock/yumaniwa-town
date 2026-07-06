@@ -97,6 +97,11 @@ var workPlayerReturnDestinationId = null;
 // 現在はnote読書室だけが右上の「noteで開く」に使う。
 var currentFrameSourceUrl = "";
 
+// 湯間庭新報でカードを開いた履歴だけを、この端末内に保存する。
+// 外部の閲覧履歴は使わず、「町の中で何を選んだか」だけでおすすめを作る。
+var SHINPO_HISTORY_KEY = "yumaniwa:shinpo-open-history-v1";
+var SHINPO_HISTORY_LIMIT = 24;
+
 function getWorkPlayerSource(work) {
     if (!work) return "";
 
@@ -1196,29 +1201,12 @@ window.changeScene = function(sceneId) {
 };
 
 
-function isShinpoDestination(destId) {
-    // data/places.js 側のIDが将来変わっても、新報のタイトルならカードラックを開く。
-    // 現在の shinpo_board に加え、表示名でも判定して取りこぼしを防ぐ。
-    if (destId === "shinpo_board") return true;
-
-    var destination = (
-        typeof DESTINATIONS !== "undefined" &&
-        DESTINATIONS &&
-        DESTINATIONS[destId]
-    ) ? DESTINATIONS[destId] : null;
-
-    var title = String((destination && destination.title) || "")
-        .replace(/\s+/g, "");
-
-    return title === "湯間庭新報";
-}
-
 window.openDestination = function(destId) {
     currentDestinationId = destId;
 
     // 湯間庭新報は、タイトル一覧を一度挟まずに
     // 記事カードが並ぶ「新聞ラック」を直接開く。
-    destinationViewMode = isShinpoDestination(destId) ? "note_rack" : "intro";
+    destinationViewMode = (destId === "shinpo_board") ? "note_rack" : "intro";
     currentDestinationMessage = "";
     currentDestinationMessageTitle = "";
     renderDestination();
@@ -1400,7 +1388,9 @@ function getNoteEmbedUrl(article) {
 
 
 // 湯間庭新報 / noteカードラック
-// title → カード → 本文という段階を作らず、新聞の棚へ直接カードを並べる。
+// すべての記事を棚に並べず、開くたびに四つの役割で選んで見せる。
+// 最新は町の現在地、ピックアップとふらりとは毎回入れ替わり、
+// おすすめは町内で開いたカードだけを手がかりに決める。
 function getSortedNoteArticlesForRack() {
     var source = (typeof getVisibleNoteArticles === "function")
         ? getVisibleNoteArticles()
@@ -1423,6 +1413,21 @@ function getSortedNoteArticlesForRack() {
     return articles;
 }
 
+function getNoteRackArticleId(article) {
+    return String((article && (article.id || article.url)) || "");
+}
+
+function getNoteArticleById(articleId) {
+    var id = String(articleId || "");
+    if (!id) return null;
+
+    var articles = getSortedNoteArticlesForRack();
+    for (var i = 0; i < articles.length; i++) {
+        if (getNoteRackArticleId(articles[i]) === id) return articles[i];
+    }
+    return null;
+}
+
 function escapeNoteRackHtml(value) {
     return String(value || "")
         .replace(/&/g, "&amp;")
@@ -1432,18 +1437,226 @@ function escapeNoteRackHtml(value) {
         .replace(/'/g, "&#39;");
 }
 
-window.openNoteArticleFromRack = function(index) {
-    var articles = getSortedNoteArticlesForRack();
-    var article = articles[index];
+function escapeNoteRackJsString(value) {
+    return String(value || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "")
+        .replace(/\n/g, "");
+}
 
+function readShinpoOpenHistory() {
+    try {
+        var raw = window.localStorage.getItem(SHINPO_HISTORY_KEY);
+        var parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+        return [];
+    }
+}
+
+function writeShinpoOpenHistory(history) {
+    try {
+        window.localStorage.setItem(
+            SHINPO_HISTORY_KEY,
+            JSON.stringify((history || []).slice(0, SHINPO_HISTORY_LIMIT))
+        );
+    } catch (err) {
+        // プライベートブラウズ等で保存できない場合でも、ラック自体は使える。
+    }
+}
+
+function recordShinpoArticleOpen(article) {
+    var id = getNoteRackArticleId(article);
+    if (!id) return;
+
+    var history = readShinpoOpenHistory();
+    var next = [{ id: id, openedAt: Date.now() }];
+
+    for (var i = 0; i < history.length; i++) {
+        if (history[i] && history[i].id && history[i].id !== id) {
+            next.push(history[i]);
+        }
+    }
+
+    writeShinpoOpenHistory(next);
+}
+
+function getNoteArticleThemes(article) {
+    if (article && Array.isArray(article.themes) && article.themes.length) {
+        return article.themes.slice();
+    }
+
+    // 日々の更新時にタグ入力を必須にしないため、まずはタイトルから軽く推定する。
+    // 将来 notes.js に themes: ["game", "making"] を付ければ、そちらを優先できる。
+    var text = String((article && article.title) || "").toLowerCase();
+    var themes = [];
+
+    function addTheme(name, words) {
+        for (var i = 0; i < words.length; i++) {
+            if (text.indexOf(String(words[i]).toLowerCase()) !== -1) {
+                if (themes.indexOf(name) === -1) themes.push(name);
+                return;
+            }
+        }
+    }
+
+    addTheme("game", ["ゲーム", "ボード", "焼き鳥", "すごろく"]);
+    addTheme("app", ["アプリ", "ui", "steamclock", "coffeefactory", "chorddrift", "vectoboy", "vectorboy", "iromix", "dotcleaner"]);
+    addTheme("making", ["自作", "作っ", "つく", "作る", "描く", "コード"]);
+    addTheme("ai", ["ai", "生成"]);
+    addTheme("rakugaki", ["らくがき", "触る", "気持ちいい"]);
+    addTheme("time", ["時間", "時計", "カレンダー"]);
+    addTheme("thoughts", ["夜", "思い出", "距離感", "残る", "売る", "保存"]);
+
+    if (!themes.length) themes.push("thoughts");
+    return themes;
+}
+
+function hasCommonNoteTheme(a, b) {
+    for (var i = 0; i < a.length; i++) {
+        if (b.indexOf(a[i]) !== -1) return true;
+    }
+    return false;
+}
+
+function getUnusedNoteRackArticles(articles, usedIds) {
+    var result = [];
+    for (var i = 0; i < articles.length; i++) {
+        var article = articles[i];
+        if (article && !usedIds[getNoteRackArticleId(article)]) {
+            result.push(article);
+        }
+    }
+    return result;
+}
+
+function pickRandomNoteRackArticle(articles, usedIds) {
+    var candidates = getUnusedNoteRackArticles(articles, usedIds || {});
+    if (!candidates.length) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function pickRecommendedNoteRackArticle(articles, usedIds) {
+    var history = readShinpoOpenHistory();
+    if (!history.length) return null;
+
+    var candidates = getUnusedNoteRackArticles(articles, usedIds || {});
+    var best = null;
+    var bestScore = 0;
+
+    for (var i = 0; i < candidates.length; i++) {
+        var candidate = candidates[i];
+        var candidateThemes = getNoteArticleThemes(candidate);
+        var score = 0;
+
+        for (var h = 0; h < history.length && h < 8; h++) {
+            var pastArticle = getNoteArticleById(history[h] && history[h].id);
+            if (!pastArticle) continue;
+
+            var weight = 8 - h;
+            if (hasCommonNoteTheme(candidateThemes, getNoteArticleThemes(pastArticle))) {
+                score += weight * 10;
+            }
+        }
+
+        // ごく小さな揺らぎを入れ、同点なら毎回同じ一枚に張り付かないようにする。
+        score += Math.random() * 0.01;
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = candidate;
+        }
+    }
+
+    return bestScore > 0 ? best : null;
+}
+
+function buildNoteRackSelection() {
+    var articles = getSortedNoteArticlesForRack();
+    var slots = [];
+    var usedIds = {};
+
+    function add(article, label, kind) {
+        if (!article) return false;
+        var id = getNoteRackArticleId(article);
+        if (!id || usedIds[id]) return false;
+
+        usedIds[id] = true;
+        slots.push({ article: article, label: label, kind: kind });
+        return true;
+    }
+
+    if (!articles.length) return slots;
+
+    // 1. 町の現在地。
+    add(articles[0], "最新", "latest");
+
+    // 2. 直近の記事群から一枚。featured / pickup を付ければ、今後はその候補を優先できる。
+    var featuredPool = [];
+    for (var i = 1; i < articles.length; i++) {
+        if (articles[i].featured === true || articles[i].pickup === true) {
+            featuredPool.push(articles[i]);
+        }
+    }
+    var recentPool = articles.slice(1, Math.min(articles.length, 10));
+    add(pickRandomNoteRackArticle(featuredPool.length ? featuredPool : recentPool, usedIds), "今のピックアップ", "pickup");
+
+    // 3. 古い紙面も含め、毎回ふらりと違う一枚。
+    add(pickRandomNoteRackArticle(articles, usedIds), "ふらりと一枚", "random");
+
+    // 4. 町内で開いたカードの傾向から選ぶ。履歴がまだなければ、初めての人向けの一枚。
+    var recommended = pickRecommendedNoteRackArticle(articles, usedIds);
+    if (recommended) {
+        add(recommended, "あなたへの一枚", "recommended");
+    } else {
+        add(pickRandomNoteRackArticle(articles, usedIds), "はじめましての一枚", "welcome");
+    }
+
+    return slots;
+}
+
+window.openNoteArticleFromRack = function(articleId) {
+    var article = getNoteArticleById(articleId);
     if (!article || !article.url) return;
+
+    recordShinpoArticleOpen(article);
 
     // カードを選んだ瞬間だけ、正式なnote記事へ進む。
     window.open(article.url, "_blank");
 };
 
+function renderNoteRackCard(slot) {
+    var article = slot.article;
+    var embedUrl = getNoteEmbedUrl(article);
+    var title = escapeNoteRackHtml(article.title);
+    var date = (typeof getNotePublishDate === "function") ? getNotePublishDate(article) : "";
+    var articleId = escapeNoteRackJsString(getNoteRackArticleId(article));
+    var slotLabel = escapeNoteRackHtml(slot.label);
+    var slotKind = escapeNoteRackHtml(slot.kind || "");
+    var html = '';
+
+    // URL形式が例外的な記事だけは、棚の中でタイトル札として残す。
+    if (!embedUrl) {
+        html += '<article class="note-rack-card note-rack-card-fallback" data-rack-kind="' + slotKind + '">';
+        html += '<div class="note-rack-fallback-title">' + title + '</div>';
+        if (date) html += '<div class="note-rack-fallback-date">' + escapeNoteRackHtml(date) + '</div>';
+        html += '<div class="note-rack-card-footer"><span class="note-rack-card-slot">' + slotLabel + '</span><span class="note-rack-card-cta">noteで読む <span aria-hidden="true">↗</span></span></div>';
+        html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(\'' + articleId + '\')"></button>';
+        html += '</article>';
+        return html;
+    }
+
+    html += '<article class="note-rack-card" data-rack-kind="' + slotKind + '">';
+    html += '<iframe class="note-rack-card-frame" title="' + title + ' の紹介" src="' + escapeNoteRackHtml(embedUrl) + '" loading="lazy" scrolling="no" tabindex="-1" aria-hidden="true"></iframe>';
+    html += '<div class="note-rack-card-footer"><span class="note-rack-card-slot">' + slotLabel + '</span><span class="note-rack-card-cta">noteで読む <span aria-hidden="true">↗</span></span></div>';
+    html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(\'' + articleId + '\')"></button>';
+    html += '</article>';
+    return html;
+}
+
 window.renderNoteCardRack = function(dest) {
-    var articles = getSortedNoteArticlesForRack();
+    var slots = buildNoteRackSelection();
     var html = '<div class="shinpo-rack">';
 
     html += '<div class="shinpo-rack-header">';
@@ -1456,37 +1669,15 @@ window.renderNoteCardRack = function(dest) {
     html += '<button class="shinpo-rack-back" type="button" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
     html += '</div>';
 
-    html += '<p class="shinpo-rack-lead">気になる一枚を選ぶと、noteの記事を開きます。</p>';
+    html += '<p class="shinpo-rack-lead">今日の棚には、少しずつ違う紙面が届いています。</p>';
 
-    if (articles.length === 0) {
+    if (slots.length === 0) {
         html += '<div class="shinpo-rack-empty">今日はまだ、新しい紙面が届いていません。</div>';
     } else {
         html += '<div class="note-card-rack-list">';
-
-        for (var i = 0; i < articles.length; i++) {
-            var article = articles[i];
-            var embedUrl = getNoteEmbedUrl(article);
-            var title = escapeNoteRackHtml(article.title);
-            var date = (typeof getNotePublishDate === "function") ? getNotePublishDate(article) : "";
-
-            // URL形式が例外的な記事だけは、棚の中でタイトル札として残す。
-            if (!embedUrl) {
-                html += '<article class="note-rack-card note-rack-card-fallback">';
-                html += '<div class="note-rack-fallback-title">' + title + '</div>';
-                if (date) html += '<div class="note-rack-fallback-date">' + escapeNoteRackHtml(date) + '</div>';
-                html += '<div class="note-rack-card-footer"><span>noteで読む</span><span aria-hidden="true">↗</span></div>';
-                html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(' + i + ')"></button>';
-                html += '</article>';
-                continue;
-            }
-
-            html += '<article class="note-rack-card">';
-            html += '<iframe class="note-rack-card-frame" title="' + title + ' の紹介" src="' + escapeNoteRackHtml(embedUrl) + '" loading="lazy" scrolling="no" tabindex="-1" aria-hidden="true"></iframe>';
-            html += '<div class="note-rack-card-footer"><span>noteで読む</span><span aria-hidden="true">↗</span></div>';
-            html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'をnoteで開く" onclick="openNoteArticleFromRack(' + i + ')"></button>';
-            html += '</article>';
+        for (var i = 0; i < slots.length; i++) {
+            html += renderNoteRackCard(slots[i]);
         }
-
         html += '</div>';
     }
 
@@ -1725,7 +1916,7 @@ window.closeWorkPlayer = function() {
 
     if (workPlayerReturnDestinationId && DESTINATIONS[workPlayerReturnDestinationId]) {
         currentDestinationId = workPlayerReturnDestinationId;
-        destinationViewMode = isShinpoDestination(currentDestinationId) ? "note_rack" : "menu";
+        destinationViewMode = "menu";
         currentDestinationMessage = "";
         currentDestinationMessageTitle = "";
         renderDestination();

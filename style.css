@@ -495,6 +495,14 @@ textarea {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26);
 }
 
+.note-rack-card[data-rack-kind="latest"] .note-rack-card-slot {
+    color: #a45745;
+}
+
+.note-rack-card[data-rack-kind="recommended"] .note-rack-card-slot {
+    color: #58758c;
+}
+
 .note-rack-card-frame {
     display: block;
     width: 100%;
@@ -509,9 +517,9 @@ textarea {
     z-index: 1;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    min-height: 34px;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 36px;
     padding: 0 12px;
     box-sizing: border-box;
     border-top: 1px solid rgba(35, 43, 51, 0.10);
@@ -520,6 +528,17 @@ textarea {
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.03em;
+}
+
+.note-rack-card-slot {
+    color: #8a724c;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+}
+
+.note-rack-card-cta {
+    white-space: nowrap;
 }
 
 .note-rack-card-open {
