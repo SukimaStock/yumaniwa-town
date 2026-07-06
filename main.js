@@ -1097,10 +1097,6 @@ function handleAction() {
         if (t.type === "inspect") {
             showMessage(t.text);
         } else if (t.type === "warp" || t.type === "menu") {
-            if (t.target === "shinpo_board") {
-                refreshShinpoBoard();
-            }
-
             var actionName = t.actionLabel || "調べる";
             showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(もう一度「" + actionName + "」で開く)</span>");
             pendingWarp = t.target;
@@ -1200,12 +1196,29 @@ window.changeScene = function(sceneId) {
 };
 
 
+function isShinpoDestination(destId) {
+    // data/places.js 側のIDが将来変わっても、新報のタイトルならカードラックを開く。
+    // 現在の shinpo_board に加え、表示名でも判定して取りこぼしを防ぐ。
+    if (destId === "shinpo_board") return true;
+
+    var destination = (
+        typeof DESTINATIONS !== "undefined" &&
+        DESTINATIONS &&
+        DESTINATIONS[destId]
+    ) ? DESTINATIONS[destId] : null;
+
+    var title = String((destination && destination.title) || "")
+        .replace(/\s+/g, "");
+
+    return title === "湯間庭新報";
+}
+
 window.openDestination = function(destId) {
     currentDestinationId = destId;
 
     // 湯間庭新報は、タイトル一覧を一度挟まずに
     // 記事カードが並ぶ「新聞ラック」を直接開く。
-    destinationViewMode = (destId === "shinpo_board") ? "note_rack" : "intro";
+    destinationViewMode = isShinpoDestination(destId) ? "note_rack" : "intro";
     currentDestinationMessage = "";
     currentDestinationMessageTitle = "";
     renderDestination();
@@ -1712,7 +1725,7 @@ window.closeWorkPlayer = function() {
 
     if (workPlayerReturnDestinationId && DESTINATIONS[workPlayerReturnDestinationId]) {
         currentDestinationId = workPlayerReturnDestinationId;
-        destinationViewMode = "menu";
+        destinationViewMode = isShinpoDestination(currentDestinationId) ? "note_rack" : "menu";
         currentDestinationMessage = "";
         currentDestinationMessageTitle = "";
         renderDestination();
