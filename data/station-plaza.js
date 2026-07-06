@@ -158,49 +158,49 @@ var triggers = [
         area: { x: 10, y: 9, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "「急がば回れ」と書いてある。"
+        text: "「今日も、急がなくていい。」と書いてある。"
     },
     {
         id: "Kanban2", label: "ポスター", actionLabel: "調べる",
         area: { x: 26, y: 14, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "「湯間庭まつり」のポスターだ。"
+        text: "「湯けむり注意」と書かれたポスターだ。"
     },
     {
         id: "Kanban3", label: "看板", actionLabel: "調べる",
         area: { x: 29, y: 16, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "「観光案内所」はこちら"
+        text: "「観光案内所　この先」と書いてある。"
     },
     {
         id: "Kanban4", label: "ポスター", actionLabel: "調べる",
         area: { x: 13, y: 22, w: 1, h: 2 },
         type: "inspect",
         target: "看板",
-        text: "来月、新しいカフェがオープン予定らしい。"
+        text: "「喫茶まどべ　準備中」と書かれた貼り紙だ。"
     },
     {
         id: "Kanban5", label: "ポスター", actionLabel: "調べる",
         area: { x: 38, y: 28, w: 2, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "「うれしい！たのしい！湯窓レジャーセンター！」と書いてある。"
+        text: "「さわれるらくがき　稼働中」と書いてある。"
     },
     {
         id: "Kanban6", label: "貼り紙", actionLabel: "調べる",
         area: { x: 26, y: 28, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "電車はめったに来ないらしい"
+        text: "電車はめったに来ないらしい。"
     },
     {
         id: "Kanban7", label: "ポスター", actionLabel: "調べる",
         area: { x: 8, y: 28, w: 1, h: 1 },
         type: "inspect",
         target: "看板",
-        text: "「灯串横町」のポスターだ。"
+        text: "「灯串横丁　今夜も営業中」と書かれたポスターだ。"
     }
 ];
 

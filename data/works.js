@@ -50,7 +50,7 @@ var WORKS = [
     },
     {
         id: "midnight-cola",
-        title: "MIDNIGHT COLA",
+        title: "クラフトコーラ研究所【MIDNIGHT COLA】",
         venue: "tomogushi_alley",
         kind: "game",
         status: "open",
@@ -61,18 +61,18 @@ var WORKS = [
         // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/midnight-cola",
 
-        frameTitle: "夜の工房",
+        frameTitle: "クラフトコーラ研究所",
         returnLabel: "灯串横丁",
         frameMode: "phone-cola",
         playerLayout: "phone",
         playerWidth: 390,
         playerHeight: 864,
-        description: "夜の工房で、クラフトコーラを仕込む小さなゲーム。",
+        description: "夜の研究所で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
     },
     {
         id: "yakitori-wars",
-        title: "串焼き勝負台：Yakitori Wars",
+        title: "やきとり屋　ゆまど【Yakitori Wars】",
         venue: "tomogushi_alley",
         kind: "game",
         status: "open",
@@ -83,13 +83,13 @@ var WORKS = [
         // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/yakitori-wars",
 
-        frameTitle: "串焼き勝負台",
+        frameTitle: "やきとり屋　ゆまど",
         returnLabel: "灯串横丁",
         frameMode: "phone-yakitori",
         playerLayout: "phone",
         playerWidth: 360,
         playerHeight: 660,
-        emptyText: "勝負台は準備中です。炭だけが静かに赤くなっています。"
+        emptyText: "やきとり屋　ゆまどは、今夜の炭火を整えています。"
     },
     {
         id: "rainy-window",

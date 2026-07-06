@@ -16,20 +16,20 @@ var DESTINATIONS = {
             {
                 label: "湯間庭町について",
                 kind: "message",
-                text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。駅前から、商店街、横丁、レジャーセンターへ歩いて行けます。まだ開いていない場所もありますが、町は少しずつ広がっていく予定です。"
+                text: "湯間庭町は、湯気と余白のあいだにある小さな温泉町です。\n\n駅前から横丁、レジャーセンター、湯窓通りへ。まだ開いていない場所もありますが、町は少しずつ広がっています。"
             },
             {
-                label: "現在行ける場所",
+                label: "町の案内",
                 kind: "message",
-                text: "いま歩けるのは、湯間庭駅前、観光案内所、湯間庭新報、湯窓レジャーセンター、灯串横丁、湯窓通り入口です。湯間庭温泉方面は、現在整備中です。"
+                text: "駅前の掲示板には湯間庭新報。レジャーセンターには、触れるらくがき。灯串横丁には、今夜開いている二つの店があります。\n\n温泉へ続く石段は、もう少し先の話です。"
             },
             {
                 label: "この町の作り手について",
                 kind: "message",
-                text: "この町は、SukimaStockの制作記録から少しずつ運び込まれたものたちでできています。アプリ、文章、ゲーム未満の小さな作品たちが、町の施設として並びはじめています。"
+                text: "この町は、SukimaStockが作った文章、ゲーム、触れるらくがきから少しずつできています。\n\n町を歩くたび、どこかに新しいものが運び込まれているかもしれません。"
             },
             {
-                label: "更新履歴",
+                label: "町のお知らせ",
                 kind: "message",
                 text: ""
             },
@@ -60,10 +60,10 @@ var DESTINATIONS = {
     tomogushi_alley_map: {
         id: "tomogushi_alley_map",
         title: "灯串横丁",
-        subtitle: "Yakitori Alley",
-        description: "提灯の灯りが続く小さな横丁。奥に、串焼き勝負台が置かれている。",
-        flavor: "炭のにおいと、誰かの笑い声が路地の奥から流れてくる。",
-        menuTitle: "どこへ向かいますか?",
+        subtitle: "Tomogushi Alley",
+        description: "提灯の灯りが続く小さな横丁。\n炭のにおいと、柑橘やスパイスの甘い香りが混じっている。",
+        flavor: "路地の奥では、今夜も誰かが何かを仕込んでいる。",
+        menuTitle: "今夜はどこへ寄りますか?",
         items: []
     },
     yumado_street_map: {
@@ -74,10 +74,9 @@ var DESTINATIONS = {
         flavor: "まだ開いていない店も多いが、通りの奥には少しだけ気配がある。",
         menuTitle: "どこを見ますか?",
         items: [
-            { label: "喫茶まどべ", kind: "message", text: "窓際の席がよさそうな小さな喫茶店。まだ準備中の札がかかっている。" },
+            { label: "喫茶まどべ", kind: "message", text: "窓際の席がよさそうな小さな喫茶店。準備中の札の向こうで、誰かがカップを磨いている。" },
             { label: "湯まんじゅう屋", kind: "message", text: "蒸し器から白い湯気が上がっている。開店までもう少しらしい。" },
             { label: "古道具屋", kind: "message", text: "入口の箱に、古いボタンや謎の部品が並んでいる。何に使うものかは分からないが、少しだけ気になる。" },
-            { label: "まだ閉まっている店", kind: "message", text: "シャッターの奥から、小さな物音がした気がする。この通りは、まだ少しずつ準備をしている。" },
             { label: "駅前へ戻る", kind: "back" }
         ]
     }
@@ -147,7 +146,7 @@ function refreshTownContent() {
     if (DESTINATIONS.tourist_info_interior) {
         var infoItems = DESTINATIONS.tourist_info_interior.items;
         for (var i = 0; i < infoItems.length; i++) {
-            if (infoItems[i].label === "更新履歴") {
+            if (infoItems[i].label === "町のお知らせ") {
                 infoItems[i].text = buildTownUpdateHistoryText(6);
             }
         }
@@ -175,14 +174,9 @@ function refreshTownContent() {
     if (DESTINATIONS.tomogushi_alley_map) {
         var alleyItems = buildWorkMenuItems("tomogushi_alley");
         alleyItems.push({
-            label: "本日の注文札",
-            kind: "message",
-            text: "本日の注文札には、\n\n『ねぎま、つくね、かわ。\n焼きすぎ注意』\n\nと書かれている。"
-        });
-        alleyItems.push({
             label: "灯串横丁について",
             kind: "message",
-            text: "灯串横丁は、駅前のはずれにある小さな横丁です。まだ店は多くありませんが、夕方になると提灯が灯り、どこからか焼き鳥のにおいがしてきます。"
+            text: "灯串横丁は、駅前のはずれにある小さな横丁です。\n\n炭火の店と、コーラを仕込む研究所が、提灯の下で今夜も開いています。"
         });
         alleyItems.push({ label: "駅前へ戻る", kind: "back" });
         DESTINATIONS.tomogushi_alley_map.items = alleyItems;

@@ -6,27 +6,27 @@
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
     {
+        date: "2026-07-06",
+        title: "湯間庭町を公開",
+        body: "駅前から、町を歩けるようになりました。",
+        tags: ["station-plaza", "open"]
+    },
+    {
+        date: "2026-07-06",
+        title: "灯串横丁に二つの店が開店",
+        body: "クラフトコーラ研究所と、やきとり屋　ゆまどが今夜から営業しています。",
+        tags: ["tomogushi-alley", "open"]
+    },
+    {
         date: "2026-07-05",
         title: "レジャーセンターに『雨の日の窓』を設置",
-        body: "指で曇りガラスをなぞる、最初の実働筐体が稼働しました。",
+        body: "窓の雨粒を、指でなぞれるようになりました。",
         tags: ["leisure-center", "rakugaki", "open"]
-    },
-    // {
-    //     date: "2026-07-04",
-    //     title: "更新タイトル",
-    //     body: "町に追加したことを短く書きます。",
-    //     tags: ["station-plaza"]
-    // },
-    {
-        date: "2026-07-04",
-        title: "町の更新台帳を設置",
-        body: "note記事、作品、更新履歴を本体から分けました。これからは町の中身だけを追加できます。",
-        tags: ["system"]
     },
     {
         date: "2026-06-16",
-        title: "湯間庭新報を開設",
-        body: "掲示板から、その日ごとに違うnote記事を読めるようになりました。",
+        title: "湯間庭新報を設置",
+        body: "掲示板に、その日ごとに違う読みものが届くようになりました。",
         tags: ["shinpo"]
     },
     {
