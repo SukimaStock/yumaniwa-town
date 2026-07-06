@@ -638,6 +638,74 @@ textarea {
 }
 
 
+/* スマホの縦長ゲームだけは、最初に店名バーを見せた後で収納する。
+   収納中はバーが占めていた高さも返すので、ゲーム本体を少し大きくできる。 */
+#work-player-peek-tab {
+    position: absolute;
+    top: max(7px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    z-index: 6;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 0 0 12px 12px;
+    background: rgba(12, 16, 21, 0.84);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 19px;
+    line-height: 1;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.30);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+#work-player-peek-tab[hidden] {
+    display: none !important;
+}
+
+#work-player-peek-tab:active {
+    opacity: 0.56;
+}
+
+@media (max-width: 700px), (max-height: 700px) {
+    #work-player[data-player-layout="phone"] #work-player-controls {
+        min-height: 0;
+        height: calc(env(safe-area-inset-top) + 56px);
+        overflow: hidden;
+        transition:
+            height 260ms ease,
+            padding 260ms ease,
+            opacity 180ms ease,
+            border-color 180ms ease,
+            transform 260ms ease;
+        will-change: height, transform;
+    }
+
+    #work-player[data-player-layout="phone"].phone-controls-hidden #work-player-controls {
+        height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-bottom-color: transparent;
+        opacity: 0;
+        transform: translateY(-10px);
+        pointer-events: none;
+    }
+
+    #work-player[data-player-layout="phone"].phone-controls-hidden #work-player-content {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    #work-player[data-player-layout="phone"].phone-controls-hidden #work-player-peek-tab:not([hidden]) {
+        display: inline-flex;
+    }
+}
+
+
 /* 縦長ゲーム用の「携帯ゲーム画面」。
    PCやiPadでは横に引き伸ばさず、iPhone相当の比率を中央に残す。 */
 #work-player[data-player-layout="phone"] #work-player-content {
