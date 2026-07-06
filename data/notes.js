@@ -1,8 +1,41 @@
 // ==========================================
 // 湯間庭新報 / note記事データ
 // 新しい記事は、配列の先頭に追加します。
-// featured: true を付けると、掲示板で優先表示されます。
+// showInShinpo: true を付けると、湯間庭新報のカードラック候補になります。
 // ==========================================
+
+// ==========================================
+// 湯間庭新報 / カードラック設定
+// どの記事を町に出すか、どの役割で見せるかはこのファイルで管理します。
+//
+// 各記事の showInShinpo: true を付けたものだけが、ラックの候補になります。
+// tags は「あなたへの一枚」の近さを判断する小さな目印です。
+// ==========================================
+var SHINPO_RACK = {
+    slots: [
+        // showInShinpo: true の中で、いちばん新しい記事。
+        { label: "最新", mode: "latest" },
+
+        // いま町に置きたい一枚。articleId を差し替えるだけで更新できます。
+        {
+            label: "今のピックアップ",
+            mode: "fixed",
+            articleId: "2c61e2a34d2540eaa1d74473329c573d",
+            fallback: "random"
+        },
+
+        // showInShinpo: true の記事から、開くたびに一枚。
+        { label: "ふらりと一枚", mode: "random" },
+
+        // 町内で最近開いた記事と tags が近いものを選びます。
+        {
+            label: "あなたへの一枚",
+            mode: "recommended",
+            fallback: "random",
+            fallbackLabel: "はじめましての一枚"
+        }
+    ]
+};
 
 var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
@@ -11,13 +44,16 @@ var NOTE_ARTICLES = [
     //     title: "記事タイトル",
     //     url: "https://note.com/...",
     //     publishedAt: "2026-07-04",
-    //     featured: false
+    //     showInShinpo: true,
+    //     tags: ["app", "making"]
     // },
     {
         id: "2fb03b60589b4691b13c967a8b4e3563",
         title: "公開予定もないアプリを21個作っていた話",
         url: "https://note.com/hamamah/n/nb376b9a8c54d",
-        publish_date: "2026-02-04"
+        publish_date: "2026-02-04",
+        showInShinpo: true,
+        tags: ["app", "making", "thoughts"]
     },
     {
         id: "1876c14202c5440789baa49e0d46bc65",
@@ -65,7 +101,9 @@ var NOTE_ARTICLES = [
         id: "c1fa369f4d3149a2a88d3da596c79f45",
         title: "ただ「気持ちいい」を磨く夜。目的のない自作アプリ",
         url: "https://note.com/hamamah/n/n419616ae3a94",
-        publish_date: "2026-03-13"
+        publish_date: "2026-03-13",
+        showInShinpo: true,
+        tags: ["app", "rakugaki", "making"]
     },
     {
         id: "71b1ee79602a4757889f1f2e093d245a",
@@ -83,13 +121,17 @@ var NOTE_ARTICLES = [
         id: "9c511d3731994686b4026e1a8d164019",
         title: "樽の中で時間を育てる、正解のない経営ゲーム「AmberTime」（自作アプリ）",
         url: "https://note.com/hamamah/n/n2123726a637c",
-        publish_date: "2026-02-13"
+        publish_date: "2026-02-13",
+        showInShinpo: true,
+        tags: ["game", "making", "thoughts"]
     },
     {
         id: "a6e80d044f734d4693d0926541fcba22",
         title: "コーヒーが落ちるまでの、静かな時間「CoffeeFactory」（自作アプリ）",
         url: "https://note.com/hamamah/n/ndd00e6f70f55",
-        publish_date: "2026-02-09"
+        publish_date: "2026-02-09",
+        showInShinpo: true,
+        tags: ["app", "making", "quiet"]
     },
     {
         id: "d761c2d720d54bd6b7fc3f595ea6120e",
@@ -101,7 +143,9 @@ var NOTE_ARTICLES = [
         id: "edf0e5f28dfc4f26bc2b31a27c33d259",
         title: "機械と植物の組み合わせにときめいている",
         url: "https://note.com/hamamah/n/nc9ff3f987c93",
-        publish_date: "2026-03-24"
+        publish_date: "2026-03-24",
+        showInShinpo: true,
+        tags: ["making", "thoughts", "quiet"]
     },
     {
         id: "cee35d30dc324a9e8f7cb846efb8acfa",
@@ -131,7 +175,9 @@ var NOTE_ARTICLES = [
         id: "2c61e2a34d2540eaa1d74473329c573d",
         title: "自分専用アプリを21個つくって、最後に残ったもの。―正解を出さない時間",
         url: "https://note.com/hamamah/n/n05dba4e45d7b",
-        publish_date: "2026-04-03"
+        publish_date: "2026-04-03",
+        showInShinpo: true,
+        tags: ["app", "making", "thoughts"]
     },
     {
         id: "219cf80c5d544ba0be86c053e28f8589",
@@ -143,7 +189,9 @@ var NOTE_ARTICLES = [
         id: "034a36b272674131b69145cb511272d3",
         title: "自分しか使わないのに、UIが気になる",
         url: "https://note.com/hamamah/n/na30ffdaf8f23",
-        publish_date: "2026-04-10"
+        publish_date: "2026-04-10",
+        showInShinpo: true,
+        tags: ["app", "making", "ui"]
     },
     {
         id: "802bce9ec2f24c76b04e31c20a50348e",
@@ -203,25 +251,33 @@ var NOTE_ARTICLES = [
         id: "95d48e6613ce4037907364809ee3359f",
         title: "「ボードゲームの作り方」が分からなかったので、アプリで再現してみた",
         url: "https://note.com/hamamah/n/n0ca130319cac",
-        publish_date: "2026-05-22"
+        publish_date: "2026-05-22",
+        showInShinpo: true,
+        tags: ["game", "making", "app"]
     },
     {
         id: "f8d60508184548129de83e6af79bd6a2",
         title: "iPhoneだけでアプリを作る｜Codea入門",
         url: "https://note.com/hamamah/n/nf466b33a95ec",
-        publish_date: "2026-05-29"
+        publish_date: "2026-05-29",
+        showInShinpo: true,
+        tags: ["app", "making", "code"]
     },
     {
         id: "757c2ac5e1ca409eaee94225f3e2af59",
         title: "自作時計アプリ「SteamClock」を壊してみた｜Codea実験",
         url: "https://note.com/hamamah/n/nfa03567df1da",
-        publish_date: "2026-06-05"
+        publish_date: "2026-06-05",
+        showInShinpo: true,
+        tags: ["app", "time", "code"]
     },
     {
         id: "31beb527cad14b72a2afdc57f4b986b4",
         title: "ゲーム未満、アプリ未満の心地よさ",
         url: "https://note.com/hamamah/n/n16f7a42c0b6a",
-        publish_date: "2026-06-12"
+        publish_date: "2026-06-12",
+        showInShinpo: true,
+        tags: ["game", "app", "making", "rakugaki"]
     }
 ];
 
