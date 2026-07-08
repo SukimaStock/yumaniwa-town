@@ -136,6 +136,96 @@ function getWorkPlayerFrameTitle(work) {
     return (work && work.title) || "湯間庭町";
 }
 
+// ==========================================
+// 町内直リンク
+// ?work=midnight-cola のように、外から来た人を
+// 湯間庭フレーム付きで直接作品へ案内する。
+//
+// ?place=tomogushi_alley_map のように、施設メニューへ直接入ることもできる。
+// ==========================================
+function getRouteParam(names) {
+    var params = new URLSearchParams(window.location.search || "");
+
+    for (var i = 0; i < names.length; i++) {
+        var value = params.get(names[i]);
+        if (value) return value;
+    }
+
+    return "";
+}
+
+function getWorkVenueDestinationId(work) {
+    if (!work) return "";
+
+    // 将来、作品ごとに戻り先を細かく指定したくなった場合の逃げ道。
+    if (work.destinationId && DESTINATIONS[work.destinationId]) {
+        return work.destinationId;
+    }
+
+    if (work.venue === "tomogushi_alley") {
+        return "tomogushi_alley_map";
+    }
+
+    if (work.venue === "leisure_center") {
+        return "leisure_center_map";
+    }
+
+    return "";
+}
+
+function openTownPlaceFromRoute(placeId) {
+    if (!placeId) return false;
+
+    if (placeId === "station_plaza") {
+        changeScene("station_plaza");
+        return true;
+    }
+
+    if (!DESTINATIONS[placeId]) return false;
+
+    changeScene(placeId);
+
+    // 直リンクで来た人には、施設説明よりも選択肢を先に見せる。
+    // 新報だけは、既存仕様どおり記事ラックを直接開く。
+    if (placeId !== "shinpo_board") {
+        destinationViewMode = "menu";
+        renderDestination();
+    }
+
+    return true;
+}
+
+function openTownWorkFromRoute(workId) {
+    if (!workId) return false;
+
+    var work = getWorkById(workId);
+    if (!work) return false;
+
+    var destinationId = getWorkVenueDestinationId(work);
+
+    if (destinationId && DESTINATIONS[destinationId]) {
+        changeScene(destinationId);
+        destinationViewMode = "menu";
+        renderDestination();
+    }
+
+    launchWork(work);
+    return true;
+}
+
+function openInitialTownRouteFromUrl() {
+    var workId = getRouteParam(["work", "spot"]);
+    if (workId && openTownWorkFromRoute(workId)) {
+        return;
+    }
+
+    var placeId = getRouteParam(["place", "dest", "destination"]);
+    if (placeId) {
+        openTownPlaceFromRoute(placeId);
+    }
+}
+
+
 
 // 作品ごとに、町のフレーム内での表示器を選ぶ。
 // responsive : コンテンツ領域をそのまま使う（触れるらくがき向け）
@@ -293,6 +383,11 @@ window.onload = function() {
     setupEditorEvents();
     setupMessageLayerEvents();
     setupWorkPlayerEvents();
+
+    // ?work=midnight-cola / ?place=tomogushi_alley_map などの直リンクを処理する。
+    // setupWorkPlayerEvents の後に呼ぶことで、戻るボタンや iframe の準備完了後に開ける。
+    openInitialTownRouteFromUrl();
+
     requestAnimationFrame(gameLoop);
 
     setTimeout(function() {
