@@ -1,162 +1,140 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#0a0a0a">
-  <meta name="description" content="つくったものが集まる町。湯間庭町。">
-
-  <!-- X / SNS共有カード（OGP） -->
-  <!-- 公開時は assets/ogp/yumaniwa-town.jpg を 1200×630px で配置する。 -->
-  <link rel="canonical" href="https://sukimastock.github.io/yumaniwa-town/">
-
-  <meta property="og:locale" content="ja_JP">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="湯間庭町">
-  <meta property="og:title" content="湯間庭町｜つくったものが集まる町">
-  <meta property="og:description" content="自分専用アプリ記事、触れるらくがき、夜の工房、焼き鳥屋台。少しずつ作ってきたものを、ひとつの町として歩ける場所にしました。">
-  <meta property="og:url" content="https://sukimastock.github.io/yumaniwa-town/">
-  <meta property="og:image" content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1">
-  <meta property="og:image:secure_url" content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1">
-  <meta property="og:image:type" content="image/jpeg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="湯間庭町の駅前広場">
-
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="湯間庭町｜つくったものが集まる町">
-  <meta name="twitter:description" content="自分専用アプリ記事、触れるらくがき、夜の工房、焼き鳥屋台。少しずつ作ってきたものを、ひとつの町として歩ける場所にしました。">
-  <meta name="twitter:image" content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1">
-  <meta name="twitter:image:alt" content="湯間庭町の駅前広場">
-
-  <title>湯間庭町｜つくったものが集まる町</title>
-  <link rel="stylesheet" href="./style.css">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" name="viewport"/>
+<meta content="#0a0a0a" name="theme-color"/>
+<meta content="つくったものが集まる町。湯間庭町。" name="description"/>
+<!-- X / SNS共有カード（OGP） -->
+<!-- 公開時は assets/ogp/yumaniwa-town.jpg を 1200×630px で配置する。 -->
+<link href="https://sukimastock.github.io/yumaniwa-town/" rel="canonical"/>
+<meta content="ja_JP" property="og:locale"/>
+<meta content="website" property="og:type"/>
+<meta content="湯間庭町" property="og:site_name"/>
+<meta content="湯間庭町｜つくったものが集まる町" property="og:title"/>
+<meta content="自分専用アプリ記事、触れるらくがき、夜の工房、焼き鳥屋台。少しずつ作ってきたものを、ひとつの町として歩ける場所にしました。" property="og:description"/>
+<meta content="https://sukimastock.github.io/yumaniwa-town/" property="og:url"/>
+<meta content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1" property="og:image"/>
+<meta content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1" property="og:image:secure_url"/>
+<meta content="image/jpeg" property="og:image:type"/>
+<meta content="1200" property="og:image:width"/>
+<meta content="630" property="og:image:height"/>
+<meta content="湯間庭町の駅前広場" property="og:image:alt"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="湯間庭町｜つくったものが集まる町" name="twitter:title"/>
+<meta content="自分専用アプリ記事、触れるらくがき、夜の工房、焼き鳥屋台。少しずつ作ってきたものを、ひとつの町として歩ける場所にしました。" name="twitter:description"/>
+<meta content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1" name="twitter:image"/>
+<meta content="湯間庭町の駅前広場" name="twitter:image:alt"/>
+<title>湯間庭町｜つくったものが集まる町</title>
+<link href="./style.css" rel="stylesheet"/>
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="game-canvas" aria-label="湯間庭町"></canvas>
+<div id="game-container">
 
-    <div id="ui-layer">
-      <div id="scene-name">駅前広場</div>
-      <div id="debug-info" style="display:none;">
-        <div id="coord-display">現在座標: (-, -)</div>
-        <div id="clicked-coord">タップ: x=-, y=-</div>
-      </div>
-    </div>
 
-    <div id="area-title">
-      <div id="area-title-main"></div>
-      <div id="area-title-sub"></div>
-    </div>
 
-    <button id="interaction-hint" type="button" aria-label="近くを調べる">
-      <span id="interaction-label"></span>
-      <span id="interaction-action"></span>
-    </button>
 
-    <div id="message-backdrop"></div>
-    <div id="message-window" role="dialog" aria-live="polite"></div>
-    <div id="scene-container"></div>
 
-    <!-- 湯間庭フレーム: ゲーム・触れるらくがき・将来の読書室を町の中で見せる共通の額縁 -->
-    <div id="work-player" aria-hidden="true" data-frame-mode="standard">
-      <div id="work-player-controls" class="town-frame-header">
-        <button id="btn-close-work" type="button" aria-label="町へ戻る">
-          <span class="town-frame-back-arrow" aria-hidden="true">←</span>
-          <span id="work-player-return-label">町</span>
-        </button>
-        <div id="work-player-title" aria-live="polite"></div>
-        <button id="btn-open-frame-source" type="button" hidden>noteで開く</button>
-      </div>
 
-      <!-- 縦長ゲーム用。上部バーが引っ込んだ後も、ここを押すとメニューを再表示できる。 -->
-      <button id="work-player-peek-tab" type="button" aria-label="店のメニューを表示" hidden>
-        <span aria-hidden="true">⌄</span>
-      </button>
+<!-- 固定ゲーム画面: canvas・町UI・セリフ・操作UIはこの中で管理する --><div aria-label="湯間庭町の画面" id="town-screen"><canvas aria-label="湯間庭町" id="game-canvas"></canvas><div id="ui-layer">
+<div id="scene-name">駅前広場</div>
+<div id="debug-info" style="display:none;">
+<div id="coord-display">現在座標: (-, -)</div>
+<div id="clicked-coord">タップ: x=-, y=-</div>
+</div>
+</div><div id="area-title">
+<div id="area-title-main"></div>
+<div id="area-title-sub"></div>
+</div><button aria-label="近くを調べる" id="interaction-hint" type="button">
+<span id="interaction-label"></span>
+<span id="interaction-action"></span>
+</button><div id="message-backdrop"></div><div aria-live="polite" id="message-window" role="dialog"></div><div id="mobile-controls">
+<div aria-label="移動コントローラー" id="dpad">
+<button aria-label="上へ" class="dpad-btn up" id="btn-up" type="button">▲</button>
+<button aria-label="左へ" class="dpad-btn left" id="btn-left" type="button">◀</button>
+<button aria-label="右へ" class="dpad-btn right" id="btn-right" type="button">▶</button>
+<button aria-label="下へ" class="dpad-btn down" id="btn-down" type="button">▼</button>
+</div>
+<div id="action-btns">
+<button id="btn-action" type="button">調べる</button>
+</div>
+</div></div><div id="scene-container"></div>
+<!-- 湯間庭フレーム: ゲーム・触れるらくがき・将来の読書室を町の中で見せる共通の額縁 -->
+<div aria-hidden="true" data-frame-mode="standard" id="work-player">
+<div class="town-frame-header" id="work-player-controls">
+<button aria-label="町へ戻る" id="btn-close-work" type="button">
+<span aria-hidden="true" class="town-frame-back-arrow">←</span>
+<span id="work-player-return-label">町</span>
+</button>
+<div aria-live="polite" id="work-player-title"></div>
+<button hidden="" id="btn-open-frame-source" type="button">noteで開く</button>
+</div>
+<!-- 縦長ゲーム用。上部バーが引っ込んだ後も、ここを押すとメニューを再表示できる。 -->
+<button aria-label="店のメニューを表示" hidden="" id="work-player-peek-tab" type="button">
+<span aria-hidden="true">⌄</span>
+</button>
+<div id="work-player-content">
+<iframe allow="autoplay; fullscreen; gamepad" allowfullscreen="" id="work-player-frame" scrolling="no" title="町内コンテンツ"></iframe>
+<div aria-hidden="true" id="work-player-loading">
+<div aria-live="polite" class="work-player-loading-card" role="status">
+<div aria-hidden="true" class="work-player-loading-mark"></div>
+<div id="work-player-loading-label">準備しています…</div>
+</div>
+</div>
+</div>
+</div>
 
-      <div id="work-player-content">
-        <iframe
-          id="work-player-frame"
-          title="町内コンテンツ"
-          allow="autoplay; fullscreen; gamepad"
-          allowfullscreen
-          scrolling="no"
-        ></iframe>
-
-        <div id="work-player-loading" aria-hidden="true">
-          <div class="work-player-loading-card" role="status" aria-live="polite">
-            <div class="work-player-loading-mark" aria-hidden="true"></div>
-            <div id="work-player-loading-label">準備しています…</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="mobile-controls">
-      <div id="dpad" aria-label="移動コントローラー">
-        <button id="btn-up" class="dpad-btn up" type="button" aria-label="上へ">▲</button>
-        <button id="btn-left" class="dpad-btn left" type="button" aria-label="左へ">◀</button>
-        <button id="btn-right" class="dpad-btn right" type="button" aria-label="右へ">▶</button>
-        <button id="btn-down" class="dpad-btn down" type="button" aria-label="下へ">▼</button>
-      </div>
-      <div id="action-btns">
-        <button id="btn-action" type="button">調べる</button>
-      </div>
-    </div>
-
-    <button id="btn-debug-toggle" type="button">開発</button>
-
-    <div id="editor-panel" style="display:none;">
-      <div class="editor-header">
-        <strong>マップ編集</strong>
-        <button id="btn-close-editor" type="button" aria-label="閉じる">×</button>
-      </div>
-      <div class="editor-content">
-        <label>編集対象
+<button id="btn-debug-toggle" type="button">開発</button>
+<div id="editor-panel" style="display:none;">
+<div class="editor-header">
+<strong>マップ編集</strong>
+<button aria-label="閉じる" id="btn-close-editor" type="button">×</button>
+</div>
+<div class="editor-content">
+<label>編集対象
           <select id="edit-target">
-            <option value="passableRects">通行可能エリア</option>
-            <option value="blockedRects">通行不可エリア</option>
-            <option value="blockedPoints">通行不可ポイント</option>
-            <option value="triggers">調べる場所</option>
-          </select>
-        </label>
-        <div id="trigger-form" style="display:none;">
-          <label>種類
+<option value="passableRects">通行可能エリア</option>
+<option value="blockedRects">通行不可エリア</option>
+<option value="blockedPoints">通行不可ポイント</option>
+<option value="triggers">調べる場所</option>
+</select>
+</label>
+<div id="trigger-form" style="display:none;">
+<label>種類
             <select id="trigger-type">
-              <option value="inspect">調べる</option>
-              <option value="warp">移動する</option>
-              <option value="menu">メニューを開く</option>
-            </select>
-          </label>
-          <label>ID <input id="trigger-id" type="text" value="new_trigger"></label>
-          <label>遷移先 <input id="trigger-target" type="text" value=""></label>
-          <label>文章 <input id="trigger-text" type="text" value="新しい場所です。"></label>
-        </div>
-        <div id="editor-status">編集対象を選んでタップしてください</div>
-        <div class="editor-actions">
-          <button id="btn-editor-undo" type="button">Undo</button>
-          <button id="btn-editor-export" type="button">書き出す</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="export-modal" style="display:none;">
-      <div class="export-header">
-        <strong>マップ設定を書き出す</strong>
-        <button id="btn-close-export" type="button">閉じる</button>
-      </div>
-      <textarea id="export-textarea" spellcheck="false"></textarea>
-      <button id="btn-copy-export" type="button">コピーする</button>
-    </div>
-  </div>
-
-  <script src="./data/station-plaza.js"></script>
-  <!-- 新報だけは更新頻度が高いため、Safari / GitHub Pages の古いキャッシュを使わず毎回取り直す。 -->
-  <script>document.write('<script src="./data/notes.js?rev=' + Date.now() + '"><\/script>');</script>
-  <script src="./data/works.js"></script>
-  <script src="./data/updates.js"></script>
-  <script src="./data/places.js"></script>
-  <script src="./main.js"></script>
-  <script src="./phone-layout.js"></script>
+<option value="inspect">調べる</option>
+<option value="warp">移動する</option>
+<option value="menu">メニューを開く</option>
+</select>
+</label>
+<label>ID <input id="trigger-id" type="text" value="new_trigger"/></label>
+<label>遷移先 <input id="trigger-target" type="text" value=""/></label>
+<label>文章 <input id="trigger-text" type="text" value="新しい場所です。"/></label>
+</div>
+<div id="editor-status">編集対象を選んでタップしてください</div>
+<div class="editor-actions">
+<button id="btn-editor-undo" type="button">Undo</button>
+<button id="btn-editor-export" type="button">書き出す</button>
+</div>
+</div>
+</div>
+<div id="export-modal" style="display:none;">
+<div class="export-header">
+<strong>マップ設定を書き出す</strong>
+<button id="btn-close-export" type="button">閉じる</button>
+</div>
+<textarea id="export-textarea" spellcheck="false"></textarea>
+<button id="btn-copy-export" type="button">コピーする</button>
+</div>
+</div>
+<script src="./data/station-plaza.js"></script>
+<!-- 新報だけは更新頻度が高いため、Safari / GitHub Pages の古いキャッシュを使わず毎回取り直す。 -->
+<script>document.write('<script src="./data/notes.js?rev=' + Date.now() + '"><\/script>');</script>
+<script src="./data/works.js"></script>
+<script src="./data/updates.js"></script>
+<script src="./data/places.js"></script>
+<script src="./main.js"></script>
+<script src="./phone-layout.js"></script>
 </body>
 </html>
