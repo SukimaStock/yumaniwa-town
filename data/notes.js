@@ -40,6 +40,14 @@ var SHINPO_RACK = {
 var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
     {
+        id: "note-20260709-6bf71139",
+        title: "ゲームジャムで、コーラをすごろくにした",
+        url: "https://note.com/hamamah/n/na359e1f383de",
+        publishedAt: "2026-07-09",
+        featured: false
+    },
+
+    {
         id: "3fbab1d8a9b14123bfdb1461a94e8098",
         title: "ひねる、積む、なぞる。触れるらくがきの話",
         url: "https://note.com/hamamah/n/nca6b0ef9db94",
