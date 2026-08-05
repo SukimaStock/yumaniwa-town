@@ -68,7 +68,7 @@ var WORKS = [
         playerLayout: "phone",
         playerWidth: 360,
         playerHeight: 660,
-        readySignal: true,
+        readySignal: false,
         readyLabel: "工房を準備しています…",
         description: "夜の研究所で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
