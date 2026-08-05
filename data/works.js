@@ -56,7 +56,7 @@ var WORKS = [
         status: "open",
 
         launch: "itch_embed",
-        embedUrl: "https://itch.io/embed-upload/18206711?color=743f39",
+        embedUrl: "https://itch.io/embed-upload/18679936?color=743f39",
 
         // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/midnight-cola",
