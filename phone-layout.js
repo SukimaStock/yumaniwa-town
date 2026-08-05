@@ -80,15 +80,10 @@
             return;
         }
 
-        // 額縁の内側に少し余白を残し、iPhone幅を超える時だけ縮小する。
-        // バーが収納されると content の高さが増え、ここで自動的に少し大きくなる。
         var horizontalPadding = playerLayer.classList.contains("phone-controls-hidden") ? 8 : 24;
         var verticalPadding = playerLayer.classList.contains("phone-controls-hidden") ? 6 : 24;
         var availableWidth = Math.max(1, content.clientWidth - horizontalPadding);
         var availableHeight = Math.max(1, content.clientHeight - verticalPadding);
-        // iPhoneでは従来どおり等倍まで。
-        // iPad・PCでは余白が大きくなりすぎないよう、表示器だけ最大1.35倍まで拡大する。
-        // iframe内の論理サイズやゲーム側の倍率には触れない。
         var maxScale = isSmallTouchScreen() ? 1 : 1.35;
         var scale = Math.min(
             maxScale,
@@ -113,7 +108,6 @@
 
     function requestLayoutUpdate() {
         window.requestAnimationFrame(function () {
-            // main.js 側のレイアウト計算と、ResizeObserver の両方へ追従させる。
             if (typeof window.updateWorkPlayerLayoutSize === "function") {
                 window.updateWorkPlayerLayoutSize();
             }
@@ -152,8 +146,6 @@
         scheduleHide(delay || REVEAL_VISIBLE_MS);
     }
 
-    // 「作品を開いた」「別の作品に切り替えた」時だけ、バーを最初の表示状態へ戻す。
-    // phone-controls-hidden 自身の class 変更では呼び直さない。
     function resetForNewPlayerState() {
         clearHideTimer();
 
@@ -162,7 +154,6 @@
             return;
         }
 
-        // ローディング中にバーが消えると、初めて入った店の名前が読めない。
         if (loading.classList.contains("visible")) {
             setControlsHidden(false);
             return;
@@ -186,8 +177,6 @@
         if (isCompactPhoneGame()) scheduleHide(REVEAL_VISIBLE_MS);
     }, { passive: true });
 
-    // 作品が開いた・閉じた、作品種類が変わった時に初期状態をそろえる。
-    // class は phone-controls-hidden でも変わるので、visible / レイアウト値が変わった時だけ再初期化する。
     var lastVisible = playerLayer.classList.contains("visible");
     var lastFrameMode = playerLayer.dataset.frameMode || "";
     var lastPlayerLayout = playerLayer.dataset.playerLayout || "";
@@ -219,7 +208,6 @@
         attributeFilter: ["class", "data-frame-mode", "data-player-layout"]
     });
 
-    // iframeの読み込みが完了してローディングが消えた瞬間から、最初の表示時間を数える。
     var loadingObserver = new MutationObserver(function () {
         window.requestAnimationFrame(function () {
             applyPhoneLayout();
@@ -253,7 +241,6 @@
         if (document.hidden) {
             clearHideTimer();
         } else if (isCompactPhoneGame()) {
-            // 戻ってきた時だけ、迷子防止にいったんバーを見せる。
             resetForNewPlayerState();
         }
     });
@@ -262,4 +249,69 @@
         applyPhoneLayout();
         resetForNewPlayerState();
     });
+
+    (function installItchLoadGuard() {
+        if (
+            typeof window.openWorkPlayer !== "function" ||
+            typeof window.closeWorkPlayer !== "function"
+        ) {
+            return;
+        }
+
+        var openWorkPlayerBase = window.openWorkPlayer;
+        var closeWorkPlayerBase = window.closeWorkPlayer;
+        var pendingOpenTimer = null;
+        var lastItchOpenAt = 0;
+        var ITCH_OPEN_GAP_MS = 1200;
+
+        function clearPendingOpen() {
+            if (pendingOpenTimer) {
+                window.clearTimeout(pendingOpenTimer);
+                pendingOpenTimer = null;
+            }
+        }
+
+        function getWorkSource(work) {
+            if (!work) return "";
+            return work.embedUrl || work.entry || work.url || "";
+        }
+
+        function isItchWork(work) {
+            return /^https:\/\/itch\.io\/embed-upload\//i.test(
+                String(getWorkSource(work))
+            );
+        }
+
+        window.openWorkPlayer = function(work) {
+            var context = this;
+            var args = arguments;
+
+            clearPendingOpen();
+
+            if (!isItchWork(work)) {
+                return openWorkPlayerBase.apply(context, args);
+            }
+
+            var elapsed = Date.now() - lastItchOpenAt;
+            var delay = Math.max(0, ITCH_OPEN_GAP_MS - elapsed);
+
+            var runOpen = function() {
+                pendingOpenTimer = null;
+                lastItchOpenAt = Date.now();
+                openWorkPlayerBase.apply(context, args);
+            };
+
+            if (delay > 0) {
+                pendingOpenTimer = window.setTimeout(runOpen, delay);
+                return;
+            }
+
+            runOpen();
+        };
+
+        window.closeWorkPlayer = function() {
+            clearPendingOpen();
+            return closeWorkPlayerBase.apply(this, arguments);
+        };
+    })();
 })();
