@@ -57,7 +57,7 @@ var WORKS = [
         status: "open",
 
         launch: "itch_embed",
-        embedUrl: "https://itch.io/embed-upload/18681133?color=743f39",
+        embedUrl: "https://itch.io/embed-upload/18681243?color=743f39",
 
         // 町内表示で問題が出た際に確認できる通常ページURL。
         url: "https://sukimastock.itch.io/midnight-cola",
@@ -68,7 +68,7 @@ var WORKS = [
         playerLayout: "phone",
         playerWidth: 360,
         playerHeight: 660,
-        readySignal: false,
+        readySignal: true,
         readyLabel: "工房を準備しています…",
         description: "夜の研究所で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
