@@ -17,7 +17,6 @@
 // frameMode   : "standard" | "soft" | "phone-cola" | "phone-yakitori"
 //   phone-cola / phone-yakitori は、iPad・PCでは縦長の小型ゲーム機として中央に表示する。
 // playerLayout / playerWidth / playerHeight は、作品の本来の表示器サイズのメモとして残す。
-// readySignal : true の作品は、子作品の yumaniwa:work-ready 通知を待ってから表示する。
 // ==========================================
 
 var WORKS = [
@@ -68,8 +67,6 @@ var WORKS = [
         playerLayout: "phone",
         playerWidth: 360,
         playerHeight: 660,
-        readySignal: true,
-        readyLabel: "工房を準備しています…",
         description: "夜の研究所で、クラフトコーラを仕込む小さなゲーム。",
         emptyText: "真夜中の工房は、いま次の仕込みを整えています。"
     },
