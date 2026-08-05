@@ -28,6 +28,19 @@
 
     if (!playerLayer || !controls || !content || !frame || !loading || !peekTab) return;
 
+    // itch.ioのような外部作品をiframe内で開いた場合も、
+    // Web Share APIとコピー操作を利用できるようにする。
+    var FRAME_ALLOW_POLICY =
+        "autoplay; fullscreen; gamepad; web-share; clipboard-write";
+
+    function ensureFramePermissions() {
+        if (frame.getAttribute("allow") !== FRAME_ALLOW_POLICY) {
+            frame.setAttribute("allow", FRAME_ALLOW_POLICY);
+        }
+    }
+
+    ensureFramePermissions();
+
     var hideTimer = null;
 
     function getLayout() {
@@ -80,10 +93,15 @@
             return;
         }
 
+        // 額縁の内側に少し余白を残し、iPhone幅を超える時だけ縮小する。
+        // バーが収納されると content の高さが増え、ここで自動的に少し大きくなる。
         var horizontalPadding = playerLayer.classList.contains("phone-controls-hidden") ? 8 : 24;
         var verticalPadding = playerLayer.classList.contains("phone-controls-hidden") ? 6 : 24;
         var availableWidth = Math.max(1, content.clientWidth - horizontalPadding);
         var availableHeight = Math.max(1, content.clientHeight - verticalPadding);
+        // iPhoneでは従来どおり等倍まで。
+        // iPad・PCでは余白が大きくなりすぎないよう、表示器だけ最大1.35倍まで拡大する。
+        // iframe内の論理サイズやゲーム側の倍率には触れない。
         var maxScale = isSmallTouchScreen() ? 1 : 1.35;
         var scale = Math.min(
             maxScale,
@@ -108,6 +126,7 @@
 
     function requestLayoutUpdate() {
         window.requestAnimationFrame(function () {
+            // main.js 側のレイアウト計算と、ResizeObserver の両方へ追従させる。
             if (typeof window.updateWorkPlayerLayoutSize === "function") {
                 window.updateWorkPlayerLayoutSize();
             }
@@ -146,6 +165,8 @@
         scheduleHide(delay || REVEAL_VISIBLE_MS);
     }
 
+    // 「作品を開いた」「別の作品に切り替えた」時だけ、バーを最初の表示状態へ戻す。
+    // phone-controls-hidden 自身の class 変更では呼び直さない。
     function resetForNewPlayerState() {
         clearHideTimer();
 
@@ -154,6 +175,7 @@
             return;
         }
 
+        // ローディング中にバーが消えると、初めて入った店の名前が読めない。
         if (loading.classList.contains("visible")) {
             setControlsHidden(false);
             return;
@@ -177,6 +199,8 @@
         if (isCompactPhoneGame()) scheduleHide(REVEAL_VISIBLE_MS);
     }, { passive: true });
 
+    // 作品が開いた・閉じた、作品種類が変わった時に初期状態をそろえる。
+    // class は phone-controls-hidden でも変わるので、visible / レイアウト値が変わった時だけ再初期化する。
     var lastVisible = playerLayer.classList.contains("visible");
     var lastFrameMode = playerLayer.dataset.frameMode || "";
     var lastPlayerLayout = playerLayer.dataset.playerLayout || "";
@@ -208,6 +232,7 @@
         attributeFilter: ["class", "data-frame-mode", "data-player-layout"]
     });
 
+    // iframeの読み込みが完了してローディングが消えた瞬間から、最初の表示時間を数える。
     var loadingObserver = new MutationObserver(function () {
         window.requestAnimationFrame(function () {
             applyPhoneLayout();
@@ -241,6 +266,7 @@
         if (document.hidden) {
             clearHideTimer();
         } else if (isCompactPhoneGame()) {
+            // 戻ってきた時だけ、迷子防止にいったんバーを見せる。
             resetForNewPlayerState();
         }
     });
@@ -250,6 +276,12 @@
         resetForNewPlayerState();
     });
 
+    /*
+     * itch.io埋め込みの連続読み込みを抑える。
+     * 作品を閉じてすぐ別のitchゲームを開いた場合だけ、
+     * 次の読み込みまで最低1.2秒の間隔を置く。
+     * 同じ時間内に複数の起動要求が来た場合は、最後の一件だけを実行する。
+     */
     (function installItchLoadGuard() {
         if (
             typeof window.openWorkPlayer !== "function" ||
@@ -289,7 +321,9 @@
             clearPendingOpen();
 
             if (!isItchWork(work)) {
-                return openWorkPlayerBase.apply(context, args);
+                var result = openWorkPlayerBase.apply(context, args);
+                ensureFramePermissions();
+                return result;
             }
 
             var elapsed = Date.now() - lastItchOpenAt;
@@ -299,6 +333,7 @@
                 pendingOpenTimer = null;
                 lastItchOpenAt = Date.now();
                 openWorkPlayerBase.apply(context, args);
+                ensureFramePermissions();
             };
 
             if (delay > 0) {
