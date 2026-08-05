@@ -9,18 +9,19 @@
     "use strict";
 
     var TYPE_WORK_READY = "yumaniwa:work-ready";
-    var FALLBACK_MS = 20000;
+    var FALLBACK_MS = 8500;
+    var READY_BUFFER_MS = 15000;
 
     var playerLayer = document.getElementById("work-player");
     var frame = document.getElementById("work-player-frame");
     var loading = document.getElementById("work-player-loading");
-    var loadingLabel = document.getElementById("work-player-loading-label");
 
     if (!playerLayer || !frame || !loading) return;
 
     var waiting = false;
     var waitingWorkId = "";
     var fallbackTimer = null;
+    var readySignals = Object.create(null);
 
     function isPlayerOpen() {
         return playerLayer.classList.contains("visible");
@@ -37,11 +38,11 @@
         return window.getWorkById(window.currentWorkId);
     }
 
-    function showLoading(label) {
-        if (label && loadingLabel) {
-            loadingLabel.textContent = label;
-        }
-
+    function showLoading() {
+        /*
+         * 文言は main.js が作品ごとに設定したものをそのまま使う。
+         * このブリッジでは別の文言へ上書きしない。
+         */
         playerLayer.classList.add("is-loading");
         loading.classList.add("visible");
         loading.setAttribute("aria-hidden", "false");
@@ -70,6 +71,21 @@
         }
     }
 
+    function rememberReady(workId) {
+        var id = String(workId || window.currentWorkId || "");
+        if (!id) return;
+        readySignals[id] = Date.now();
+    }
+
+    function consumeRecentReady(workId) {
+        var id = String(workId || "");
+        if (!id || !readySignals[id]) return false;
+
+        var age = Date.now() - readySignals[id];
+        delete readySignals[id];
+        return age >= 0 && age <= READY_BUFFER_MS;
+    }
+
     function beginWaiting() {
         var work = getCurrentWork();
 
@@ -86,16 +102,21 @@
         waiting = true;
         waitingWorkId = String(work.id || window.currentWorkId || "");
 
-        showLoading(
-            work.readyLabel ||
-            work.openingLabel ||
-            "作品を準備しています…"
-        );
+        /*
+         * itch.io の外側iframeが load する前に、内側ゲームから
+         * 準備完了通知が届くことがある。その通知を捨てずに使う。
+         */
+        if (consumeRecentReady(waitingWorkId)) {
+            stopWaiting(true);
+            return;
+        }
+
+        showLoading();
 
         fallbackTimer = window.setTimeout(function () {
             /*
              * 通知が届かない古いビルドや通信不調でも、
-             * 永久に町側の幕を残さない。
+             * 長時間待たせず町側の幕を外す。
              */
             stopWaiting(true);
         }, FALLBACK_MS);
@@ -137,7 +158,6 @@
         var data = event.data;
 
         if (
-            !waiting ||
             !data ||
             typeof data !== "object" ||
             data.type !== TYPE_WORK_READY
@@ -145,12 +165,24 @@
             return;
         }
 
+        var signalWorkId = String(
+            data.workId || window.currentWorkId || ""
+        );
+
+        rememberReady(signalWorkId);
+
+        if (!waiting) return;
+
         if (
-            data.workId &&
+            signalWorkId &&
             waitingWorkId &&
-            String(data.workId) !== waitingWorkId
+            signalWorkId !== waitingWorkId
         ) {
             return;
+        }
+
+        if (waitingWorkId) {
+            delete readySignals[waitingWorkId];
         }
 
         stopWaiting(true);
