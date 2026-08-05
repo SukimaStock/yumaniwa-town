@@ -5,7 +5,7 @@
    読み込み完了の自動判定やエラー表示は行わない。
 
    429 や一時的な読み込み失敗が見えた場合だけ、
-   上部メニューの「再読込」からゲームiframeを読み直す。
+   上部メニュー右端の更新アイコンからゲームiframeを読み直す。
    ========================================== */
 (function () {
     "use strict";
@@ -33,9 +33,14 @@
         style.id = "yumaniwa-work-retry-style";
         style.textContent = [
             "#yumaniwa-work-retry[hidden]{display:none!important}",
-            "#yumaniwa-work-retry{flex:0 0 auto;min-width:54px;height:36px;padding:0 9px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(255,255,255,.08);color:inherit;font:inherit;font-size:11px;font-weight:700;letter-spacing:.02em;white-space:nowrap;touch-action:manipulation;-webkit-tap-highlight-color:transparent}",
-            "#yumaniwa-work-retry:active{transform:translateY(1px)}",
-            "#yumaniwa-work-retry:disabled{opacity:.42;transform:none}",
+            "#yumaniwa-work-retry{flex:0 0 36px;width:36px;height:36px;padding:0;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:20px;font-weight:400;line-height:1;opacity:.34;display:inline-flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:opacity .16s ease,background-color .16s ease,transform .12s ease}",
+            "@media (hover:hover){#yumaniwa-work-retry:hover{opacity:.82;background:rgba(255,255,255,.08)}}",
+            "#yumaniwa-work-retry:focus-visible{opacity:.9;background:rgba(255,255,255,.10);outline:2px solid rgba(255,255,255,.42);outline-offset:2px}",
+            "#yumaniwa-work-retry:active{opacity:.92;transform:translateY(1px)}",
+            "#yumaniwa-work-retry:disabled{opacity:.26;transform:none}",
+            "#yumaniwa-work-retry.is-retrying{opacity:.72;animation:yumaniwa-retry-spin 1s linear infinite}",
+            "@keyframes yumaniwa-retry-spin{to{transform:rotate(360deg)}}",
+            "@media (prefers-reduced-motion:reduce){#yumaniwa-work-retry{transition:none}#yumaniwa-work-retry.is-retrying{animation:none}}",
             "#work-player.phone-controls-hidden #yumaniwa-work-retry{display:none!important}"
         ].join("");
         document.head.appendChild(style);
@@ -44,7 +49,8 @@
         button.id = "yumaniwa-work-retry";
         button.type = "button";
         button.hidden = true;
-        button.textContent = "再読込";
+        button.textContent = "↻";
+        button.title = "ゲームを再読み込み";
         button.setAttribute("aria-label", "ゲームを再読み込み");
         button.addEventListener("click", retryCurrentWork);
 
@@ -89,7 +95,9 @@
         clearEnableTimer();
         retrying = false;
         retryButton.disabled = false;
-        retryButton.textContent = "再読込";
+        retryButton.classList.remove("is-retrying");
+        retryButton.textContent = "↻";
+        retryButton.title = "ゲームを再読み込み";
         retryButton.setAttribute("aria-label", "ゲームを再読み込み");
     }
 
@@ -126,10 +134,7 @@
 
         enableTimer = window.setTimeout(function () {
             enableTimer = null;
-            retrying = false;
-            retryButton.disabled = false;
-            retryButton.textContent = "再読込";
-            retryButton.setAttribute("aria-label", "ゲームを再読み込み");
+            resetButton();
             updateButtonVisibility();
         }, remaining);
     }
@@ -160,7 +165,8 @@
         lastRetryAt = now;
         retrying = true;
         retryButton.disabled = true;
-        retryButton.textContent = "読込中";
+        retryButton.classList.add("is-retrying");
+        retryButton.title = "ゲームを再読み込みしています";
         retryButton.setAttribute("aria-label", "ゲームを再読み込みしています");
 
         showTownLoading("仕込み場を開けています…");
