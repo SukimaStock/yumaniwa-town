@@ -1,12 +1,12 @@
 /* ==========================================
-   湯間庭町 / 縦長ゲーム表示器 + スマホ用バー自動収納
+   湯間庭町 / 縦長作品表示器 + スマホ用バー自動収納
 
-   - MIDNIGHT COLA / Yakitori Wars は、iPad・PCでは iPhone相当の
-     縦長画面として中央に置く。
-   - iPhoneなど小さいタッチ画面では、店名バーを読み込み直後だけ表示。
-     少しすると上へ収納し、ゲームのための高さを返す。
-   - 収納後は左上の小さなタブを押すと、店名バーを再表示できる。
-   - 触れるらくがき（soft / standard）は対象外。
+   - playerLayout: "phone" の作品は、iPad・PCでは
+     iPhone相当の縦長画面として中央に置く。
+   - iPhoneなど小さいタッチ画面では、上部バーを読み込み直後だけ表示。
+     少しすると上へ収納し、作品のための高さを返す。
+   - 収納後は左上の小さなタブを押すと、上部バーを再表示できる。
+   - responsive表示の作品は対象外。
    ========================================== */
 (function () {
     "use strict";
@@ -44,7 +44,19 @@
     var hideTimer = null;
 
     function getLayout() {
-        return PHONE_LAYOUTS[playerLayer.dataset.frameMode] || null;
+        var preset = PHONE_LAYOUTS[playerLayer.dataset.frameMode];
+        if (preset) return preset;
+
+        // 作品データの playerLayout: "phone" を共通条件にする。
+        // DotWeatherなど、softフレームの縦長作品も同じ収納挙動になる。
+        if (playerLayer.dataset.playerLayout !== "phone") {
+            return null;
+        }
+
+        return {
+            width: Number(playerLayer.dataset.playerWidth) || 360,
+            height: Number(playerLayer.dataset.playerHeight) || 640
+        };
     }
 
     function isSmallTouchScreen() {
