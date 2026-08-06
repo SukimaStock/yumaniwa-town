@@ -36,7 +36,27 @@ var WORKS = [
     //     frameMode: "standard",
     //     emptyText: "この作品は準備中です。"
     // },
+{
+    id: "dotweather",
+    title: "DotWeather",
+    venue: "leisure_center",
+    kind: "work",
+    status: "open",
 
+    launch: "embedded",
+    entry: "./works/dotweather/index.html",
+
+    frameTitle: "DotWeather",
+    returnLabel: "湯窓レジャーセンター",
+    frameMode: "soft",
+
+    playerLayout: "phone",
+    playerWidth: 360,
+    playerHeight: 640,
+
+    description: "世界の空を、静かなドットで眺める天気アプリ。",
+    emptyText: "空模様を読み込んでいます。"
+},
     // 作品プレイヤーの動作確認用。必要なときだけ status を open に変更してください。
     {
         id: "rakugaki-template-test",
