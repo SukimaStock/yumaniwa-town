@@ -35,6 +35,7 @@
     id: "dotweather",
     logicalWidth: 360,
     logicalHeight: 640,
+    frameRate: 30,
     initialScene: "weather",
     outerBackground: "pixelDeep",
     sceneBackground: "pixelNight",

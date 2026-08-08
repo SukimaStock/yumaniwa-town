@@ -189,6 +189,7 @@
     id: "sukimastock-app",
     logicalWidth: 360,
     logicalHeight: 640,
+    frameRate: null,
     initialScene: null,
     initialPayload: null,
     pointerMode: "primary",
@@ -217,6 +218,7 @@
     theme: deepClone(DEFAULT_THEME),
     activePointerId: null,
     drawGuardActive: false,
+    lastDrawTimeMs: 0,
   };
 
   // ------------------------------------------------------------
@@ -1874,6 +1876,22 @@
   }
 
   function drawEngine() {
+    const configuredFrameRate = Number(state.config.frameRate);
+    const frameRate = Number.isFinite(configuredFrameRate) && configuredFrameRate > 0
+      ? configuredFrameRate
+      : 0;
+    const currentTimeMs = nowMs();
+
+    if (frameRate > 0 && state.lastDrawTimeMs > 0) {
+      const minimumFrameMs = 1000 / frameRate;
+      if (currentTimeMs - state.lastDrawTimeMs < minimumFrameMs - 0.5) return;
+    }
+
+    const frameDelta = state.lastDrawTimeMs > 0
+      ? Math.min(0.05, Math.max(0, (currentTimeMs - state.lastDrawTimeMs) / 1000))
+      : (Number(root.DeltaTime) || 1 / 60);
+    state.lastDrawTimeMs = currentTimeMs;
+
     let viewportOpen = false;
 
     try {
@@ -1881,7 +1899,7 @@
       const outer = theme.color(state.config.outerBackground || "nightDeep");
       root.background(outer);
 
-      app.update(Number(root.DeltaTime) || 1 / 60);
+      app.update(frameDelta);
       viewport.begin();
       viewportOpen = true;
 
