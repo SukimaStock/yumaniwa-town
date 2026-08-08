@@ -154,6 +154,17 @@
       if (!opts.force && !DotWeatherData.needsRefresh(this.weatherUpdatedAt)) return null;
 
       const refreshSource = opts.reason || (opts.force ? "manual" : "auto");
+      const requestStartedAt = Date.now();
+      const hasCustomCities = this.cities.some((city) => !!city?.isCustom);
+      const durationBucket = (durationMs) => {
+        const ms = Math.max(0, Number(durationMs) || 0);
+        if (ms < 1000) return "under_1s";
+        if (ms < 3000) return "1_3s";
+        if (ms < 6000) return "3_6s";
+        if (ms < 12000) return "6_12s";
+        return "12s_plus";
+      };
+
       if (refreshSource === "manual") {
         SSE.analytics.track("Refresh", {
           city_count: this.cityIds.length,
@@ -171,18 +182,32 @@
           const activeIndex = this.cityIds.indexOf(activeId);
           this.cityIndex = activeIndex >= 0 ? activeIndex : 0;
           this.world.setCity(this.getCity());
+
+          SSE.analytics.track("Weather Load Success", {
+            source: refreshSource,
+            city_count: this.cityIds.length,
+            has_custom_cities: hasCustomCities,
+            duration: durationBucket(result.durationMs ?? (Date.now() - requestStartedAt)),
+          });
+
           if (opts.force) {
             SSE.audio.tone({ frequency: 390, endFrequency: 520, duration: 0.07, volume: 0.018 });
           }
           return result;
         })
-        .catch((_error) => {
+        .catch((error) => {
           this.weatherStatus = "error";
           this.weatherErrorUntil = Date.now() + 3000;
+          const diagnostic = error?.dotWeather || {};
           SSE.analytics.track("Weather Load Error", {
             source: refreshSource,
             city_count: this.cityIds.length,
             has_cached_data: DotWeatherData.hasLiveData(),
+            has_custom_cities: hasCustomCities,
+            error_type: diagnostic.type || "unknown",
+            http_status: diagnostic.httpStatus ? String(diagnostic.httpStatus) : "none",
+            duration: durationBucket(diagnostic.durationMs ?? (Date.now() - requestStartedAt)),
+            online: typeof navigator === "undefined" ? "unknown" : (navigator.onLine ? "yes" : "no"),
           });
           if (opts.force) {
             SSE.audio.tone({ frequency: 260, endFrequency: 190, duration: 0.09, volume: 0.018 });

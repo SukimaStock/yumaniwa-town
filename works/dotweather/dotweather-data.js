@@ -512,9 +512,21 @@
     },
 
     async refreshForecasts(ids) {
+      const startedAt = Date.now();
       const cities = this.citiesForIds(ids);
-      if (cities.length === 0) throw new Error("No cities to update.");
-      if (typeof root.fetch !== "function") throw new Error("Fetch API is unavailable.");
+
+      function diagnosticError(type, message, details) {
+        const error = new Error(message);
+        error.dotWeather = {
+          type,
+          ...(details || {}),
+          durationMs: Date.now() - startedAt,
+        };
+        return error;
+      }
+
+      if (cities.length === 0) throw diagnosticError("no_cities", "No cities to update.");
+      if (typeof root.fetch !== "function") throw diagnosticError("fetch_unavailable", "Fetch API is unavailable.");
 
       const controller = typeof root.AbortController === "function" ? new root.AbortController() : null;
       const timeout = root.setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
@@ -526,24 +538,55 @@
           cache: "no-store",
           signal: controller?.signal,
         });
+      } catch (error) {
+        const isAbort = error?.name === "AbortError" || controller?.signal?.aborted;
+        throw diagnosticError(
+          isAbort ? "timeout" : "network",
+          isAbort ? "Forecast request timed out." : "Forecast network request failed.",
+          { originalName: String(error?.name || "") }
+        );
       } finally {
         root.clearTimeout(timeout);
       }
-      if (!response || !response.ok) throw new Error("Forecast request failed: " + (response?.status || "network"));
 
-      const json = await response.json();
+      if (!response || !response.ok) {
+        throw diagnosticError("http", "Forecast request failed: " + (response?.status || "network"), {
+          httpStatus: response?.status || 0,
+        });
+      }
+
+      let json;
+      try {
+        json = await response.json();
+      } catch (_error) {
+        throw diagnosticError("parse", "Forecast response could not be parsed.");
+      }
+
       const payloads = cities.length === 1 ? [json] : json;
       if (!Array.isArray(payloads) || payloads.length !== cities.length) {
-        throw new Error("Forecast response count did not match the city count.");
+        throw diagnosticError("response_shape", "Forecast response count did not match the city count.", {
+          payloadCount: Array.isArray(payloads) ? payloads.length : -1,
+        });
       }
 
       const updatedAt = Date.now();
-      const normalized = payloads.map((payload, index) => normalizeForecast(cities[index], payload, updatedAt));
+      let normalized;
+      try {
+        normalized = payloads.map((payload, index) => normalizeForecast(cities[index], payload, updatedAt));
+      } catch (_error) {
+        throw diagnosticError("normalize", "Forecast response could not be normalized.");
+      }
+
       normalized.forEach((forecast, index) => applyForecast(cities[index], forecast));
       liveCityCount = Math.max(liveCityCount, cities.length);
       lastUpdatedAt = updatedAt;
       saveCache(cities, updatedAt);
-      return { updatedAt, count: cities.length, cities };
+      return {
+        updatedAt,
+        count: cities.length,
+        cities,
+        durationMs: Date.now() - startedAt,
+      };
     },
 
     // Exposed for deterministic validation without making a network request.
