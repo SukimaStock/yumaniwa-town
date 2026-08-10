@@ -40,10 +40,35 @@ var SHINPO_RACK = {
 var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
     {
-        id: "note-20260709-6bf71139",
-        title: "ゲームジャムで、コーラをすごろくにした",
-        url: "https://note.com/hamamah/n/na359e1f383de",
-        publishedAt: "2026-07-09",
+        id: "note-20260807-n845da26b1b0b",
+        title: "正解のないゲームを探していた",
+        url: "https://note.com/hamamah/n/n845da26b1b0b",
+        publish_date: "2026-08-07",
+        showInShinpo: true,
+        tags: ["game", "making", "thoughts"]
+    },
+    {
+        id: "note-20260731-n6565e030d711",
+        title: "アプリを作っていたはずが、工作の時間に戻っていた",
+        url: "https://note.com/hamamah/n/n6565e030d711",
+        publish_date: "2026-07-31",
+        showInShinpo: true,
+        tags: ["app", "making", "thoughts"]
+    },
+
+    {
+        id: "note-20260723-e2edff63",
+        title: "世の中のアプリはだいたい優秀だった",
+        url: "https://note.com/hamamah/n/nf9e2d84e9429",
+        publishedAt: "2026-07-23",
+        featured: false
+    },
+
+    {
+        id: "note-20260717-153a44e0",
+        title: "作品を並べるより、住める場所を作りたかった",
+        url: "https://note.com/hamamah/n/nad06ba5e60a2",
+        publishedAt: "2026-07-17",
         featured: false
     },
 
