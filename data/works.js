@@ -59,6 +59,28 @@ var WORKS = [
 },
     // 作品プレイヤーの動作確認用。必要なときだけ status を open に変更してください。
     {
+        id: "junkissa-dive",
+        title: "純喫茶ダイヴ",
+        venue: "tomogushi_alley",
+        kind: "game",
+        status: "open",
+
+        launch: "itch_embed",
+        embedUrl: "https://itch.io/embed-upload/18746640?color=743f39",
+
+        // 町内表示で問題が出た際に確認できる通常ページURL。
+        url: "https://sukimastock.itch.io/junkissa-dive",
+
+        frameTitle: "純喫茶ダイヴ",
+        returnLabel: "灯串横丁",
+        frameMode: "phone-cola",
+        playerLayout: "phone",
+        playerWidth: 360,
+        playerHeight: 660,
+        description: "深夜だけ開く純喫茶で、トッピングを飛ばして商品を仕上げる小さなゲーム。",
+        emptyText: "純喫茶ダイヴは、今夜の開店準備をしています。"
+    },
+    {
         id: "rakugaki-template-test",
         title: "新しい筐体の見本",
         venue: "leisure_center",
