@@ -76,7 +76,7 @@ var WORKS = [
         frameMode: "phone-cola",
         playerLayout: "phone",
         playerWidth: 360,
-        playerHeight: 660,
+        playerHeight: 640,
         description: "深夜だけ開く純喫茶で、トッピングを飛ばして商品を仕上げる小さなゲーム。",
         emptyText: "純喫茶ダイヴは、今夜の開店準備をしています。"
     },
