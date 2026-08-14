@@ -60,7 +60,7 @@ var isMessageOpen = false;
 var pendingWarp = null;
 
 // 開発モードを戻すときは、この値だけ true にしてください。
-var DEV_MODE_ENABLED = true;
+var DEV_MODE_ENABLED = false;
 var debugMode = false;
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
