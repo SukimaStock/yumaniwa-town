@@ -1,0 +1,99 @@
+name: Production Safety Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "node --check $file"
+            node --check "$file"
+          done < <(find . -type f -name '*.js' -not -path './.git/*' -print0)
+
+      - name: Check YumaniwaDesk syntax
+        run: python -m py_compile tools/YumaniwaDesk.py
+
+      - name: Check production invariants and manifests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+          import sys
+
+          errors = []
+
+          index_path = Path('index.html')
+          main_path = Path('main.js')
+          gate_path = Path('developer-access.js')
+
+          for path in (index_path, main_path, gate_path):
+              if not path.is_file():
+                  errors.append(f'missing required file: {path}')
+
+          if not errors:
+              index = index_path.read_text(encoding='utf-8')
+              main = main_path.read_text(encoding='utf-8')
+              gate = gate_path.read_text(encoding='utf-8')
+
+              if 'noindex' in index.lower():
+                  errors.append('production index.html contains noindex')
+
+              if 'var DEV_MODE_ENABLED = false;' not in main:
+                  errors.append('main.js default DEV_MODE_ENABLED must remain false')
+
+              if 'params.get("dev") === "1"' not in gate and "params.get('dev') === '1'" not in gate:
+                  errors.append('developer-access.js no longer contains the explicit ?dev=1 gate')
+
+              main_pos = index.find('main.js')
+              gate_pos = index.find('developer-access.js')
+              if main_pos < 0 or gate_pos < 0 or gate_pos <= main_pos:
+                  errors.append('developer-access.js must be loaded after main.js')
+
+              # Local root-level script/style references in index.html must exist.
+              refs = re.findall(r'(?:src|href)=["\'](\./[^"\']+)["\']', index)
+              for ref in refs:
+                  clean = ref.split('?', 1)[0].split('#', 1)[0]
+                  target = Path(clean[2:])
+                  if not target.exists():
+                      errors.append(f'index.html references missing local file: {clean}')
+
+          for manifest_path in Path('.').rglob('*.webmanifest'):
+              try:
+                  data = json.loads(manifest_path.read_text(encoding='utf-8'))
+              except Exception as exc:
+                  errors.append(f'invalid manifest {manifest_path}: {exc}')
+                  continue
+              for icon in data.get('icons', []):
+                  src = icon.get('src')
+                  if not src or src.startswith(('http://', 'https://', 'data:')):
+                      continue
+                  clean = src.split('?', 1)[0].split('#', 1)[0]
+                  target = (manifest_path.parent / clean).resolve()
+                  if not target.exists():
+                      errors.append(f'{manifest_path} references missing icon: {src}')
+
+          if errors:
+              print('Production safety checks failed:')
+              for error in errors:
+                  print(' -', error)
+              sys.exit(1)
+
+          print('Production safety checks passed.')
+          PY
