@@ -21,24 +21,18 @@
 <meta content="1200" property="og:image:width"/>
 <meta content="630" property="og:image:height"/>
 <meta content="湯間庭町の駅前広場" property="og:image:alt"/>
-          <!-- Privacy-friendly analytics by Plausible -->
-<script async src="https://plausible.io/js/pa-sYe-y0PqpZapFe6FJVlK2.js"></script>
-<script>
-  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-  plausible.init()
-</script>
-
 <meta content="summary_large_image" name="twitter:card"/>
 <meta content="湯間庭町｜つくったものが集まる町" name="twitter:title"/>
 <meta content="自分専用アプリ記事、触れるらくがき、夜の工房、焼き鳥屋台。少しずつ作ってきたものを、ひとつの町として歩ける場所にしました。" name="twitter:description"/>
 <meta content="https://sukimastock.github.io/yumaniwa-town/assets/ogp/yumaniwa-town.jpg?v=1" name="twitter:image"/>
 <meta content="湯間庭町の駅前広場" name="twitter:image:alt"/>
 <title>湯間庭町｜つくったものが集まる町</title>
+<script src="./work-install-meta.js?v=20260813-1"></script>
 <link href="./style.css" rel="stylesheet"/>
+<link href="./layout-fix.css?v=20260813-1" rel="stylesheet"/>
 </head>
 <body>
 <div id="game-container">
-
 
 
 
@@ -77,14 +71,13 @@
 <div aria-live="polite" id="work-player-title"></div>
 <button hidden="" id="btn-open-frame-source" type="button">noteで開く</button>
 </div>
-<!-- 縦長ゲーム用。上部バーが引っ込んだ後も、ここを押すとメニューを再表示できる。 -->
 <button aria-label="店のメニューを表示" hidden="" id="work-player-peek-tab" type="button">
 <span aria-hidden="true">⌄</span>
 </button>
 <div id="work-player-content">
 <iframe allow="autoplay; fullscreen; gamepad; web-share; clipboard-write" allowfullscreen="" id="work-player-frame" scrolling="no" title="町内コンテンツ"></iframe>
 <div aria-hidden="true" id="work-player-loading">
-<div aria-live="polite" class="work-player-loading-card" role="status">
+<div class="work-player-loading-card" aria-live="polite" role="status">
 <div aria-hidden="true" class="work-player-loading-mark"></div>
 <div id="work-player-loading-label">準備しています…</div>
 </div>
@@ -135,14 +128,23 @@
 <button id="btn-copy-export" type="button">コピーする</button>
 </div>
 </div>
-<script src="./data/station-plaza.js"></script>
-<!-- 新報だけは更新頻度が高いため、Safari / GitHub Pages の古いキャッシュを使わず毎回取り直す。 -->
+<script src="./data/station-plaza.js?rev=20260711-1"></script>
 <script>document.write('<script src="./data/notes.js?rev=' + Date.now() + '"><\/script>');</script>
 <script src="./data/works.js"></script>
 <script src="./data/updates.js"></script>
-<script src="./data/places.js"></script>
-<script src="./main.js"></script>
+<script src="./data/places.js?v=20260813-1"></script>
+<script src="./data/town-maps.js?rev=20260813-7"></script>
+<script src="./main.js?rev=20260711-2"></script>
+<script src="./data/station-plaza-props.js?rev=20260711-1"></script>
+<script src="./data/town-runtime-fixes.js?v=20260813-5"></script>
+<script src="./town-arrival-refresh.js?v=20260813-1"></script>
+<script src="./station-guide-refresh.js?v=20260813-2"></script>
+<script src="./station-guide-hotfix.js?v=20260813-1"></script>
+<script src="./data/town-tap-targets.js?v=20260813-1"></script>
+<script src="./town-interaction-flow.js?v=20260813-5"></script>
+<script src="./town-return-flow.js?v=20260813-1"></script>
 <script src="./phone-layout.js"></script>
+<script src="./town-analytics.js?v=20260813-1"></script>
 <script src="./share-bridge.js?v=20260805-1"></script>
 <script src="./work-ready.js?v=20260805-5"></script>
 </body>

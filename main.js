@@ -60,7 +60,7 @@ var isMessageOpen = false;
 var pendingWarp = null;
 
 // 開発モードを戻すときは、この値だけ true にしてください。
-var DEV_MODE_ENABLED = false;
+var DEV_MODE_ENABLED = true;
 var debugMode = false;
 var keys = {};
 var dpad = { up: false, down: false, left: false, right: false };
@@ -72,6 +72,23 @@ var editStartX = 0;
 var editStartY = 0;
 var currentHoverTile = null;
 var editHistory = [];
+var editingTriggerIndex = -1;
+
+// 開発モード / 保存状態・アコーディオン
+var editorHasUnsavedChanges = false;
+var editorPanelCollapsed = false;
+
+// 開発モード / マップパーツ編集
+var editingPartIndex = -1;
+var partEditorMode = 'select'; // select | add
+var partDragState = null;
+var partEditorRatioLock = true;
+
+// パーツ由来の当たり判定と、マップ固定の当たり判定を分離する。
+// baseCollisionGrid は固定地形だけ、collisionGrid はパーツ分を重ねた実際の判定。
+var baseCollisionGrid = [];
+var townPartTriggerTemplates = {};
+var townPartManagedTriggerIds = {};
 
 var collisionGrid = [];
 var currentAreaId = null;
@@ -81,6 +98,11 @@ var tapMovePath = [];
 var tapMoveTargetTile = null;
 var tapMarkerTimer = 0;
 var tapMarkerPos = null;
+
+var tapMarkerPos = null;
+
+// 画面端タップで予約された出口方向。
+
 
 //
 // PC / モバイル共通の固定ゲーム画面。
@@ -348,6 +370,73 @@ var isWorkPlayerOpen = false;
 var currentWorkId = null;
 var workPlayerReturnDestinationId = null;
 
+var workPlayerReturnDestinationId = null;
+
+// 作品直リンクから町へ入ったかどうか。
+// 直リンクで遊び終えた人にだけ、施設内の別作品を案内する。
+var isDirectWorkVisit = false;
+
+function trackYumaniwaEvent(name, props){
+ try{
+  if(typeof window.plausible!=="function") return false;
+  window.plausible(name, props?{props:props}:undefined);
+  if(window.__YUMANIWA_ANALYTICS_DEBUG__) console.info("[Yumaniwa]",name,props||{});
+  return true;
+ }catch(e){
+  if(window.__YUMANIWA_ANALYTICS_DEBUG__) console.warn(e);
+  return false;
+ }
+}
+
+
+// 施設メニューへ戻った直後に表示する案内。
+var destinationReturnGuideText = "";
+
+// 直前に遊んでいた作品。
+var lastClosedWorkId = null;
+
+
+var workPlayerReturnDestinationId = null;
+
+// お店・看板などを開いた直前の町内位置
+var townWindowReturnPoint = null;
+
+function rememberTownWindowReturnPoint() {
+    if (!isTownScene(currentScene)) return;
+
+    townWindowReturnPoint = {
+        sceneId: currentScene,
+        x: player.x,
+        y: player.y,
+        dir: player.dir || "down"
+    };
+}
+
+function restoreTownWindowReturnPoint(fallbackSceneId) {
+    var point = townWindowReturnPoint;
+    townWindowReturnPoint = null;
+
+    if (!point || !isTownScene(point.sceneId)) {
+        changeScene(fallbackSceneId || "station_plaza");
+        return;
+    }
+
+    changeScene(point.sceneId);
+
+    player.x = point.x;
+    player.y = point.y;
+    player.dir = point.dir || "down";
+    player.isMoving = false;
+    player.walkDistance = 0;
+    player.walkFrame = 0;
+    player.walkWasMoving = false;
+
+    cancelTapMove();
+    updateInteractionHint();
+    updateCurrentArea();
+}
+
+
 // 湯間庭フレームで表示中の元ページ。
 // 現在はnote読書室だけが右上の「noteで開く」に使う。
 var currentFrameSourceUrl = "";
@@ -391,7 +480,7 @@ function getWorkPlayerFrameTitle(work) {
     return (work && work.title) || "湯間庭町";
 }
 
-var STATION_GUIDE_MAP_IMAGE = "assets/station-guide-map.png";
+var STATION_GUIDE_MAP_IMAGE = "assets/station-guide-map.png?rev=20260710-final";
 var isStationGuideMapOpen = false;
 var stationGuideMapStylesReady = false;
 var stationGuideMapEventsReady = false;
@@ -404,6 +493,423 @@ var townArrivalLoadingStartedAt = 0;
 var townArrivalLoadingMinMs = 720;
 var townArrivalLoadingHideTimer = null;
 
+var activeTownSceneDef = null;
+
+function cloneTownData(data) {
+    return JSON.parse(JSON.stringify(data || []));
+}
+
+function isTownScene(sceneId) {
+    return !!(window.TOWN_SCENE_MAPS && window.TOWN_SCENE_MAPS[sceneId]);
+}
+
+function getTownSceneDefinition(sceneId) {
+    if (!window.TOWN_SCENE_MAPS) return null;
+    return window.TOWN_SCENE_MAPS[sceneId] || null;
+}
+
+var townSceneBackgroundCache = {};
+
+function flushTownSceneBackgroundCallbacks(entry) {
+    if (!entry || !entry.callbacks) return;
+
+    var callbacks = entry.callbacks.slice();
+    entry.callbacks.length = 0;
+
+    for (var i = 0; i < callbacks.length; i++) {
+        if (typeof callbacks[i] === "function") {
+            callbacks[i](entry);
+        }
+    }
+}
+
+function preloadTownSceneBackgroundAsset(path, callback) {
+    if (!path) {
+        if (typeof callback === "function") {
+            window.setTimeout(function() {
+                callback({ loaded: true, error: false, image: null, path: "" });
+            }, 0);
+        }
+        return null;
+    }
+
+    var entry = townSceneBackgroundCache[path];
+
+    if (entry) {
+        if (typeof callback === "function") {
+            if (entry.loaded || entry.error) {
+                window.setTimeout(function() {
+                    callback(entry);
+                }, 0);
+            } else {
+                entry.callbacks.push(callback);
+            }
+        }
+
+        return entry;
+    }
+
+    var image = new Image();
+
+    entry = {
+        path: path,
+        image: image,
+        loaded: false,
+        error: false,
+        callbacks: []
+    };
+
+    if (typeof callback === "function") {
+        entry.callbacks.push(callback);
+    }
+
+    townSceneBackgroundCache[path] = entry;
+
+    image.onload = function() {
+        entry.loaded = true;
+        entry.error = false;
+        flushTownSceneBackgroundCallbacks(entry);
+    };
+
+    image.onerror = function() {
+        entry.loaded = false;
+        entry.error = true;
+        flushTownSceneBackgroundCallbacks(entry);
+    };
+
+    image.src = path;
+
+    return entry;
+}
+
+function preloadTownSceneBackgrounds() {
+    if (!window.TOWN_SCENE_MAPS) return;
+
+    for (var sceneId in window.TOWN_SCENE_MAPS) {
+        if (!Object.prototype.hasOwnProperty.call(window.TOWN_SCENE_MAPS, sceneId)) continue;
+
+        var def = window.TOWN_SCENE_MAPS[sceneId];
+        if (def && def.backgroundImagePath) {
+            preloadTownSceneBackgroundAsset(def.backgroundImagePath);
+        }
+    }
+}
+
+function waitForTownSceneBackground(sceneId, done) {
+    var finished = false;
+
+    function finish() {
+        if (finished) return;
+        finished = true;
+
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+
+        if (typeof done === "function") {
+            done();
+        }
+    }
+
+    var def = getTownSceneDefinition(sceneId);
+    var path = def && def.backgroundImagePath ? def.backgroundImagePath : "";
+
+    if (!path) {
+        finish();
+        return;
+    }
+
+    var entry = preloadTownSceneBackgroundAsset(path, function() {
+        finish();
+    });
+
+    if (!entry || entry.loaded || entry.error) {
+        finish();
+        return;
+    }
+
+    // 通信やキャッシュの都合で読み込みが詰まった場合でも、暗転したまま固まらないようにする。
+    var timeoutId = window.setTimeout(function() {
+        finish();
+    }, 2200);
+}
+
+
+function loadTownSceneBackground(def) {
+    activeTownSceneDef = def || null;
+    bgLoaded = false;
+    bgError = false;
+
+    var bgPath = def && def.backgroundImagePath ? def.backgroundImagePath : "";
+
+    if (!bgPath) {
+        finishTownArrivalLoading();
+        return;
+    }
+
+    var entry = preloadTownSceneBackgroundAsset(bgPath, function(doneEntry) {
+        var currentPath = activeTownSceneDef && activeTownSceneDef.backgroundImagePath
+            ? activeTownSceneDef.backgroundImagePath
+            : "";
+
+        if (currentPath !== bgPath) return;
+
+        bgLoaded = !!doneEntry.loaded;
+        bgError = !!doneEntry.error;
+
+        if (doneEntry.image) {
+            bgImage = doneEntry.image;
+        }
+
+        finishTownArrivalLoading();
+    });
+
+    if (entry && entry.image) {
+        bgImage = entry.image;
+    }
+
+    if (entry && entry.loaded) {
+        bgLoaded = true;
+        bgError = false;
+        finishTownArrivalLoading();
+        return;
+    }
+
+    if (entry && entry.error) {
+        bgLoaded = false;
+        bgError = true;
+        finishTownArrivalLoading();
+    }
+}
+
+
+function placePlayerAtTownSpawn(def, spawnKey) {
+    if (!def) return;
+
+    var spawns = def.spawnPoints || {};
+    var spawn = spawns[spawnKey] || spawns.default || { x: 12, y: 12, dir: 'down' };
+
+    player.x = spawn.x * TILE_SIZE;
+    player.y = spawn.y * TILE_SIZE;
+    player.dir = spawn.dir || 'down';
+    player.isMoving = false;
+    player.walkDistance = 0;
+    player.walkFrame = 0;
+    player.walkWasMoving = false;
+}
+
+function applyTownSceneDefinition(sceneId, spawnKey) {
+    var def = getTownSceneDefinition(sceneId);
+    if (!def) return false;
+
+    activeTownSceneDef = def;
+    MAP_WIDTH = Number(def.mapWidth) || 24;
+    MAP_HEIGHT = Number(def.mapHeight) || 24;
+    passableRects = cloneTownData(def.passableRects);
+    blockedRects = cloneTownData(def.blockedRects);
+    blockedPoints = cloneTownData(def.blockedPoints);
+    triggers = cloneTownData(def.triggers);
+    areaZones = cloneTownData(def.areaZones);
+
+    // 旧 station-plaza-props.js が足した固定座標の判定は除外し、
+    // ここからはパーツ自身の collision 定義で追従させる。
+    removeLegacyTownPartCollisionEntries();
+    captureTownPartTriggerTemplates(def);
+    ensureAllTownPartMetadata();
+    syncTownPartTriggers();
+
+    currentAreaId = null;
+    tapFocusedTrigger = null;
+    pendingWarp = null;
+    editingPartIndex = -1;
+    partDragState = null;
+    cancelTapMove();
+    initGrid();
+    carveTownEdgeWarpTiles(def);
+    loadTownSceneBackground(def);
+    placePlayerAtTownSpawn(def, spawnKey || 'default');
+    updateUI();
+    updateInteractionHint();
+    setTimeout(function() { updateCurrentArea(); }, 10);
+    return true;
+}
+
+function getTownSceneTitle(sceneId) {
+    var def = getTownSceneDefinition(sceneId);
+    return def ? def.title : sceneId;
+}
+
+function drawTownSceneBackground(cam) {
+    var def = activeTownSceneDef;
+
+    if (def && def.backgroundImagePath) {
+        var entry = preloadTownSceneBackgroundAsset(def.backgroundImagePath);
+
+        if (entry && entry.loaded && entry.image) {
+            ctx.drawImage(entry.image, 0, 0, cam.mapPixelW, cam.mapPixelH);
+            return;
+        }
+
+        if (!entry || !entry.error) {
+            // 背景アセットがまだ読めていない間は、仮矩形マップを描かない。
+            // これにより、マップ遷移直後に開発中の仮画面が一瞬見えるのを防ぐ。
+            ctx.fillStyle = "#050403";
+            ctx.fillRect(0, 0, cam.mapPixelW, cam.mapPixelH);
+            return;
+        }
+
+        // 読み込み失敗時だけ、下の仮描画へフォールバックする。
+    }
+
+    if (bgLoaded) {
+        ctx.drawImage(bgImage, 0, 0, cam.mapPixelW, cam.mapPixelH);
+        return;
+    }
+
+    var baseColor = "#b7a385";
+    if (def && def.backgroundStyle === "alley") baseColor = "#4f4033";
+    if (def && def.backgroundStyle === "leisure") baseColor = "#57565d";
+    if (def && def.backgroundStyle === "onsen") baseColor = "#c5b79f";
+    if (def && def.backgroundStyle === "street") baseColor = "#d1c2a9";
+
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, cam.mapPixelW, cam.mapPixelH);
+
+    var grounds = (def && def.groundRects) || [];
+    for (var i = 0; i < grounds.length; i++) {
+        var g = grounds[i];
+        ctx.fillStyle = g.color || "#d9ccb3";
+        ctx.fillRect(g.x * TILE_SIZE, g.y * TILE_SIZE, g.w * TILE_SIZE, g.h * TILE_SIZE);
+    }
+
+    ctx.strokeStyle = "rgba(105, 84, 60, 0.20)";
+    ctx.lineWidth = 1;
+    for (var gx = 0; gx <= cam.mapPixelW; gx += TILE_SIZE * 2) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, cam.mapPixelH);
+        ctx.stroke();
+    }
+    for (var gy = 0; gy <= cam.mapPixelH; gy += TILE_SIZE * 2) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(cam.mapPixelW, gy);
+        ctx.stroke();
+    }
+
+    var decor = (def && def.decor) || [];
+    for (var d = 0; d < decor.length; d++) {
+        var it = decor[d];
+        var px = it.x * TILE_SIZE;
+        var py = it.y * TILE_SIZE;
+        var pw = it.w * TILE_SIZE;
+        var ph = it.h * TILE_SIZE;
+
+        ctx.fillStyle = it.fill || "#7a6650";
+        ctx.fillRect(px, py, pw, ph);
+
+        ctx.strokeStyle = it.stroke || "#2d241b";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 1, py + 1, Math.max(0, pw - 2), Math.max(0, ph - 2));
+
+        if (it.label) {
+            ctx.fillStyle = it.labelColor || "#ffffff";
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(it.label, px + pw / 2, py + ph / 2);
+            ctx.textAlign = "left";
+            ctx.textBaseline = "alphabetic";
+        }
+    }
+}
+
+
+
+function carveTownEdgeWarpTiles(def) {
+    if (!def || !def.edgeWarps || !collisionGrid || !collisionGrid.length) return;
+
+    for (var i = 0; i < def.edgeWarps.length; i++) {
+        var warp = def.edgeWarps[i];
+        if (!warp) continue;
+
+        var min = Math.max(0, Number(warp.min) || 0);
+        var max = Math.min(
+            (warp.side === 'left' || warp.side === 'right') ? MAP_HEIGHT - 1 : MAP_WIDTH - 1,
+            Number(warp.max)
+        );
+
+        if (!isFinite(max)) max = min;
+
+        // 出口は「画面端の1タイル」だけを基本として通行可能に戻す。
+        // 以前は8タイル分を強制通行にしていたため、マップごとの当たり判定を大きく上書きしていた。
+        // もっと奥まで出口を確保したい場合だけ、data/town-maps.js の edgeWarps に corridorDepth を指定する。
+        var corridorDepth = Number(warp.corridorDepth);
+
+        if (!isFinite(corridorDepth)) {
+            corridorDepth = 1;
+        }
+
+        corridorDepth = Math.max(0, Math.min(8, Math.floor(corridorDepth)));
+        for (var n = min; n <= max; n++) {
+            for (var depth = 0; depth < corridorDepth; depth++) {
+                var x = 0;
+                var y = 0;
+
+                if (warp.side === 'left') {
+                    x = depth;
+                    y = n;
+                } else if (warp.side === 'right') {
+                    x = MAP_WIDTH - 1 - depth;
+                    y = n;
+                } else if (warp.side === 'up') {
+                    x = n;
+                    y = depth;
+                } else if (warp.side === 'down') {
+                    x = n;
+                    y = MAP_HEIGHT - 1 - depth;
+                } else {
+                    continue;
+                }
+
+                if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
+                    collisionGrid[y][x] = 1;
+                    if (baseCollisionGrid[y]) {
+                        baseCollisionGrid[y][x] = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function tryTownEdgeWarp(requestedSide) {
+    if (!isTownScene(currentScene) || !activeTownSceneDef || !activeTownSceneDef.edgeWarps || isMessageOpen) return false;
+
+    var tile = getPlayerTile();
+    var warps = activeTownSceneDef.edgeWarps;
+
+    for (var i = 0; i < warps.length; i++) {
+        var warp = warps[i];
+        if (!warp) continue;
+        if (requestedSide && warp.side !== requestedSide) continue;
+
+        var hit = false;
+        if (warp.side === 'left' && tile.x <= 0 && tile.y >= warp.min && tile.y <= warp.max) hit = true;
+        if (warp.side === 'right' && tile.x >= MAP_WIDTH - 1 && tile.y >= warp.min && tile.y <= warp.max) hit = true;
+        if (warp.side === 'up' && tile.y <= 0 && tile.x >= warp.min && tile.x <= warp.max) hit = true;
+        if (warp.side === 'down' && tile.y >= MAP_HEIGHT - 1 && tile.x >= warp.min && tile.x <= warp.max) hit = true;
+
+        if (hit) {
+            clearDpadInput();
+            cancelTapMove();
+            changeSceneWithTownFade(warp.target, warp.targetSpawn || 'default');
+            return true;
+        }
+    }
+
+    return false;
+}
 
 
 var STATION_GUIDE_MAP_HOTSPOTS = [
@@ -412,55 +918,48 @@ var STATION_GUIDE_MAP_HOTSPOTS = [
         label: "湯間庭新報",
         kind: "place",
         target: "shinpo_board",
-        rect: { left: 7.3, top: 12.3, width: 19.8, height: 18.9 }
+        rect: { left: 22.8, top: 20.6, width: 16.0, height: 11.2 }
     },
     {
         id: "tomogushi",
         label: "灯串横丁",
         kind: "place",
         target: "tomogushi_alley_map",
-        rect: { left: 2.7, top: 40.1, width: 26.9, height: 35.4 }
+        rect: { left: 0.0, top: 0.0, width: 24.0, height: 70.0 }
     },
     {
         id: "yumado",
         label: "湯窓通り",
         kind: "place",
         target: "yumado_street_map",
-        rect: { left: 71.6, top: 11.8, width: 24.9, height: 29.5 }
-    },
-    {
-        id: "tourist_info",
-        label: "観光案内所",
-        kind: "place",
-        target: "tourist_info_interior",
-        rect: { left: 56.2, top: 22.4, width: 19.0, height: 28.3 }
+        rect: { left: 63.0, top: 0.0, width: 37.0, height: 56.0 }
     },
     {
         id: "leisure_center",
         label: "湯窓レジャーセンター",
         kind: "place",
         target: "leisure_center_map",
-        rect: { left: 74.8, top: 43.6, width: 22.5, height: 40.1 }
+        rect: { left: 74.5, top: 52.5, width: 25.5, height: 36.0 }
     },
     {
         id: "station",
         label: "湯間庭駅",
         kind: "message",
         text: "湯間庭駅。\n\nのんびりしたローカル線の小さな駅だ。\nここから、湯気と看板の町歩きが始まる。",
-        rect: { left: 33.2, top: 67.2, width: 33.2, height: 28.9 }
+        rect: { left: 38.0, top: 58.0, width: 27.0, height: 31.0 }
     },
     {
         id: "current",
         label: "現在地",
         kind: "close",
-        rect: { left: 45.1, top: 41.3, width: 12.7, height: 15.9 }
+        rect: { left: 42.0, top: 39.0, width: 16.5, height: 15.0 }
     },
     {
         id: "onsen",
         label: "湯けむり坂 工事中",
-        kind: "message",
-        text: "この先、湯けむり坂。\n\n温泉方面は、ただいま工事中です。",
-        rect: { left: 41.1, top: 10.1, width: 19.0, height: 17.1 }
+        kind: "place",
+        target: "onsen_slope_map",
+        rect: { left: 38.0, top: 0.0, width: 24.0, height: 29.0 }
     }
 ];
 
@@ -819,7 +1318,7 @@ function finishTownArrivalLoading() {
     hideTownLoading();
 }
 
-function playTownRpgFadeTransition(callback) {
+function playTownRpgFadeTransition(callback, waitForReady) {
     var oldFade = document.getElementById("town-rpg-fade-transition");
     if (oldFade && oldFade.parentNode) {
         oldFade.parentNode.removeChild(oldFade);
@@ -851,11 +1350,7 @@ function playTownRpgFadeTransition(callback) {
         });
     });
 
-    window.setTimeout(function() {
-        if (typeof callback === "function") {
-            callback();
-        }
-
+    function startFadeIn() {
         window.setTimeout(function() {
             fade.style.transition = "opacity " + fadeInMs + "ms cubic-bezier(.22,.8,.28,1)";
             fade.style.opacity = "0";
@@ -866,14 +1361,33 @@ function playTownRpgFadeTransition(callback) {
                 }
             }, fadeInMs + 80);
         }, holdMs);
+    }
+
+    window.setTimeout(function() {
+        if (typeof callback === "function") {
+            callback();
+        }
+
+        if (typeof waitForReady === "function") {
+            waitForReady(startFadeIn);
+        } else {
+            startFadeIn();
+        }
     }, fadeOutMs + 40);
 }
 
-function changeSceneWithTownFade(sceneId) {
-    playTownRpgFadeTransition(function() {
-        changeScene(sceneId);
-    });
+
+function changeSceneWithTownFade(sceneId, spawnKey) {
+    playTownRpgFadeTransition(
+        function() {
+            changeScene(sceneId, spawnKey);
+        },
+        function(reveal) {
+            waitForTownSceneBackground(sceneId, reveal);
+        }
+    );
 }
+
 
 function getWorkOpeningLabel(work) {
     if (!work) return "作品を準備しています…";
@@ -1393,13 +1907,11 @@ function openTownPlaceFromRoute(placeId) {
         return true;
     }
 
-    if (!DESTINATIONS[placeId]) return false;
+    if (!DESTINATIONS[placeId] && !isTownScene(placeId)) return false;
 
     changeScene(placeId);
 
-    // 直リンクで来た人には、施設説明よりも選択肢を先に見せる。
-    // 新報だけは、既存仕様どおり記事ラックを直接開く。
-    if (placeId !== "shinpo_board") {
+    if (!isTownScene(placeId) && placeId !== "shinpo_board") {
         destinationViewMode = "menu";
         renderDestination();
     }
@@ -1415,15 +1927,24 @@ function openTownWorkFromRoute(workId) {
 
     var destinationId = getWorkVenueDestinationId(work);
 
-    if (destinationId && DESTINATIONS[destinationId]) {
+    // 外部リンクから直接作品へ来たことを記録する。
+    isDirectWorkVisit = true;
+    destinationReturnGuideText = "";
+    lastClosedWorkId = null;
+
+    if (destinationId && (DESTINATIONS[destinationId] || isTownScene(destinationId))) {
         changeScene(destinationId);
-        destinationViewMode = "menu";
-        renderDestination();
+
+        if (!isTownScene(destinationId)) {
+            destinationViewMode = "menu";
+            renderDestination();
+        }
     }
 
     launchWork(work);
     return true;
 }
+
 
 function openInitialTownRouteFromUrl() {
     var workId = getRouteParam(["work", "spot"]);
@@ -1514,7 +2035,7 @@ function updateControlVisibility() {
         debugMode ||
         isWorkPlayerOpen ||
         isStationGuideMapOpen ||
-        currentScene !== "station_plaza"
+        !isTownScene(currentScene)
     ) {
         controls.classList.add("disabled");
     } else {
@@ -1590,6 +2111,7 @@ window.onload = function() {
     ctx = canvas.getContext('2d');
     applyDeveloperModeVisibility();
     setupTouchSelectionGuards();
+    preloadTownSceneBackgrounds();
     if (typeof refreshTownContent === 'function') refreshTownContent();
     window.addEventListener('resize', resizeCanvas);
 
@@ -1600,8 +2122,6 @@ window.onload = function() {
 
     resizeCanvas();
 
-    initGrid();
-
     bgImage.onload = function() {
         bgLoaded = true;
         finishTownArrivalLoading();
@@ -1610,11 +2130,23 @@ window.onload = function() {
         bgError = true;
         finishTownArrivalLoading();
     };
-    bgImage.src = BG_IMAGE_PATH;
+
+    if (!applyTownSceneDefinition(currentScene, 'default')) {
+        initGrid();
+        if (typeof BG_IMAGE_PATH !== 'undefined' && BG_IMAGE_PATH) {
+            bgImage.src = BG_IMAGE_PATH;
+        } else {
+            finishTownArrivalLoading();
+        }
+    }
+
     loadPlayerSprites();
 
     setupEvents();
+    setupCompactTownController();
+    setupInteractionHintButton();
     setupEditorEvents();
+    markEditorExportCopied();
     setupMessageLayerEvents();
     setupWorkPlayerEvents();
 
@@ -1739,33 +2271,61 @@ function drawPlayerSprite(px, py) {
 }
 
 
+function cloneCollisionGrid(source) {
+    var copied = [];
+    var grid = source || [];
+
+    for (var y = 0; y < grid.length; y++) {
+        copied.push(grid[y].slice());
+    }
+
+    return copied;
+}
+
 function initGrid() {
-    collisionGrid = [];
+    baseCollisionGrid = [];
+
     for (var y = 0; y < MAP_HEIGHT; y++) {
         var row = [];
         for (var x = 0; x < MAP_WIDTH; x++) row.push(0);
-        collisionGrid.push(row);
+        baseCollisionGrid.push(row);
     }
-    for(var i=0; i<passableRects.length; i++) {
+
+    for (var i = 0; i < passableRects.length; i++) {
         var r = passableRects[i];
-        for(var cy=r.y; cy<r.y+r.h; cy++) {
-            for(var cx=r.x; cx<r.x+r.w; cx++) {
-                if(cx>=0 && cx<MAP_WIDTH && cy>=0 && cy<MAP_HEIGHT) collisionGrid[cy][cx] = 1;
+        for (var cy = r.y; cy < r.y + r.h; cy++) {
+            for (var cx = r.x; cx < r.x + r.w; cx++) {
+                if (cx >= 0 && cx < MAP_WIDTH && cy >= 0 && cy < MAP_HEIGHT) {
+                    baseCollisionGrid[cy][cx] = 1;
+                }
             }
         }
     }
-    for(var i=0; i<blockedRects.length; i++) {
-        var r = blockedRects[i];
-        for(var cy=r.y; cy<r.y+r.h; cy++) {
-            for(var cx=r.x; cx<r.x+r.w; cx++) {
-                if(cx>=0 && cx<MAP_WIDTH && cy>=0 && cy<MAP_HEIGHT) collisionGrid[cy][cx] = 2;
+
+    for (var j = 0; j < blockedRects.length; j++) {
+        var blocked = blockedRects[j];
+        for (var by = blocked.y; by < blocked.y + blocked.h; by++) {
+            for (var bx = blocked.x; bx < blocked.x + blocked.w; bx++) {
+                if (bx >= 0 && bx < MAP_WIDTH && by >= 0 && by < MAP_HEIGHT) {
+                    baseCollisionGrid[by][bx] = 2;
+                }
             }
         }
     }
-    for(var i=0; i<blockedPoints.length; i++) {
-        var p = blockedPoints[i];
-        if(p.x>=0 && p.x<MAP_WIDTH && p.y>=0 && p.y<MAP_HEIGHT) collisionGrid[p.y][p.x] = 2;
+
+    for (var p = 0; p < blockedPoints.length; p++) {
+        var point = blockedPoints[p];
+        if (point.x >= 0 && point.x < MAP_WIDTH && point.y >= 0 && point.y < MAP_HEIGHT) {
+            baseCollisionGrid[point.y][point.x] = 2;
+        }
     }
+
+    rebuildCollisionGridFromBase();
+}
+
+function rebuildCollisionGridFromBase() {
+    collisionGrid = cloneCollisionGrid(baseCollisionGrid);
+    applyTownPartCollisionToGrid(collisionGrid);
 }
 
 function getPlayerTile() {
@@ -1777,6 +2337,190 @@ function getPlayerTile() {
         y: Math.floor(cy / TILE_SIZE)
     };
 }
+
+function getTownDevTileText(tile) {
+    if (!tile) return "-";
+    return "x=" + tile.x + ", y=" + tile.y;
+}
+
+function updateTownDevInfo(tile) {
+    if (!debugMode && !isEditMode) return;
+
+    var coord = document.getElementById("coord-display");
+    if (!coord) return;
+
+    var playerTile = getPlayerTile();
+    var sceneTitle = currentScene;
+    var def = getTownSceneDefinition(currentScene);
+
+    if (def && def.title) {
+        sceneTitle = currentScene + " / " + def.title;
+    }
+
+    coord.innerText =
+        "map: " + sceneTitle +
+        " ｜ player: " + getTownDevTileText(playerTile) +
+        " ｜ tile: " + getTownDevTileText(tile || currentHoverTile);
+}
+
+function drawTownDevGridLabels(cam) {
+    ctx.save();
+
+    ctx.font = "bold 7px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    for (var x = 0; x < MAP_WIDTH; x++) {
+        if (x % 2 !== 0 && x !== MAP_WIDTH - 1) continue;
+
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(x * TILE_SIZE + 1, 1, TILE_SIZE - 2, 8);
+
+        ctx.fillStyle = "rgba(255,255,255,0.88)";
+        ctx.fillText(String(x), x * TILE_SIZE + TILE_SIZE / 2, 5);
+    }
+
+    ctx.textAlign = "left";
+
+    for (var y = 0; y < MAP_HEIGHT; y++) {
+        if (y % 2 !== 0 && y !== MAP_HEIGHT - 1) continue;
+
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(1, y * TILE_SIZE + 1, 12, TILE_SIZE - 2);
+
+        ctx.fillStyle = "rgba(255,255,255,0.88)";
+        ctx.fillText(String(y), 3, y * TILE_SIZE + TILE_SIZE / 2);
+    }
+
+    ctx.restore();
+}
+
+function drawTownDevTileCallout(tile) {
+    if (!tile) return;
+
+    var label = "x=" + tile.x + " y=" + tile.y;
+    var px = tile.x * TILE_SIZE;
+    var py = tile.y * TILE_SIZE;
+
+    ctx.save();
+
+    ctx.fillStyle = "rgba(255, 165, 0, 0.78)";
+    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.fillRect(px + 2, py - 12, Math.max(42, label.length * 6), 11);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 8px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, px + 5, py - 6);
+
+    ctx.restore();
+}
+
+function drawTownDevOverlay(cam) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 1;
+
+    for (var gx = 0; gx <= cam.mapPixelW; gx += TILE_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, cam.mapPixelH);
+        ctx.stroke();
+    }
+
+    for (var gy = 0; gy <= cam.mapPixelH; gy += TILE_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(cam.mapPixelW, gy);
+        ctx.stroke();
+    }
+
+    // 通行可能エリア
+    ctx.fillStyle = "rgba(0, 120, 255, 0.20)";
+    for (var y1 = 0; y1 < MAP_HEIGHT; y1++) {
+        for (var x1 = 0; x1 < MAP_WIDTH; x1++) {
+            if (collisionGrid[y1][x1] === 1) {
+                ctx.fillRect(x1 * TILE_SIZE, y1 * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+
+    // 通行不可エリア
+    ctx.fillStyle = "rgba(255, 0, 0, 0.28)";
+    for (var y2 = 0; y2 < MAP_HEIGHT; y2++) {
+        for (var x2 = 0; x2 < MAP_WIDTH; x2++) {
+            if (collisionGrid[y2][x2] === 2) {
+                ctx.fillRect(x2 * TILE_SIZE, y2 * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+
+    // 調べる場所
+    ctx.fillStyle = "rgba(255, 230, 0, 0.42)";
+    for (var k = 0; k < triggers.length; k++) {
+        var t = triggers[k];
+        if (!t || !t.area) continue;
+
+        ctx.fillRect(
+            t.area.x * TILE_SIZE,
+            t.area.y * TILE_SIZE,
+            t.area.w * TILE_SIZE,
+            t.area.h * TILE_SIZE
+        );
+
+        ctx.fillStyle = "rgba(0,0,0,0.70)";
+        ctx.fillRect(t.area.x * TILE_SIZE + 1, t.area.y * TILE_SIZE + 1, Math.min(72, Math.max(28, String(t.label || t.id || "").length * 7)), 11);
+
+        ctx.fillStyle = "#fff7b0";
+        ctx.font = "bold 8px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(t.label || t.id || "trigger"), t.area.x * TILE_SIZE + 4, t.area.y * TILE_SIZE + 6);
+
+        ctx.fillStyle = "rgba(255, 230, 0, 0.42)";
+    }
+
+    // エリア名
+    for (var a = 0; a < areaZones.length; a++) {
+        var z = areaZones[a].area;
+        ctx.fillStyle = "rgba(180, 80, 255, 0.16)";
+        ctx.fillRect(z.x * TILE_SIZE, z.y * TILE_SIZE, z.w * TILE_SIZE, z.h * TILE_SIZE);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(areaZones[a].title, z.x * TILE_SIZE + 2, z.y * TILE_SIZE + 10);
+    }
+
+    drawTownDevGridLabels(cam);
+    drawTownPartEditorOverlay();
+
+    if (isEditMode) {
+        if (editStep === 1 && currentHoverTile) {
+            var minX = Math.min(editStartX, currentHoverTile.x);
+            var minY = Math.min(editStartY, currentHoverTile.y);
+            var w = Math.max(editStartX, currentHoverTile.x) - minX + 1;
+            var h = Math.max(editStartY, currentHoverTile.y) - minY + 1;
+
+            ctx.fillStyle = "rgba(0, 255, 255, 0.36)";
+            ctx.fillRect(minX * TILE_SIZE, minY * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
+        }
+
+        if (currentHoverTile && editStep === 0 && editTarget === "blockedPoints") {
+            drawTownDevTileCallout(currentHoverTile);
+        } else if (editStep === 1) {
+            drawTownDevTileCallout({ x: editStartX, y: editStartY });
+        }
+    } else if (currentHoverTile) {
+        drawTownDevTileCallout(currentHoverTile);
+    }
+
+    updateTownDevInfo(currentHoverTile);
+}
+
 
 function isWalkableTile(tx, ty) {
     if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT) return false;
@@ -1853,15 +2597,19 @@ function cancelTapMove() {
     tapMoveTargetTile = null;
     tapMoveTargetTrigger = null;
     tapFocusedTrigger = null;
+    tapMoveRequestedWarpSide = null;
 }
+
 
 function cancelTapMoveForAction() {
     // ヒントや調べるボタンを押す時用。
-    // 移動予約だけ止めて、到着後に覚えている対象 tapFocusedTrigger は消さない。
+    // 到着後に覚えている対象 tapFocusedTrigger は消さない。
     tapMovePath = [];
     tapMoveTargetTile = null;
     tapMoveTargetTrigger = null;
+    tapMoveRequestedWarpSide = null;
 }
+
 
 
 function isTileInsideRectWithPadding(tileX, tileY, rect, padding) {
@@ -2158,7 +2906,7 @@ function isDestinationSceneOpen() {
     return !!(
         sceneContainer &&
         sceneContainer.style.display !== 'none' &&
-        currentScene !== 'station_plaza' &&
+        !isTownScene(currentScene) &&
         !isWorkPlayerOpen &&
         !isStationGuideMapOpen
     );
@@ -2238,7 +2986,7 @@ function backFromRpgMenu() {
         return;
     }
 
-    changeScene('station_plaza');
+    backToDestinationReturnScene(currentDestinationId);
 }
 
 function handleRpgMenuKeyboard(e) {
@@ -2246,12 +2994,12 @@ function handleRpgMenuKeyboard(e) {
 
     var key = e.key;
 
-    // 新報ラックなど、通常のRPGメニューではない画面では戻る操作だけ受ける。
+    // 湯間庭新報も、開いた直前の場所へ戻す
     if (destinationViewMode === 'note_rack') {
         if (key === 'Escape' || key === 'Backspace' || key === 'ArrowLeft') {
             e.preventDefault();
             e.stopPropagation();
-            changeScene('station_plaza');
+            backToDestinationReturnScene(currentDestinationId);
             return true;
         }
         return false;
@@ -2288,6 +3036,7 @@ function handleRpgMenuKeyboard(e) {
     return false;
 }
 
+
 function setupRpgMenuPointerSelection(sceneContainer) {
     if (!sceneContainer || sceneContainer.dataset.rpgCursorReady === 'true') return;
     sceneContainer.dataset.rpgCursorReady = 'true';
@@ -2315,31 +3064,235 @@ function setupRpgMenuPointerSelection(sceneContainer) {
 // ==========================================
 // 4. 入力イベント
 // ==========================================
+
+function setupInteractionHintButton() {
+    var hint = document.getElementById("interaction-hint");
+
+    if (!hint || hint.dataset.buttonReady === "true") {
+        return;
+    }
+
+    hint.dataset.buttonReady = "true";
+    hint.setAttribute("role", "button");
+    hint.setAttribute("tabindex", "0");
+
+    var pointerPressed = false;
+    var activePointerId = null;
+    var lastActionTime = 0;
+
+    function canUseHint() {
+        return (
+            hint.classList.contains("visible") &&
+            !isMessageOpen &&
+            !isEditMode &&
+            !debugMode &&
+            isTownScene(currentScene)
+        );
+    }
+
+    function activateHint(e) {
+        if (!canUseHint()) return;
+
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        var now = Date.now();
+        if (now - lastActionTime < 350) {
+            return;
+        }
+        lastActionTime = now;
+
+        if (typeof cancelTapMoveForAction === "function") {
+            cancelTapMoveForAction();
+        }
+
+        handleActionTrigger();
+    }
+
+    function beginPress(e) {
+        if (!canUseHint()) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        pointerPressed = true;
+        activePointerId = e.pointerId;
+        hint.classList.add("hint-pressed");
+
+        if (
+            hint.setPointerCapture &&
+            e.pointerId !== undefined
+        ) {
+            try {
+                hint.setPointerCapture(e.pointerId);
+            } catch (err) {}
+        }
+    }
+
+    function finishPress(e) {
+        if (
+            activePointerId !== null &&
+            e.pointerId !== undefined &&
+            e.pointerId !== activePointerId
+        ) {
+            return;
+        }
+
+        var shouldActivate = pointerPressed && canUseHint();
+
+        pointerPressed = false;
+        activePointerId = null;
+        hint.classList.remove("hint-pressed");
+
+        if (shouldActivate) {
+            activateHint(e);
+        }
+    }
+
+    function cancelPress(e) {
+        pointerPressed = false;
+        activePointerId = null;
+        hint.classList.remove("hint-pressed");
+
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }
+
+    hint.addEventListener(
+        "pointerdown",
+        beginPress,
+        { passive: false }
+    );
+
+    hint.addEventListener(
+        "pointerup",
+        finishPress,
+        { passive: false }
+    );
+
+    hint.addEventListener(
+        "pointercancel",
+        cancelPress,
+        { passive: false }
+    );
+
+    hint.addEventListener(
+        "lostpointercapture",
+        cancelPress,
+        { passive: false }
+    );
+
+    // pointerイベントに対応しない環境向けの保険。
+    // pointerup直後のclickはactivateHint内の時間判定で二重実行を防ぐ。
+    hint.addEventListener("click", function(e) {
+        activateHint(e);
+    });
+
+    hint.addEventListener("keydown", function(e) {
+        if (e.key !== "Enter" && e.key !== " ") {
+            return;
+        }
+
+        activateHint(e);
+    });
+}
+
+
+function setupCompactTownController() {
+    var actionButton = document.getElementById("btn-action");
+    var actionButtons = document.getElementById("action-btns");
+
+    // 独立アクションボタンは使わない。
+    // 操作は、十字キーの上に表示される案内そのものへ集約する。
+    if (actionButton) {
+        actionButton.disabled = true;
+        actionButton.classList.remove("compact-action-button");
+        actionButton.classList.remove("action-ready");
+        actionButton.setAttribute("aria-hidden", "true");
+        actionButton.setAttribute("tabindex", "-1");
+    }
+
+    if (actionButtons) {
+        actionButtons.setAttribute("aria-hidden", "true");
+    }
+}
+
 function setupEvents() {
     window.addEventListener('keydown', function(e) {
         if (handleRpgMenuKeyboard(e)) return;
+        if (
+            isEditMode &&
+            editTarget === 'props' &&
+            handlePartEditorKeyboard(e)
+        ) {
+            return;
+        }
 
         keys[e.key] = true;
-        if (DEV_MODE_ENABLED && (e.key === 'g' || e.key === 'G' || e.key === 'd' || e.key === 'D')) toggleDebugMode();
+
+        if (
+            DEV_MODE_ENABLED &&
+            (
+                e.key === 'g' ||
+                e.key === 'G' ||
+                e.key === 'd' ||
+                e.key === 'D'
+            )
+        ) {
+            toggleDebugMode();
+        }
+
         if (e.key === 'Escape') {
             if (isWorkPlayerOpen) {
                 closeWorkPlayer();
                 return;
             }
+
             closeMessage();
-            if (currentScene !== 'station_plaza') changeScene('station_plaza');
+
+            if (!isTownScene(currentScene)) {
+                changeScene('station_plaza');
+            }
+
             pendingWarp = null;
         }
-        if (e.key === 'Enter' || e.key === ' ') handleActionTrigger();
-    });
-    window.addEventListener('keyup', function(e) { keys[e.key] = false; });
 
-    window.addEventListener("blur", clearDpadInput);
-    document.addEventListener("visibilitychange", function() {
-        if (document.hidden) clearDpadInput();
+        if (
+            e.key === 'Enter' ||
+            e.key === ' '
+        ) {
+            handleActionTrigger();
+        }
     });
 
-    function stopProp(e) { e.stopPropagation(); }
+    window.addEventListener(
+        'keyup',
+        function(e) {
+            keys[e.key] = false;
+        }
+    );
+
+    window.addEventListener(
+        "blur",
+        clearDpadInput
+    );
+
+    document.addEventListener(
+        "visibilitychange",
+        function() {
+            if (document.hidden) {
+                clearDpadInput();
+            }
+        }
+    );
+
+    function stopProp(e) {
+        e.stopPropagation();
+    }
 
     function bindDpadButton(id, dir) {
         var el = document.getElementById(id);
@@ -2349,13 +3302,23 @@ function setupEvents() {
             e.preventDefault();
             e.stopPropagation();
 
-            if (isMessageOpen || isEditMode || debugMode || currentScene !== "station_plaza") return;
+            if (
+                isMessageOpen ||
+                isEditMode ||
+                debugMode ||
+                !isTownScene(currentScene)
+            ) {
+                return;
+            }
 
             cancelTapMove();
             dpad[dir] = true;
             el.classList.add("pressed");
 
-            if (el.setPointerCapture && e.pointerId !== undefined) {
+            if (
+                el.setPointerCapture &&
+                e.pointerId !== undefined
+            ) {
                 try {
                     el.setPointerCapture(e.pointerId);
                 } catch (err) {}
@@ -2371,17 +3334,40 @@ function setupEvents() {
             dpad[dir] = false;
             el.classList.remove("pressed");
 
-            if (el.releasePointerCapture && e && e.pointerId !== undefined) {
+            if (
+                el.releasePointerCapture &&
+                e &&
+                e.pointerId !== undefined
+            ) {
                 try {
                     el.releasePointerCapture(e.pointerId);
                 } catch (err) {}
             }
         }
 
-        el.addEventListener("pointerdown", press, { passive: false });
-        el.addEventListener("pointerup", release, { passive: false });
-        el.addEventListener("pointercancel", release, { passive: false });
-        el.addEventListener("pointerleave", release, { passive: false });
+        el.addEventListener(
+            "pointerdown",
+            press,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            "pointerup",
+            release,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            "pointercancel",
+            release,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            "lostpointercapture",
+            release,
+            { passive: false }
+        );
     }
 
     bindDpadButton("btn-up", "up");
@@ -2389,136 +3375,245 @@ function setupEvents() {
     bindDpadButton("btn-left", "left");
     bindDpadButton("btn-right", "right");
 
-    var btnAction = document.getElementById('btn-action');
-    if (btnAction) {
-        var actionFunc = function(e) { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            handleActionTrigger(); 
-        };
-        btnAction.addEventListener('pointerdown', stopProp);
-        btnAction.addEventListener('touchstart', actionFunc, {passive: false});
-        btnAction.addEventListener('click', actionFunc);
-    }
+    var actionButton =
+        document.getElementById("btn-action");
 
-    var btnDebug = document.getElementById('btn-debug-toggle');
-    if (DEV_MODE_ENABLED && btnDebug) {
-        btnDebug.addEventListener('pointerdown', stopProp);
-        btnDebug.addEventListener('touchstart', function(e) { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            toggleDebugMode(); 
-        }, {passive: false});
-        btnDebug.addEventListener('click', function(e) { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            toggleDebugMode(); 
-        });
-    }
+    if (actionButton) {
+        var lastActionButtonTime = 0;
 
-    var hintEl = document.getElementById('interaction-hint');
-    if (hintEl) {
-        hintEl.addEventListener('pointerdown', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!isEditMode && !debugMode) {
-                cancelTapMoveForAction();
-                handleActionTrigger();
+        function activateActionButton(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
             }
-        });
-    }
 
-    var sceneContainer = document.getElementById('scene-container');
-    if (sceneContainer) {
-        sceneContainer.addEventListener('pointerdown', stopProp);
-        sceneContainer.addEventListener('touchstart', stopProp, {passive: false});
-        setupRpgMenuPointerSelection(sceneContainer);
-    }
+            // pointerupの直後にclickも発生した場合の二重実行を防ぐ。
+            var now = Date.now();
 
-    // Safariの虫眼鏡・長押し選択を、ゲームCanvas自身で確実に抑止する。
-    // 施設メニューや作品プレイヤーのボタンには触れない。
-    function suppressCanvasNativeGesture(e) {
-        if (e.cancelable) {
-            e.preventDefault();
+            if (now - lastActionButtonTime < 350) {
+                return;
+            }
+
+            lastActionButtonTime = now;
+
+            // 移動途中で押した場合は移動だけ止め、
+            // 到着済みの対象情報は残して調べられるようにする。
+            if (typeof cancelTapMoveForAction === "function") {
+                cancelTapMoveForAction();
+            }
+
+            handleActionTrigger();
         }
+
+        actionButton.addEventListener(
+            "pointerup",
+            activateActionButton,
+            { passive: false }
+        );
+
+        // PCや古いブラウザ向けの保険。
+        actionButton.addEventListener(
+            "click",
+            activateActionButton
+        );
+    }
+
+    function suppressCanvasNativeGesture(e) {
+        e.preventDefault();
     }
 
     function applyNativeGestureSuppression(el) {
         if (!el) return;
 
-        el.style.webkitTouchCallout = 'none';
-        el.style.webkitUserSelect = 'none';
-        el.style.userSelect = 'none';
-        el.oncontextmenu = function() {
-            return false;
-        };
+        el.addEventListener(
+            'selectstart',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
 
-        el.addEventListener('selectstart', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('dragstart', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('contextmenu', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('touchstart', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('touchmove', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('gesturestart', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('gesturechange', suppressCanvasNativeGesture, { passive: false });
-        el.addEventListener('gestureend', suppressCanvasNativeGesture, { passive: false });
+        el.addEventListener(
+            'dragstart',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'contextmenu',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'touchstart',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'touchmove',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'gesturestart',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'gesturechange',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
+
+        el.addEventListener(
+            'gestureend',
+            suppressCanvasNativeGesture,
+            { passive: false }
+        );
     }
 
-    // Canvas本体
     applyNativeGestureSuppression(canvas);
+    applyNativeGestureSuppression(
+        document.getElementById('mobile-controls')
+    );
+    applyNativeGestureSuppression(
+        document.getElementById('dpad')
+    );
+    applyNativeGestureSuppression(
+        document.getElementById('btn-action')
+    );
 
-    // 十字キー・調べるボタン側でも虫眼鏡を抑止する
-    applyNativeGestureSuppression(document.getElementById('mobile-controls'));
-    applyNativeGestureSuppression(document.getElementById('dpad'));
-    applyNativeGestureSuppression(document.getElementById('btn-action'));
+    var dpadButtons =
+        document.querySelectorAll('.dpad-btn');
 
-    var dpadButtons = document.querySelectorAll('.dpad-btn');
     dpadButtons.forEach(function(btn) {
         applyNativeGestureSuppression(btn);
     });
 
-    canvas.addEventListener('pointerdown', function(e) {
-        e.preventDefault();
+    canvas.addEventListener(
+        'pointerdown',
+        function(e) {
+            e.preventDefault();
 
-        if (isMessageOpen || currentScene !== 'station_plaza') return;
+            if (
+                isMessageOpen ||
+                !isTownScene(currentScene)
+            ) {
+                return;
+            }
 
-        var tappedTile = getPointerTile(e);
-        if (!tappedTile) return;
+            if (
+                isEditMode &&
+                editTarget === 'props'
+            ) {
+                handlePartEditorPointerDown(e);
+                return;
+            }
 
-        var tileX = tappedTile.x;
-        var tileY = tappedTile.y;
+            var tappedTile = getPointerTile(e);
+            if (!tappedTile) return;
 
-        if (isEditMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
-            handleEditorTap(tileX, tileY);
-            return;
+            var tileX = tappedTile.x;
+            var tileY = tappedTile.y;
+
+            if (isEditMode) {
+                document
+                    .getElementById('clicked-coord')
+                    .innerText =
+                    "タップ: x=" +
+                    tileX +
+                    ", y=" +
+                    tileY;
+
+                currentHoverTile = {
+                    x: tileX,
+                    y: tileY
+                };
+
+                updateTownDevInfo(currentHoverTile);
+                handleEditorTap(tileX, tileY);
+                return;
+            }
+
+            if (debugMode) {
+                document
+                    .getElementById('clicked-coord')
+                    .innerText =
+                    "タップ: x=" +
+                    tileX +
+                    ", y=" +
+                    tileY;
+
+                currentHoverTile = {
+                    x: tileX,
+                    y: tileY
+                };
+
+                updateTownDevInfo(currentHoverTile);
+                return;
+            }
+
+            if (
+                startTapMoveToNearbyTrigger(
+                    tileX,
+                    tileY
+                )
+            ) {
+                return;
+            }
+
+            startTapMoveTo(tileX, tileY);
         }
+    );
 
-        if (debugMode) {
-            document.getElementById('clicked-coord').innerText = "タップ: x=" + tileX + ", y=" + tileY;
-            currentHoverTile = { x: tileX, y: tileY };
-            return;
+    canvas.addEventListener(
+        'pointermove',
+        function(e) {
+            e.preventDefault();
+
+            if (!debugMode && !isEditMode) {
+                return;
+            }
+
+            if (
+                isEditMode &&
+                editTarget === 'props' &&
+                partDragState
+            ) {
+                handlePartEditorPointerMove(e);
+                return;
+            }
+
+            var hoverTile = getPointerTile(e);
+            if (!hoverTile) return;
+
+            currentHoverTile = {
+                x: hoverTile.x,
+                y: hoverTile.y
+            };
+
+            updateTownDevInfo(currentHoverTile);
         }
+    );
 
-        if (startTapMoveToNearbyTrigger(tileX, tileY)) {
-            return;
-        }
+    canvas.addEventListener(
+        'pointerup',
+        finishPartEditorDrag
+    );
 
-        startTapMoveTo(tileX, tileY);
-    });
+    canvas.addEventListener(
+        'pointercancel',
+        finishPartEditorDrag
+    );
 
-    canvas.addEventListener('pointermove', function(e) {
-        e.preventDefault();
-
-        if (!isEditMode || editStep !== 1) return;
-        var hoverTile = getPointerTile(e);
-        if (!hoverTile) return;
-
-        currentHoverTile = {
-            x: hoverTile.x,
-            y: hoverTile.y
-        };
-    });
+    canvas.addEventListener(
+        'lostpointercapture',
+        finishPartEditorDrag
+    );
 }
+
 
 
 function setupMessageLayerEvents() {
@@ -2565,7 +3660,7 @@ function handleActionTrigger() {
         return;
     }
 
-    if (currentScene === 'station_plaza') {
+    if (isTownScene(currentScene)) {
         handleAction();
     }
 }
@@ -2578,8 +3673,12 @@ function toggleDebugMode() {
     var btn = document.getElementById('btn-debug-toggle');
     if (panel.style.display === 'none') {
         panel.style.display = 'flex'; btn.style.display = 'none';
+        setEditorPanelCollapsed(false);
         debugMode = true; isEditMode = true;
         document.getElementById('debug-info').style.display = 'inline-block';
+        ensurePartEditorFields();
+        setPartEditorVisible(editTarget === 'props');
+        updatePartEditorSelectionUi();
         updateEditorStatus("編集対象を選んでタップしてください");
         document.getElementById('interaction-hint').classList.remove('visible');
         document.getElementById('area-title').classList.remove('visible');
@@ -2592,28 +3691,197 @@ function toggleDebugMode() {
 // ==========================================
 // 5. エディタ機能
 // ==========================================
+
+function ensureEditorSafetyUI() {
+    var panel = document.getElementById("editor-panel");
+    if (!panel || panel.dataset.safetyUiReady === "true") return;
+
+    panel.dataset.safetyUiReady = "true";
+
+    var header = panel.querySelector(".editor-header");
+    var content = panel.querySelector(".editor-content");
+    var closeButton = document.getElementById("btn-close-editor");
+
+    if (!header || !content) return;
+
+    var title = header.querySelector("strong");
+    var status = document.createElement("span");
+    status.id = "editor-save-state";
+    status.setAttribute("aria-live", "polite");
+    status.style.display = "inline-flex";
+    status.style.alignItems = "center";
+    status.style.marginLeft = "8px";
+    status.style.padding = "3px 8px";
+    status.style.borderRadius = "999px";
+    status.style.fontSize = "11px";
+    status.style.fontWeight = "800";
+    status.style.whiteSpace = "nowrap";
+
+    var collapseButton = document.createElement("button");
+    collapseButton.id = "btn-toggle-editor-collapse";
+    collapseButton.type = "button";
+    collapseButton.setAttribute("aria-expanded", "true");
+    collapseButton.setAttribute("aria-label", "開発ウィンドウを折りたたむ");
+    collapseButton.innerText = "−";
+    collapseButton.style.marginLeft = "auto";
+    collapseButton.style.minWidth = "34px";
+
+    if (title && title.parentNode === header) {
+        title.insertAdjacentElement("afterend", status);
+    } else {
+        header.insertBefore(status, header.firstChild);
+    }
+
+    if (closeButton && closeButton.parentNode === header) {
+        header.insertBefore(collapseButton, closeButton);
+    } else {
+        header.appendChild(collapseButton);
+    }
+
+    collapseButton.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setEditorPanelCollapsed(!editorPanelCollapsed);
+    });
+
+    header.addEventListener("dblclick", function(e) {
+        if (e.target && e.target.closest && e.target.closest("button")) return;
+        setEditorPanelCollapsed(!editorPanelCollapsed);
+    });
+
+    updateEditorSaveStateUI();
+    setEditorPanelCollapsed(false);
+}
+
+function setEditorPanelCollapsed(collapsed) {
+    var panel = document.getElementById("editor-panel");
+    var content = panel ? panel.querySelector(".editor-content") : null;
+    var button = document.getElementById("btn-toggle-editor-collapse");
+
+    editorPanelCollapsed = !!collapsed;
+
+    if (panel) {
+        panel.classList.toggle("editor-collapsed", editorPanelCollapsed);
+        panel.style.height = editorPanelCollapsed ? "auto" : "";
+        panel.style.maxHeight = editorPanelCollapsed ? "none" : "";
+    }
+
+    if (content) {
+        content.style.display = editorPanelCollapsed ? "none" : "";
+    }
+
+    if (button) {
+        button.innerText = editorPanelCollapsed ? "＋" : "−";
+        button.setAttribute("aria-expanded", editorPanelCollapsed ? "false" : "true");
+        button.setAttribute(
+            "aria-label",
+            editorPanelCollapsed
+                ? "開発ウィンドウを開く"
+                : "開発ウィンドウを折りたたむ"
+        );
+    }
+}
+
+function updateEditorSaveStateUI() {
+    var status = document.getElementById("editor-save-state");
+    if (!status) return;
+
+    if (editorHasUnsavedChanges) {
+        status.innerText = "● 未保存";
+        status.style.background = "rgba(165, 64, 48, .92)";
+        status.style.color = "#fff7ed";
+        status.title = "まだ完全版コードをコピーしていない変更があります";
+    } else {
+        status.innerText = "✓ コピー済み";
+        status.style.background = "rgba(51, 111, 73, .92)";
+        status.style.color = "#f3fff6";
+        status.title = "現在の編集内容は完全版コードとしてコピー済みです";
+    }
+}
+
+function markEditorDirty() {
+    editorHasUnsavedChanges = true;
+    updateEditorSaveStateUI();
+}
+
+function markEditorExportCopied() {
+    editorHasUnsavedChanges = false;
+    updateEditorSaveStateUI();
+}
+
+function setupEditorUnsavedGuard() {
+    if (window.__yumaniwaEditorUnsavedGuardReady) return;
+    window.__yumaniwaEditorUnsavedGuardReady = true;
+
+    window.addEventListener("beforeunload", function(e) {
+        if (!editorHasUnsavedChanges) return;
+
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+    });
+}
+
 function setupEditorEvents() {
+    ensureEditorSafetyUI();
+    setupEditorUnsavedGuard();
+    ensureTriggerEditorExtraFields();
+    ensurePartEditorFields();
+
     document.getElementById('btn-close-editor').addEventListener('click', function() {
         document.getElementById('editor-panel').style.display = 'none';
         document.getElementById('btn-debug-toggle').style.display = DEV_MODE_ENABLED ? 'block' : 'none';
         isEditMode = false; debugMode = false;
         document.getElementById('debug-info').style.display = 'none';
         editStep = 0; currentHoverTile = null;
+        editingPartIndex = -1;
+        partDragState = null;
+        refreshTownPartDerivedData();
+        updatePartEditorSelectionUi();
         updateInteractionHint();
         updateControlVisibility();
     });
 
     document.getElementById('edit-target').addEventListener('change', function(e) {
-        editTarget = e.target.value; editStep = 0; currentHoverTile = null;
+        editTarget = e.target.value;
+        editStep = 0;
+        currentHoverTile = null;
+        editingTriggerIndex = -1;
+        partDragState = null;
+
         document.getElementById('trigger-form').style.display = (editTarget === 'triggers') ? 'block' : 'none';
-        updateEditorStatus(editTarget + " を編集します");
+        setPartEditorVisible(editTarget === 'props');
+
+        if (editTarget === 'triggers') ensureTriggerEditorExtraFields();
+
+        if (editTarget === 'props') {
+            updatePartEditorSelectionUi();
+            updateEditorStatus("パーツをタップして選択、または「追加」に切り替えて配置します");
+        } else {
+            editingPartIndex = -1;
+            updateEditorStatus(editTarget + " を編集します");
+        }
     });
 
     document.getElementById('btn-editor-undo').addEventListener('click', function() {
         if (editHistory.length === 0) { updateEditorStatus("Undoする履歴がありません"); return; }
         var last = editHistory.pop();
-        if (last.type === 'grid') { collisionGrid = last.prev; }
-        else if (last.type === 'triggers') { triggers.pop(); }
+        if (last.type === 'grid') {
+            baseCollisionGrid = cloneCollisionGrid(last.prev || []);
+            rebuildCollisionGridFromBase();
+        }
+        else if (last.type === 'triggers') {
+            if (last.prev) restoreTriggers(last.prev);
+            else triggers.pop();
+            editingTriggerIndex = -1;
+        }
+        else if (last.type === 'props') {
+            restoreTownParts(last.prev || []);
+            editingPartIndex = -1;
+            partDragState = null;
+            updatePartEditorSelectionUi();
+        }
+        markEditorDirty();
         updateEditorStatus("直前の編集を取り消しました");
         editStep = 0; currentHoverTile = null;
     });
@@ -2623,64 +3891,1747 @@ function setupEditorEvents() {
     var btnCopy = document.getElementById('btn-copy-export');
     btnCopy.addEventListener('click', function() {
         var textarea = document.getElementById('export-textarea');
+        var code = textarea ? textarea.value : "";
+
+        function copied() {
+            markEditorExportCopied();
+            btnCopy.innerText = "コピー完了!";
+            setTimeout(function() {
+                btnCopy.innerText = "完全版コードをコピー";
+            }, 2000);
+        }
+
+        function failed() {
+            btnCopy.innerText = "コピー失敗";
+            setTimeout(function() {
+                btnCopy.innerText = "完全版コードをコピー";
+            }, 2000);
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(code).then(copied).catch(function() {
+                if (!textarea) {
+                    failed();
+                    return;
+                }
+
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    if (document.execCommand("copy")) copied();
+                    else failed();
+                } catch (err) {
+                    failed();
+                }
+            });
+            return;
+        }
+
+        if (!textarea) {
+            failed();
+            return;
+        }
+
+        textarea.focus();
         textarea.select();
-        try { document.execCommand('copy'); btnCopy.innerText = "コピー完了!"; setTimeout(function(){ btnCopy.innerText = "コピーする"; }, 2000); }
-        catch(err) { alert("コピーに失敗しました。手動でコピーしてください。"); }
+
+        try {
+            if (document.execCommand("copy")) copied();
+            else failed();
+        } catch (err) {
+            failed();
+        }
     });
 }
 
+function ensureTriggerEditorExtraFields() {
+    var form = document.getElementById("trigger-form");
+    if (!form || form.dataset.extraTriggerFieldsReady === "true") return;
 
-function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; }
-function copyGrid() { var arr = []; for (var y = 0; y < MAP_HEIGHT; y++) arr.push(collisionGrid[y].slice()); return arr; }
+    form.dataset.extraTriggerFieldsReady = "true";
 
-function handleEditorTap(tx, ty) {
-    if (editTarget === 'blockedPoints') {
-        editHistory.push({ type: 'grid', prev: copyGrid() });
-        collisionGrid[ty][tx] = 2; 
-        updateEditorStatus("Point追加: (" + tx + ", " + ty + ")");
-        return;
+    function makeLabel(text, input) {
+        var label = document.createElement("label");
+        label.appendChild(document.createTextNode(text + " "));
+        label.appendChild(input);
+        return label;
     }
-    if (editStep === 0) {
-        editStartX = tx; editStartY = ty; editStep = 1; currentHoverTile = { x: tx, y: ty };
-        updateEditorStatus("終点をタップしてください");
-    } else if (editStep === 1) {
-        var minX = Math.min(editStartX, tx); var minY = Math.min(editStartY, ty);
-        var w = Math.max(editStartX, tx) - minX + 1; var h = Math.max(editStartY, ty) - minY + 1;
-        var newRect = { x: minX, y: minY, w: w, h: h };
 
-        if (editTarget === 'passableRects' || editTarget === 'blockedRects') {
-            editHistory.push({ type: 'grid', prev: copyGrid() });
-            var val = (editTarget === 'passableRects') ? 1 : 2;
-            for (var cy = minY; cy < minY + h; cy++) {
-                for (var cx = minX; cx < minX + w; cx++) {
-                    if (cx >= 0 && cx < MAP_WIDTH && cy >= 0 && cy < MAP_HEIGHT) collisionGrid[cy][cx] = val;
-                }
-            }
-        } else if (editTarget === 'triggers') {
-            for (var i = triggers.length - 1; i >= 0; i--) {
-                if (triggers[i].area.x === minX && triggers[i].area.y === minY && triggers[i].area.w === w && triggers[i].area.h === h) triggers.splice(i, 1);
-            }
-            var tType = document.getElementById('trigger-type').value;
-            var tId = document.getElementById('trigger-id').value;
-            var tText = document.getElementById('trigger-text').value;
-            var tTarget = document.getElementById('trigger-target').value;
-            triggers.push({ id: tId, label: "新規トリガー", actionLabel: "調べる", area: newRect, type: tType, target: tTarget, text: tText });
-            editHistory.push({ type: 'triggers' });
-        }
-        editStep = 0; currentHoverTile = null; updateEditorStatus("追加完了。次の始点をタップ");
+    var labelInput = document.createElement("input");
+    labelInput.id = "trigger-label";
+    labelInput.type = "text";
+    labelInput.value = "新規トリガー";
+
+    var actionInput = document.createElement("input");
+    actionInput.id = "trigger-action-label";
+    actionInput.type = "text";
+    actionInput.value = "調べる";
+
+    var updateButton = document.createElement("button");
+    updateButton.id = "btn-update-trigger";
+    updateButton.type = "button";
+    updateButton.innerText = "選択中トリガーを更新";
+
+    updateButton.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        updateSelectedTriggerFromForm();
+    });
+
+    var deleteButton = document.createElement("button");
+    deleteButton.id = "btn-delete-trigger";
+    deleteButton.type = "button";
+    deleteButton.innerText = "選択中トリガーを削除";
+    deleteButton.style.background = "#7f2f2f";
+    deleteButton.style.color = "#ffffff";
+    deleteButton.style.borderColor = "#b85b5b";
+
+    deleteButton.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteSelectedTrigger();
+    });
+
+    form.insertBefore(makeLabel("表示名", labelInput), form.firstChild);
+    form.insertBefore(makeLabel("動作名", actionInput), form.children[1] || null);
+    form.appendChild(updateButton);
+    form.appendChild(deleteButton);
+}
+
+
+// ==========================================
+// 5-B. マップパーツ編集
+// ==========================================
+var TOWN_PART_CATALOG = [
+    {
+        key: 'noticeBoard',
+        label: '横長掲示板',
+        file: 'station-notice-board.png',
+        w: 5.5,
+        h: 3.6,
+        collision: { enabled: true, x: 0.06, y: 0.76, w: 0.88, h: 0.22 }
+    },
+    {
+        key: 'touristMap',
+        label: '観光案内図',
+        file: 'station-tourist-map.png',
+        w: 3.4,
+        h: 3.6,
+        collision: { enabled: true, x: 0.22, y: 0.90, w: 0.56, h: 0.12 }
+    },
+    {
+        key: 'bench',
+        label: '木製ベンチ',
+        file: 'station-bench.png',
+        w: 3.0,
+        h: 2.0,
+        collision: { enabled: true, x: 0.14, y: 0.72, w: 0.72, h: 0.30 }
+    },
+    {
+        key: 'streetLamp',
+        label: 'レトロな街灯',
+        file: 'station-street-lamp.png',
+        w: 1.02,
+        h: 3.4,
+        collision: { enabled: true, x: 0.28, y: 0.92, w: 0.44, h: 0.22 }
+    },
+    {
+        key: 'planter',
+        label: '植木鉢',
+        file: 'station-planter.png',
+        w: 1.1,
+        h: 1.8,
+        collision: { enabled: true, x: 0.14, y: 0.58, w: 0.72, h: 0.42 }
+    },
+    {
+        key: 'directionSign',
+        label: '方向案内札',
+        file: 'station-direction-sign.png',
+        w: 1.4,
+        h: 2.4,
+        collision: { enabled: true, x: 0.34, y: 0.84, w: 0.32, h: 0.20 }
+    },
+    {
+        key: 'stationBuilding',
+        label: '湯間庭駅舎',
+        file: 'station-building.png',
+        w: 8.6,
+        h: 8.5,
+        collision: { enabled: true, x: 0.06, y: 0.78, w: 0.88, h: 0.22 }
+    }
+];
+
+var TOWN_PART_ASSET_BASE = 'assets/maps/props/station-plaza/';
+
+function getActiveTownParts() {
+    if (!activeTownSceneDef) return [];
+
+    if (!Array.isArray(activeTownSceneDef.props)) {
+        activeTownSceneDef.props = [];
+    }
+
+    return activeTownSceneDef.props;
+}
+
+function cloneTownPart(part) {
+    return JSON.parse(JSON.stringify(part || {}));
+}
+
+function cloneTownParts() {
+    var parts = getActiveTownParts();
+    var copied = [];
+
+    for (var i = 0; i < parts.length; i++) {
+        copied.push(cloneTownPart(parts[i]));
+    }
+
+    return copied;
+}
+
+function restoreTownParts(prev) {
+    var parts = getActiveTownParts();
+    parts.length = 0;
+
+    for (var i = 0; i < prev.length; i++) {
+        parts.push(cloneTownPart(prev[i]));
+    }
+
+    refreshTownPartDerivedData();
+}
+
+function syncTownPartPublicReference(parts) {
+    if (
+        currentScene === 'station_plaza' &&
+        window.YUMANIWA_STATION_PLAZA_PROPS
+    ) {
+        window.YUMANIWA_STATION_PLAZA_PROPS.props = parts;
     }
 }
 
-function gridToRects(targetValue) {
+function getPartCatalogEntry(key) {
+    for (var i = 0; i < TOWN_PART_CATALOG.length; i++) {
+        if (TOWN_PART_CATALOG[i].key === key) {
+            return TOWN_PART_CATALOG[i];
+        }
+    }
+
+    return TOWN_PART_CATALOG[0];
+}
+
+function inferTownPartCatalogKey(part) {
+    var src = String((part && part.src) || '');
+    var id = String((part && part.id) || '').toLowerCase();
+
+    if (src.indexOf('station-notice-board') !== -1 || id.indexOf('notice') !== -1) return 'noticeBoard';
+    if (src.indexOf('station-tourist-map') !== -1 || id.indexOf('tourist') !== -1) return 'touristMap';
+    if (src.indexOf('station-bench') !== -1 || id.indexOf('bench') !== -1) return 'bench';
+    if (src.indexOf('station-street-lamp') !== -1 || id.indexOf('lamp') !== -1) return 'streetLamp';
+    if (src.indexOf('station-planter') !== -1 || id.indexOf('planter') !== -1) return 'planter';
+    if (src.indexOf('station-direction-sign') !== -1 || id.indexOf('direction') !== -1) return 'directionSign';
+    if (src.indexOf('station-building') !== -1 || id.indexOf('station_building') !== -1 || id.indexOf('stationbuilding') !== -1) return 'stationBuilding';
+
+    return 'bench';
+}
+
+function cloneRelativePartRect(rect) {
+    var source = rect || {};
+    return {
+        enabled: source.enabled !== false,
+        x: Number(source.x) || 0,
+        y: Number(source.y) || 0,
+        w: Math.max(0.001, Number(source.w) || 0.001),
+        h: Math.max(0.001, Number(source.h) || 0.001)
+    };
+}
+
+function getDefaultTownPartInteraction(part, catalogKey) {
+    var id = String((part && part.id) || '');
+
+    if (id === 'station_notice_board') {
+        return {
+            enabled: true,
+            triggerId: 'shinpo_board_trigger',
+            x: 0.05,
+            y: 0.45,
+            w: 0.95,
+            h: 0.55
+        };
+    }
+
+    if (id === 'station_tourist_map') {
+        return {
+            enabled: true,
+            triggerId: 'tourist_map',
+            x: 0.22,
+            y: 0.92,
+            w: 0.56,
+            h: 0.10
+        };
+    }
+
+    return {
+        enabled: false,
+        triggerId: '',
+        x: 0,
+        y: 0.60,
+        w: 1,
+        h: 0.40
+    };
+}
+
+function ensureTownPartMetadata(part) {
+    if (!part) return part;
+
+    var catalogKey = part.catalogKey || inferTownPartCatalogKey(part);
+    var catalog = getPartCatalogEntry(catalogKey);
+    part.catalogKey = catalogKey;
+
+    if (!part.collision || typeof part.collision !== 'object') {
+        part.collision = cloneRelativePartRect(catalog.collision);
+    } else {
+        part.collision = cloneRelativePartRect(part.collision);
+    }
+
+    if (!part.interaction || typeof part.interaction !== 'object') {
+        part.interaction = getDefaultTownPartInteraction(part, catalogKey);
+    } else {
+        part.interaction = {
+            enabled: part.interaction.enabled !== false,
+            triggerId: String(part.interaction.triggerId || ''),
+            x: Number(part.interaction.x) || 0,
+            y: Number(part.interaction.y) || 0,
+            w: Math.max(0.001, Number(part.interaction.w) || 0.001),
+            h: Math.max(0.001, Number(part.interaction.h) || 0.001)
+        };
+    }
+
+    updatePartFootY(part);
+    return part;
+}
+
+function ensureAllTownPartMetadata() {
+    var parts = getActiveTownParts();
+
+    for (var i = 0; i < parts.length; i++) {
+        ensureTownPartMetadata(parts[i]);
+    }
+}
+
+function getPartRelativeRectPixels(part, spec) {
+    var rect = getPartRectPixels(part);
+    var relative = spec || {};
+
+    return {
+        x: rect.x + Number(relative.x || 0) * rect.w,
+        y: rect.y + Number(relative.y || 0) * rect.h,
+        w: Math.max(1, Number(relative.w || 0) * rect.w),
+        h: Math.max(1, Number(relative.h || 0) * rect.h)
+    };
+}
+
+function getTownPartCollisionRectPixels(part) {
+    if (!part || !part.collision || part.collision.enabled === false) return null;
+    return getPartRelativeRectPixels(part, part.collision);
+}
+
+function getTownPartInteractionRectPixels(part) {
+    if (!part || !part.interaction || part.interaction.enabled === false) return null;
+    if (!part.interaction.triggerId) return null;
+    return getPartRelativeRectPixels(part, part.interaction);
+}
+
+function getTilesCoveredByPixelRect(rect) {
+    if (!rect) return [];
+
+    var tiles = [];
+    var minX = Math.max(0, Math.floor(rect.x / TILE_SIZE));
+    var maxX = Math.min(MAP_WIDTH - 1, Math.ceil((rect.x + rect.w) / TILE_SIZE) - 1);
+    var minY = Math.max(0, Math.floor(rect.y / TILE_SIZE));
+    var maxY = Math.min(MAP_HEIGHT - 1, Math.ceil((rect.y + rect.h) / TILE_SIZE) - 1);
+
+    for (var y = minY; y <= maxY; y++) {
+        for (var x = minX; x <= maxX; x++) {
+            var centerX = x * TILE_SIZE + TILE_SIZE / 2;
+            var centerY = y * TILE_SIZE + TILE_SIZE / 2;
+
+            if (
+                centerX >= rect.x &&
+                centerX <= rect.x + rect.w &&
+                centerY >= rect.y &&
+                centerY <= rect.y + rect.h
+            ) {
+                tiles.push({ x: x, y: y });
+            }
+        }
+    }
+
+    // 細い街灯などで中心点が入らない場合も、中心の1タイルは必ず塞ぐ。
+    if (!tiles.length) {
+        var fallbackX = Math.floor((rect.x + rect.w / 2) / TILE_SIZE);
+        var fallbackY = Math.floor((rect.y + rect.h / 2) / TILE_SIZE);
+
+        if (fallbackX >= 0 && fallbackX < MAP_WIDTH && fallbackY >= 0 && fallbackY < MAP_HEIGHT) {
+            tiles.push({ x: fallbackX, y: fallbackY });
+        }
+    }
+
+    return tiles;
+}
+
+function applyTownPartCollisionToGrid(targetGrid) {
+    if (!targetGrid || !targetGrid.length) return;
+
+    var parts = getActiveTownParts();
+
+    for (var i = 0; i < parts.length; i++) {
+        var part = ensureTownPartMetadata(parts[i]);
+        if (!part || part.enabled === false || !part.collision || part.collision.enabled === false) continue;
+
+        var tiles = getTilesCoveredByPixelRect(getTownPartCollisionRectPixels(part));
+
+        for (var t = 0; t < tiles.length; t++) {
+            var tile = tiles[t];
+            if (targetGrid[tile.y]) {
+                targetGrid[tile.y][tile.x] = 2;
+            }
+        }
+    }
+}
+
+function rectMatchesTownPartLegacy(rect, target) {
+    return !!rect && rect.x === target.x && rect.y === target.y && rect.w === target.w && rect.h === target.h;
+}
+
+function pointMatchesTownPartLegacy(point, target) {
+    return !!point && point.x === target.x && point.y === target.y;
+}
+
+function removeLegacyTownPartCollisionEntries() {
+    if (currentScene !== 'station_plaza') return;
+
+    var legacyRects = [
+        { x: 7, y: 8, w: 2, h: 1 },
+        { x: 15, y: 13, w: 2, h: 1 },
+        { x: 11, y: 9, w: 2, h: 1 }
+    ];
+    var legacyPoints = [
+        { x: 6, y: 10 },
+        { x: 18, y: 10 }
+    ];
+
+    blockedRects = blockedRects.filter(function(rect) {
+        for (var i = 0; i < legacyRects.length; i++) {
+            if (rectMatchesTownPartLegacy(rect, legacyRects[i])) return false;
+        }
+        return true;
+    });
+
+    blockedPoints = blockedPoints.filter(function(point) {
+        for (var i = 0; i < legacyPoints.length; i++) {
+            if (pointMatchesTownPartLegacy(point, legacyPoints[i])) return false;
+        }
+        return true;
+    });
+}
+
+function captureTownPartTriggerTemplates(def) {
+    townPartTriggerTemplates = {};
+    townPartManagedTriggerIds = {};
+
+    var source = (def && def.triggers) || [];
+    for (var i = 0; i < source.length; i++) {
+        var trigger = source[i];
+        if (trigger && trigger.id) {
+            townPartTriggerTemplates[trigger.id] = cloneTrigger(trigger);
+        }
+    }
+}
+
+function makeUniqueTownPartTriggerId(base) {
+    var stem = String(base || 'part_trigger').replace(/[^a-zA-Z0-9_-]/g, '_');
+    var candidate = stem;
+    var suffix = 2;
+
+    function exists(id) {
+        if (townPartTriggerTemplates[id]) return true;
+        for (var i = 0; i < triggers.length; i++) {
+            if (triggers[i] && triggers[i].id === id) return true;
+        }
+        return false;
+    }
+
+    while (exists(candidate)) {
+        candidate = stem + '_' + suffix;
+        suffix++;
+    }
+
+    return candidate;
+}
+
+function getTownPartTriggerArea(part) {
+    var rect = getTownPartInteractionRectPixels(part);
+    if (!rect) return null;
+
+    var x = Math.max(0, Math.floor(rect.x / TILE_SIZE + 0.0001));
+    var y = Math.max(0, Math.floor(rect.y / TILE_SIZE + 0.0001));
+    var right = Math.min(MAP_WIDTH, Math.ceil((rect.x + rect.w) / TILE_SIZE - 0.0001));
+    var bottom = Math.min(MAP_HEIGHT, Math.ceil((rect.y + rect.h) / TILE_SIZE - 0.0001));
+
+    return {
+        x: x,
+        y: y,
+        w: Math.max(1, right - x),
+        h: Math.max(1, bottom - y)
+    };
+}
+
+function syncTownPartTriggers() {
+    var parts = getActiveTownParts();
+    var desired = {};
+
+    for (var i = 0; i < parts.length; i++) {
+        var part = ensureTownPartMetadata(parts[i]);
+        var interaction = part && part.interaction;
+        if (!part || part.enabled === false || !interaction || interaction.enabled === false || !interaction.triggerId) continue;
+
+        var triggerId = String(interaction.triggerId);
+        var area = getTownPartTriggerArea(part);
+        if (!area) continue;
+
+        desired[triggerId] = {
+            part: part,
+            area: area
+        };
+        townPartManagedTriggerIds[triggerId] = true;
+    }
+
+    // 管理対象なのに対応パーツがなくなったトリガーは、透明な操作範囲を残さない。
+    triggers = triggers.filter(function(trigger) {
+        return !trigger || !townPartManagedTriggerIds[trigger.id] || !!desired[trigger.id];
+    });
+
+    for (var triggerId in desired) {
+        if (!Object.prototype.hasOwnProperty.call(desired, triggerId)) continue;
+
+        var index = -1;
+        for (var t = 0; t < triggers.length; t++) {
+            if (triggers[t] && triggers[t].id === triggerId) {
+                index = t;
+                break;
+            }
+        }
+
+        var template = townPartTriggerTemplates[triggerId]
+            ? cloneTrigger(townPartTriggerTemplates[triggerId])
+            : {
+                id: triggerId,
+                label: desired[triggerId].part.id || 'パーツ',
+                actionLabel: '調べる',
+                type: 'inspect',
+                text: '町に置かれたパーツです。',
+                tapPadding: 1
+            };
+
+        template.area = desired[triggerId].area;
+
+        if (index >= 0) {
+            triggers[index] = template;
+        } else {
+            triggers.push(template);
+        }
+    }
+}
+
+function refreshTownPartDerivedData() {
+    var parts = getActiveTownParts();
+    ensureAllTownPartMetadata();
+    syncTownPartPublicReference(parts);
+    syncTownPartTriggers();
+    rebuildCollisionGridFromBase();
+}
+
+function getPartEditorWorldPoint(e) {
+    var point = getCanvasPointerPoint(e);
+    if (!point) return null;
+
+    var cam = getCamera();
+
+    return {
+        x: point.x / cam.zoom + cam.cameraX,
+        y: point.y / cam.zoom + cam.cameraY
+    };
+}
+
+function getPartRectPixels(part) {
+    return {
+        x: Number(part.x || 0) * TILE_SIZE,
+        y: Number(part.y || 0) * TILE_SIZE,
+        w: Math.max(1, Number(part.w || 1) * TILE_SIZE),
+        h: Math.max(1, Number(part.h || 1) * TILE_SIZE)
+    };
+}
+
+function getPartIndexAtWorldPoint(worldX, worldY) {
+    var parts = getActiveTownParts();
+    var candidates = [];
+
+    for (var i = 0; i < parts.length; i++) {
+        var part = parts[i];
+        if (!part || part.enabled === false) continue;
+
+        var rect = getPartRectPixels(part);
+
+        if (
+            worldX >= rect.x &&
+            worldX <= rect.x + rect.w &&
+            worldY >= rect.y &&
+            worldY <= rect.y + rect.h
+        ) {
+            candidates.push({
+                index: i,
+                footY: (typeof part.footY === 'number' ? part.footY : Number(part.y || 0) + Number(part.h || 0)) * TILE_SIZE
+            });
+        }
+    }
+
+    if (!candidates.length) return -1;
+
+    candidates.sort(function(a, b) {
+        if (a.footY !== b.footY) return a.footY - b.footY;
+        return a.index - b.index;
+    });
+
+    return candidates[candidates.length - 1].index;
+}
+
+function clampPartToMap(part) {
+    var maxX = Math.max(0, MAP_WIDTH - Number(part.w || 0));
+    var maxY = Math.max(0, MAP_HEIGHT - Number(part.h || 0));
+
+    part.x = Math.max(0, Math.min(maxX, Number(part.x || 0)));
+    part.y = Math.max(0, Math.min(maxY, Number(part.y || 0)));
+    updatePartFootY(part);
+}
+
+function updatePartFootY(part) {
+    if (!part) return;
+    part.footY = Number(part.y || 0) + Number(part.h || 0);
+}
+
+function makeUniquePartId(base) {
+    var parts = getActiveTownParts();
+    var stem = String(base || 'part').replace(/[^a-zA-Z0-9_-]/g, '_');
+    var index = parts.length + 1;
+    var id = stem + '_' + index;
+
+    function exists(candidate) {
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] && parts[i].id === candidate) return true;
+        }
+        return false;
+    }
+
+    while (exists(id)) {
+        index++;
+        id = stem + '_' + index;
+    }
+
+    return id;
+}
+
+function createTownPartFromCatalog(key, worldX, worldY) {
+    var catalog = getPartCatalogEntry(key);
+    var part = {
+        id: makeUniquePartId('station_' + catalog.key),
+        src: TOWN_PART_ASSET_BASE + catalog.file + '?rev=editor',
+        x: (worldX / TILE_SIZE) - catalog.w / 2,
+        y: (worldY / TILE_SIZE) - catalog.h,
+        w: catalog.w,
+        h: catalog.h,
+        footY: 0,
+        enabled: true,
+        catalogKey: catalog.key,
+        collision: cloneRelativePartRect(catalog.collision),
+        interaction: getDefaultTownPartInteraction(null, catalog.key)
+    };
+
+    clampPartToMap(part);
+    ensureTownPartMetadata(part);
+    return part;
+}
+
+function setPartEditorMode(mode) {
+    partEditorMode = mode === 'add' ? 'add' : 'select';
+
+    var selectButton = document.getElementById('btn-part-mode-select');
+    var addButton = document.getElementById('btn-part-mode-add');
+
+    if (selectButton) {
+        selectButton.classList.toggle('active', partEditorMode === 'select');
+    }
+
+    if (addButton) {
+        addButton.classList.toggle('active', partEditorMode === 'add');
+    }
+
+    updateEditorStatus(
+        partEditorMode === 'add'
+            ? "追加するパーツを選び、マップ上の置きたい場所をタップしてください"
+            : "パーツをタップして選択し、そのままドラッグできます"
+    );
+}
+
+function setPartEditorVisible(visible) {
+    var form = document.getElementById('part-form');
+    if (form) form.style.display = visible ? 'block' : 'none';
+}
+
+function ensurePartEditorStyles() {
+    if (document.getElementById('town-part-editor-style')) return;
+
+    var style = document.createElement('style');
+    style.id = 'town-part-editor-style';
+    style.textContent =
+        '#part-form{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.22);}' +
+        '#part-form .part-editor-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0;}' +
+        '#part-form button,#part-form select,#part-form input{font:inherit;}' +
+        '#part-form button{min-height:32px;padding:5px 9px;border-radius:8px;}' +
+        '#part-form button.active{background:#f4dec0;color:#2d2118;font-weight:800;}' +
+        '#part-form .part-editor-number{width:66px;box-sizing:border-box;}' +
+        '#part-form .part-editor-selected{font-weight:800;color:#fff0c8;word-break:break-all;}' +
+        '#part-form .part-editor-danger{background:#6f2e2e;color:#fff;border-color:#b97070;}' +
+        '#part-form .part-editor-grow{flex:1;min-width:120px;}' +
+        '#part-form .part-editor-section{width:100%;margin-top:5px;padding-top:6px;border-top:1px dashed rgba(255,255,255,.18);font-weight:800;color:#f4dec0;}' +
+        '#part-form .part-editor-note{font-size:11px;line-height:1.4;opacity:.75;}';
+
+    document.head.appendChild(style);
+}
+
+function ensurePartEditorFields() {
+    ensurePartEditorStyles();
+
+    var targetSelect = document.getElementById('edit-target');
+    if (targetSelect && !targetSelect.querySelector('option[value="props"]')) {
+        var option = document.createElement('option');
+        option.value = 'props';
+        option.textContent = 'パーツ';
+        targetSelect.appendChild(option);
+    }
+
+    if (document.getElementById('part-form')) return;
+
+    var editorContent = document.querySelector('#editor-panel .editor-content');
+    if (!editorContent) return;
+
+    var form = document.createElement('div');
+    form.id = 'part-form';
+    form.style.display = 'none';
+
+    var catalogOptions = '';
+    for (var i = 0; i < TOWN_PART_CATALOG.length; i++) {
+        catalogOptions +=
+            '<option value="' + TOWN_PART_CATALOG[i].key + '">' +
+            TOWN_PART_CATALOG[i].label +
+            '</option>';
+    }
+
+    form.innerHTML =
+        '<div class="part-editor-row">' +
+        '<button id="btn-part-mode-select" type="button">選択・移動</button>' +
+        '<button id="btn-part-mode-add" type="button">追加</button>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label class="part-editor-grow">追加するパーツ ' +
+        '<select id="part-asset-select">' + catalogOptions + '</select></label>' +
+        '</div>' +
+        '<div class="part-editor-row">選択中: <span id="part-selected-label" class="part-editor-selected">なし</span></div>' +
+        '<div class="part-editor-row">' +
+        '<label>X <input id="part-x-input" class="part-editor-number" type="number" step="1"></label>' +
+        '<label>Y <input id="part-y-input" class="part-editor-number" type="number" step="1"></label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label>幅 <input id="part-w-input" class="part-editor-number" type="number" min="1" step="1"></label>' +
+        '<label>高さ <input id="part-h-input" class="part-editor-number" type="number" min="1" step="1"></label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label><input id="part-ratio-lock" type="checkbox" checked> 縦横比固定</label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<button type="button" data-part-nudge-x="-1">← 1px</button>' +
+        '<button type="button" data-part-nudge-y="-1">↑ 1px</button>' +
+        '<button type="button" data-part-nudge-y="1">↓ 1px</button>' +
+        '<button type="button" data-part-nudge-x="1">→ 1px</button>' +
+        '</div>' +
+        '<div class="part-editor-section">当たり判定</div>' +
+        '<div class="part-editor-row">' +
+        '<label><input id="part-collision-enabled" type="checkbox"> パーツと一緒に移動</label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label>相対X <input id="part-collision-x" class="part-editor-number" type="number" step="1"></label>' +
+        '<label>相対Y <input id="part-collision-y" class="part-editor-number" type="number" step="1"></label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label>幅 <input id="part-collision-w" class="part-editor-number" type="number" min="1" step="1"></label>' +
+        '<label>高さ <input id="part-collision-h" class="part-editor-number" type="number" min="1" step="1"></label>' +
+        '</div>' +
+        '<div class="part-editor-section">調べる範囲</div>' +
+        '<div class="part-editor-row">' +
+        '<label><input id="part-trigger-enabled" type="checkbox"> パーツと一緒に移動</label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<label class="part-editor-grow">トリガーID <input id="part-trigger-id" type="text" style="width:100%;box-sizing:border-box"></label>' +
+        '</div>' +
+        '<div class="part-editor-row">' +
+        '<button id="btn-part-smaller" type="button">縮小</button>' +
+        '<button id="btn-part-larger" type="button">拡大</button>' +
+        '<button id="btn-part-duplicate" type="button">複製</button>' +
+        '<button id="btn-part-delete" class="part-editor-danger" type="button">削除</button>' +
+        '</div>' +
+        '<div class="part-editor-note">ドラッグ・数値変更・拡大縮小に、当たり判定と調べる範囲が追従します。赤が当たり判定、黄が調べる範囲です。</div>';
+
+    var status = document.getElementById('editor-status');
+    editorContent.insertBefore(form, status || null);
+
+    document.getElementById('btn-part-mode-select').addEventListener('click', function() {
+        setPartEditorMode('select');
+    });
+
+    document.getElementById('btn-part-mode-add').addEventListener('click', function() {
+        setPartEditorMode('add');
+    });
+
+    document.getElementById('part-ratio-lock').addEventListener('change', function(e) {
+        partEditorRatioLock = !!e.target.checked;
+    });
+
+    var nudgeButtons = form.querySelectorAll('[data-part-nudge-x],[data-part-nudge-y]');
+    for (var n = 0; n < nudgeButtons.length; n++) {
+        nudgeButtons[n].addEventListener('click', function() {
+            nudgeSelectedPart(
+                Number(this.getAttribute('data-part-nudge-x') || 0),
+                Number(this.getAttribute('data-part-nudge-y') || 0)
+            );
+        });
+    }
+
+    document.getElementById('btn-part-smaller').addEventListener('click', function() {
+        resizeSelectedPart(-1);
+    });
+
+    document.getElementById('btn-part-larger').addEventListener('click', function() {
+        resizeSelectedPart(1);
+    });
+
+    document.getElementById('btn-part-duplicate').addEventListener('click', duplicateSelectedPart);
+    document.getElementById('btn-part-delete').addEventListener('click', deleteSelectedPart);
+
+    document.getElementById('part-x-input').addEventListener('change', function() {
+        applyPartNumberInputs('x');
+    });
+
+    document.getElementById('part-y-input').addEventListener('change', function() {
+        applyPartNumberInputs('y');
+    });
+
+    document.getElementById('part-w-input').addEventListener('change', function() {
+        applyPartNumberInputs('w');
+    });
+
+    document.getElementById('part-h-input').addEventListener('change', function() {
+        applyPartNumberInputs('h');
+    });
+
+    var collisionInputIds = [
+        'part-collision-enabled',
+        'part-collision-x',
+        'part-collision-y',
+        'part-collision-w',
+        'part-collision-h'
+    ];
+    for (var c = 0; c < collisionInputIds.length; c++) {
+        document.getElementById(collisionInputIds[c]).addEventListener('change', applyPartCollisionInputs);
+    }
+
+    document.getElementById('part-trigger-enabled').addEventListener('change', applyPartInteractionInputs);
+    document.getElementById('part-trigger-id').addEventListener('change', applyPartInteractionInputs);
+
+    setPartEditorMode('select');
+    updatePartEditorSelectionUi();
+}
+
+function getSelectedTownPart() {
+    var parts = getActiveTownParts();
+
+    if (editingPartIndex < 0 || editingPartIndex >= parts.length) {
+        return null;
+    }
+
+    return parts[editingPartIndex];
+}
+
+function selectTownPart(index) {
+    var parts = getActiveTownParts();
+
+    if (index < 0 || index >= parts.length) {
+        editingPartIndex = -1;
+    } else {
+        editingPartIndex = index;
+    }
+
+    updatePartEditorSelectionUi();
+}
+
+function updatePartEditorSelectionUi() {
+    var part = getSelectedTownPart();
+    var label = document.getElementById('part-selected-label');
+    var xInput = document.getElementById('part-x-input');
+    var yInput = document.getElementById('part-y-input');
+    var wInput = document.getElementById('part-w-input');
+    var hInput = document.getElementById('part-h-input');
+    var collisionEnabled = document.getElementById('part-collision-enabled');
+    var collisionX = document.getElementById('part-collision-x');
+    var collisionY = document.getElementById('part-collision-y');
+    var collisionW = document.getElementById('part-collision-w');
+    var collisionH = document.getElementById('part-collision-h');
+    var triggerEnabled = document.getElementById('part-trigger-enabled');
+    var triggerId = document.getElementById('part-trigger-id');
+
+    if (part) ensureTownPartMetadata(part);
+
+    if (label) {
+        label.textContent = part ? (part.id || '名称なし') : 'なし';
+    }
+
+    var disabled = !part;
+    var inputs = [
+        xInput, yInput, wInput, hInput,
+        collisionEnabled, collisionX, collisionY, collisionW, collisionH,
+        triggerEnabled, triggerId
+    ];
+
+    for (var i = 0; i < inputs.length; i++) {
+        if (inputs[i]) inputs[i].disabled = disabled;
+    }
+
+    var actionIds = [
+        'btn-part-smaller',
+        'btn-part-larger',
+        'btn-part-duplicate',
+        'btn-part-delete'
+    ];
+
+    for (var a = 0; a < actionIds.length; a++) {
+        var action = document.getElementById(actionIds[a]);
+        if (action) action.disabled = disabled;
+    }
+
+    if (!part) {
+        if (xInput) xInput.value = '';
+        if (yInput) yInput.value = '';
+        if (wInput) wInput.value = '';
+        if (hInput) hInput.value = '';
+        if (collisionEnabled) collisionEnabled.checked = false;
+        if (collisionX) collisionX.value = '';
+        if (collisionY) collisionY.value = '';
+        if (collisionW) collisionW.value = '';
+        if (collisionH) collisionH.value = '';
+        if (triggerEnabled) triggerEnabled.checked = false;
+        if (triggerId) triggerId.value = '';
+        return;
+    }
+
+    var rect = getPartRectPixels(part);
+    var collision = part.collision || {};
+
+    if (xInput) xInput.value = Math.round(rect.x);
+    if (yInput) yInput.value = Math.round(rect.y);
+    if (wInput) wInput.value = Math.round(rect.w);
+    if (hInput) hInput.value = Math.round(rect.h);
+
+    if (collisionEnabled) collisionEnabled.checked = collision.enabled !== false;
+    if (collisionX) collisionX.value = Math.round(Number(collision.x || 0) * rect.w);
+    if (collisionY) collisionY.value = Math.round(Number(collision.y || 0) * rect.h);
+    if (collisionW) collisionW.value = Math.max(1, Math.round(Number(collision.w || 0) * rect.w));
+    if (collisionH) collisionH.value = Math.max(1, Math.round(Number(collision.h || 0) * rect.h));
+
+    if (triggerEnabled) triggerEnabled.checked = !!(part.interaction && part.interaction.enabled !== false && part.interaction.triggerId);
+    if (triggerId) triggerId.value = part.interaction ? String(part.interaction.triggerId || '') : '';
+}
+
+function applyPartCollisionInputs() {
+    var part = getSelectedTownPart();
+    if (!part) return;
+
+    ensureTownPartMetadata(part);
+
+    var rect = getPartRectPixels(part);
+    var enabled = document.getElementById('part-collision-enabled');
+    var xInput = document.getElementById('part-collision-x');
+    var yInput = document.getElementById('part-collision-y');
+    var wInput = document.getElementById('part-collision-w');
+    var hInput = document.getElementById('part-collision-h');
+
+    var xPx = Number(xInput && xInput.value);
+    var yPx = Number(yInput && yInput.value);
+    var wPx = Number(wInput && wInput.value);
+    var hPx = Number(hInput && hInput.value);
+
+    if (![xPx, yPx, wPx, hPx].every(isFinite)) {
+        updatePartEditorSelectionUi();
+        return;
+    }
+
+    pushTownPartHistory();
+
+    part.collision = {
+        enabled: !!(enabled && enabled.checked),
+        x: xPx / rect.w,
+        y: yPx / rect.h,
+        w: Math.max(1, wPx) / rect.w,
+        h: Math.max(1, hPx) / rect.h
+    };
+
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus('当たり判定を更新しました');
+}
+
+function applyPartInteractionInputs() {
+    var part = getSelectedTownPart();
+    if (!part) return;
+
+    ensureTownPartMetadata(part);
+
+    var enabled = document.getElementById('part-trigger-enabled');
+    var idInput = document.getElementById('part-trigger-id');
+    var nextId = String((idInput && idInput.value) || '').trim();
+
+    pushTownPartHistory();
+
+    part.interaction.enabled = !!(enabled && enabled.checked && nextId);
+    part.interaction.triggerId = nextId;
+
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus('調べる範囲の連動を更新しました');
+}
+
+function pushTownPartHistory() {
+    markEditorDirty();
+    editHistory.push({
+        type: 'props',
+        prev: cloneTownParts()
+    });
+}
+
+function applyPartNumberInputs(changedKey) {
+    var part = getSelectedTownPart();
+    if (!part) return;
+
+    var xInput = document.getElementById('part-x-input');
+    var yInput = document.getElementById('part-y-input');
+    var wInput = document.getElementById('part-w-input');
+    var hInput = document.getElementById('part-h-input');
+
+    var xPx = Number(xInput && xInput.value);
+    var yPx = Number(yInput && yInput.value);
+    var wPx = Number(wInput && wInput.value);
+    var hPx = Number(hInput && hInput.value);
+
+    if (![xPx, yPx, wPx, hPx].every(isFinite)) {
+        updatePartEditorSelectionUi();
+        return;
+    }
+
+    pushTownPartHistory();
+
+    var oldWPx = Math.max(1, part.w * TILE_SIZE);
+    var oldHPx = Math.max(1, part.h * TILE_SIZE);
+    var ratio = oldWPx / oldHPx;
+
+    part.x = xPx / TILE_SIZE;
+    part.y = yPx / TILE_SIZE;
+
+    if (changedKey === 'w' && partEditorRatioLock) {
+        part.w = Math.max(1, wPx) / TILE_SIZE;
+        part.h = Math.max(1, Math.round(wPx / ratio)) / TILE_SIZE;
+    } else if (changedKey === 'h' && partEditorRatioLock) {
+        part.h = Math.max(1, hPx) / TILE_SIZE;
+        part.w = Math.max(1, Math.round(hPx * ratio)) / TILE_SIZE;
+    } else {
+        part.w = Math.max(1, wPx) / TILE_SIZE;
+        part.h = Math.max(1, hPx) / TILE_SIZE;
+    }
+
+    clampPartToMap(part);
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus("パーツの数値を更新しました");
+}
+
+function nudgeSelectedPart(dxPx, dyPx) {
+    var part = getSelectedTownPart();
+    if (!part) {
+        updateEditorStatus("先にパーツを選択してください");
+        return;
+    }
+
+    pushTownPartHistory();
+    part.x += dxPx / TILE_SIZE;
+    part.y += dyPx / TILE_SIZE;
+    clampPartToMap(part);
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus("1px移動しました");
+}
+
+function resizeSelectedPart(deltaPx) {
+    var part = getSelectedTownPart();
+    if (!part) {
+        updateEditorStatus("先にパーツを選択してください");
+        return;
+    }
+
+    var oldWPx = Math.max(1, part.w * TILE_SIZE);
+    var oldHPx = Math.max(1, part.h * TILE_SIZE);
+    var newWPx = Math.max(1, oldWPx + deltaPx);
+    var newHPx = partEditorRatioLock
+        ? Math.max(1, Math.round(oldHPx * (newWPx / oldWPx)))
+        : Math.max(1, oldHPx + deltaPx);
+
+    pushTownPartHistory();
+
+    // 足元中央をなるべく維持して拡大縮小する。
+    var centerXPx = (part.x + part.w / 2) * TILE_SIZE;
+    var footYPx = (part.y + part.h) * TILE_SIZE;
+
+    part.w = newWPx / TILE_SIZE;
+    part.h = newHPx / TILE_SIZE;
+    part.x = centerXPx / TILE_SIZE - part.w / 2;
+    part.y = footYPx / TILE_SIZE - part.h;
+
+    clampPartToMap(part);
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus(deltaPx > 0 ? "パーツを拡大しました" : "パーツを縮小しました");
+}
+
+function duplicateSelectedPart() {
+    var part = getSelectedTownPart();
+    if (!part) {
+        updateEditorStatus("複製するパーツを選択してください");
+        return;
+    }
+
+    pushTownPartHistory();
+
+    var copy = cloneTownPart(part);
+    copy.id = makeUniquePartId((part.id || 'part') + '_copy');
+    copy.x += 8 / TILE_SIZE;
+    copy.y += 8 / TILE_SIZE;
+
+    if (copy.interaction && copy.interaction.enabled && copy.interaction.triggerId) {
+        copy.interaction.triggerId = makeUniqueTownPartTriggerId(copy.id + '_trigger');
+    }
+
+    clampPartToMap(copy);
+
+    var parts = getActiveTownParts();
+    parts.push(copy);
+    editingPartIndex = parts.length - 1;
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus("パーツを複製しました");
+}
+
+function deleteSelectedPart() {
+    var part = getSelectedTownPart();
+    if (!part) {
+        updateEditorStatus("削除するパーツを選択してください");
+        return;
+    }
+
+    var confirmed = window.confirm("「" + (part.id || "選択中のパーツ") + "」を削除しますか？");
+    if (!confirmed) return;
+
+    pushTownPartHistory();
+
+    var parts = getActiveTownParts();
+    parts.splice(editingPartIndex, 1);
+    editingPartIndex = -1;
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus("パーツを削除しました");
+}
+
+function handlePartEditorPointerDown(e) {
+    var world = getPartEditorWorldPoint(e);
+    if (!world) return;
+
+    if (partEditorMode === 'add') {
+        var select = document.getElementById('part-asset-select');
+        var key = select ? select.value : TOWN_PART_CATALOG[0].key;
+
+        pushTownPartHistory();
+
+        var parts = getActiveTownParts();
+        var added = createTownPartFromCatalog(key, world.x, world.y);
+        parts.push(added);
+        editingPartIndex = parts.length - 1;
+        refreshTownPartDerivedData();
+        setPartEditorMode('select');
+        updatePartEditorSelectionUi();
+        updateEditorStatus("パーツを追加しました。ドラッグで調整できます");
+        return;
+    }
+
+    var hitIndex = getPartIndexAtWorldPoint(world.x, world.y);
+
+    if (hitIndex < 0) {
+        selectTownPart(-1);
+        updateEditorStatus("パーツがない場所です");
+        return;
+    }
+
+    selectTownPart(hitIndex);
+
+    var part = getSelectedTownPart();
+    var rect = getPartRectPixels(part);
+
+    partDragState = {
+        pointerId: e.pointerId,
+        offsetX: world.x - rect.x,
+        offsetY: world.y - rect.y,
+        prev: cloneTownParts(),
+        moved: false
+    };
+
+    if (canvas.setPointerCapture && e.pointerId !== undefined) {
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch (err) {}
+    }
+
+    updateEditorStatus("選択中: " + (part.id || "part") + " / ドラッグで移動");
+}
+
+function handlePartEditorPointerMove(e) {
+    if (!partDragState) return;
+    if (
+        partDragState.pointerId !== undefined &&
+        e.pointerId !== undefined &&
+        partDragState.pointerId !== e.pointerId
+    ) {
+        return;
+    }
+
+    var part = getSelectedTownPart();
+    var world = getPartEditorWorldPoint(e);
+    if (!part || !world) return;
+
+    var nextX = (world.x - partDragState.offsetX) / TILE_SIZE;
+    var nextY = (world.y - partDragState.offsetY) / TILE_SIZE;
+
+    if (
+        Math.abs(nextX - part.x) > 0.0001 ||
+        Math.abs(nextY - part.y) > 0.0001
+    ) {
+        partDragState.moved = true;
+    }
+
+    part.x = nextX;
+    part.y = nextY;
+    clampPartToMap(part);
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+}
+
+function finishPartEditorDrag(e) {
+    if (!partDragState) return;
+
+    if (
+        e &&
+        partDragState.pointerId !== undefined &&
+        e.pointerId !== undefined &&
+        partDragState.pointerId !== e.pointerId
+    ) {
+        return;
+    }
+
+    var moved = partDragState.moved;
+    var prev = partDragState.prev;
+    var pointerId = partDragState.pointerId;
+    partDragState = null;
+
+    if (moved) {
+        markEditorDirty();
+    editHistory.push({
+            type: 'props',
+            prev: prev
+        });
+        updateEditorStatus("パーツを移動しました");
+    }
+
+    if (canvas.releasePointerCapture && pointerId !== undefined) {
+        try {
+            canvas.releasePointerCapture(pointerId);
+        } catch (err) {}
+    }
+}
+
+function handlePartEditorKeyboard(e) {
+    var target = e.target;
+
+    if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+    ) {
+        return false;
+    }
+
+    var step = e.shiftKey ? 4 : 1;
+
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        nudgeSelectedPart(-step, 0);
+        return true;
+    }
+
+    if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nudgeSelectedPart(step, 0);
+        return true;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        nudgeSelectedPart(0, -step);
+        return true;
+    }
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        nudgeSelectedPart(0, step);
+        return true;
+    }
+
+    if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        resizeSelectedPart(step);
+        return true;
+    }
+
+    if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        resizeSelectedPart(-step);
+        return true;
+    }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelectedPart();
+        return true;
+    }
+
+    return false;
+}
+
+function drawTownPartEditorOverlay() {
+    if (!isEditMode || editTarget !== 'props') return;
+
+    var parts = getActiveTownParts();
+
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    for (var i = 0; i < parts.length; i++) {
+        var part = parts[i];
+        if (!part || part.enabled === false) continue;
+
+        var rect = getPartRectPixels(part);
+        var selected = i === editingPartIndex;
+
+        ctx.fillStyle = selected
+            ? 'rgba(0,255,255,0.13)'
+            : 'rgba(255,255,255,0.035)';
+
+        ctx.strokeStyle = selected
+            ? 'rgba(0,255,255,0.98)'
+            : 'rgba(255,255,255,0.38)';
+
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.strokeRect(
+            Math.round(rect.x) + 0.5,
+            Math.round(rect.y) + 0.5,
+            Math.max(1, Math.round(rect.w) - 1),
+            Math.max(1, Math.round(rect.h) - 1)
+        );
+
+        if (selected) {
+            var footY = (typeof part.footY === 'number' ? part.footY : part.y + part.h) * TILE_SIZE;
+            var footX = (part.x + part.w / 2) * TILE_SIZE;
+
+            ctx.fillStyle = '#00ffff';
+            ctx.fillRect(Math.round(footX) - 2, Math.round(footY) - 2, 5, 5);
+
+            var collisionRect = getTownPartCollisionRectPixels(part);
+            if (collisionRect) {
+                ctx.fillStyle = 'rgba(255,45,45,0.28)';
+                ctx.strokeStyle = 'rgba(255,90,90,0.98)';
+                ctx.fillRect(collisionRect.x, collisionRect.y, collisionRect.w, collisionRect.h);
+                ctx.strokeRect(collisionRect.x + 0.5, collisionRect.y + 0.5, collisionRect.w, collisionRect.h);
+
+                var collisionTiles = getTilesCoveredByPixelRect(collisionRect);
+                for (var ct = 0; ct < collisionTiles.length; ct++) {
+                    ctx.fillStyle = 'rgba(255,0,0,0.16)';
+                    ctx.fillRect(
+                        collisionTiles[ct].x * TILE_SIZE,
+                        collisionTiles[ct].y * TILE_SIZE,
+                        TILE_SIZE,
+                        TILE_SIZE
+                    );
+                }
+            }
+
+            var interactionRect = getTownPartInteractionRectPixels(part);
+            if (interactionRect) {
+                ctx.fillStyle = 'rgba(255,220,0,0.16)';
+                ctx.strokeStyle = 'rgba(255,230,70,0.98)';
+                ctx.fillRect(interactionRect.x, interactionRect.y, interactionRect.w, interactionRect.h);
+                ctx.strokeRect(interactionRect.x + 0.5, interactionRect.y + 0.5, interactionRect.w, interactionRect.h);
+            }
+
+            var label = String(part.id || 'part');
+            ctx.font = 'bold 8px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+
+            var labelWidth = Math.max(42, Math.min(150, ctx.measureText(label).width + 8));
+            var labelY = Math.max(11, rect.y - 2);
+
+            ctx.fillStyle = 'rgba(0,0,0,0.78)';
+            ctx.fillRect(rect.x, labelY - 11, labelWidth, 11);
+
+            ctx.fillStyle = '#dfffff';
+            ctx.fillText(label, rect.x + 4, labelY - 1);
+        }
+    }
+
+    ctx.restore();
+}
+
+function cloneTrigger(trigger) {
+    var copied = {};
+    for (var key in trigger) {
+        if (!Object.prototype.hasOwnProperty.call(trigger, key)) continue;
+
+        if (key === "area" && trigger.area) {
+            copied.area = {
+                x: trigger.area.x,
+                y: trigger.area.y,
+                w: trigger.area.w,
+                h: trigger.area.h
+            };
+        } else {
+            copied[key] = trigger[key];
+        }
+    }
+    return copied;
+}
+
+function cloneTriggers() {
+    var copied = [];
+    for (var i = 0; i < triggers.length; i++) {
+        copied.push(cloneTrigger(triggers[i]));
+    }
+    return copied;
+}
+
+function restoreTriggers(prev) {
+    triggers = [];
+    for (var i = 0; i < prev.length; i++) {
+        triggers.push(cloneTrigger(prev[i]));
+    }
+}
+
+function getTriggerIndexAtTile(tx, ty) {
+    for (var i = triggers.length - 1; i >= 0; i--) {
+        var t = triggers[i];
+        if (!t || !t.area) continue;
+
+        if (
+            tx >= t.area.x &&
+            tx < t.area.x + t.area.w &&
+            ty >= t.area.y &&
+            ty < t.area.y + t.area.h
+        ) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+function getTriggerFormValues(area) {
+    var idInput = document.getElementById("trigger-id");
+    var labelInput = document.getElementById("trigger-label");
+    var actionInput = document.getElementById("trigger-action-label");
+    var typeInput = document.getElementById("trigger-type");
+    var targetInput = document.getElementById("trigger-target");
+    var textInput = document.getElementById("trigger-text");
+
+    return {
+        id: idInput ? idInput.value : "new_trigger",
+        label: labelInput ? labelInput.value : "新規トリガー",
+        actionLabel: actionInput ? actionInput.value : "調べる",
+        area: area,
+        type: typeInput ? typeInput.value : "inspect",
+        target: targetInput ? targetInput.value : "",
+        text: textInput ? textInput.value : ""
+    };
+}
+
+function setTriggerFormValues(trigger) {
+    if (!trigger) return;
+
+    ensureTriggerEditorExtraFields();
+
+    var idInput = document.getElementById("trigger-id");
+    var labelInput = document.getElementById("trigger-label");
+    var actionInput = document.getElementById("trigger-action-label");
+    var typeInput = document.getElementById("trigger-type");
+    var targetInput = document.getElementById("trigger-target");
+    var textInput = document.getElementById("trigger-text");
+
+    if (idInput) idInput.value = trigger.id || "";
+    if (labelInput) labelInput.value = trigger.label || "";
+    if (actionInput) actionInput.value = trigger.actionLabel || "";
+    if (typeInput) typeInput.value = trigger.type || "inspect";
+    if (targetInput) targetInput.value = trigger.target || "";
+    if (textInput) textInput.value = trigger.text || "";
+}
+
+function applyTriggerValues(index, values) {
+    if (index < 0 || index >= triggers.length || !values) return false;
+
+    triggers[index] = {
+        id: values.id || "trigger",
+        label: values.label || "トリガー",
+        actionLabel: values.actionLabel || "調べる",
+        area: values.area || triggers[index].area,
+        type: values.type || "inspect",
+        target: values.target || "",
+        text: values.text || ""
+    };
+
+    return true;
+}
+
+function selectExistingTriggerForEdit(index) {
+    if (index < 0 || index >= triggers.length) return false;
+
+    var trigger = triggers[index];
+    if (!trigger || !trigger.area) return false;
+
+    editingTriggerIndex = index;
+    editStep = 1;
+    editStartX = trigger.area.x;
+    editStartY = trigger.area.y;
+    currentHoverTile = {
+        x: trigger.area.x + trigger.area.w - 1,
+        y: trigger.area.y + trigger.area.h - 1
+    };
+
+    setTriggerFormValues(trigger);
+
+    updateEditorStatus(
+        "既存トリガーを選択中: " +
+        (trigger.label || trigger.id || "trigger") +
+        " / 内容変更後に「選択中トリガーを更新」、または終点タップで範囲変更"
+    );
+
+    return true;
+}
+
+function updateSelectedTriggerFromForm() {
+    if (editingTriggerIndex < 0 || editingTriggerIndex >= triggers.length) {
+        updateEditorStatus("更新する既存トリガーが選択されていません");
+        return;
+    }
+
+    var current = triggers[editingTriggerIndex];
+    if (!current || !current.area) {
+        updateEditorStatus("選択中トリガーが見つかりません");
+        editingTriggerIndex = -1;
+        return;
+    }
+
+    markEditorDirty();
+    editHistory.push({ type: "triggers", prev: cloneTriggers() });
+
+    applyTriggerValues(editingTriggerIndex, getTriggerFormValues({
+        x: current.area.x,
+        y: current.area.y,
+        w: current.area.w,
+        h: current.area.h
+    }));
+
+    editStep = 0;
+    currentHoverTile = null;
+    editingTriggerIndex = -1;
+
+    updateEditorStatus("既存トリガーの内容を更新しました");
+}
+
+
+function deleteSelectedTrigger() {
+    if (editingTriggerIndex < 0 || editingTriggerIndex >= triggers.length) {
+        updateEditorStatus("削除する既存トリガーが選択されていません");
+        return;
+    }
+
+    var current = triggers[editingTriggerIndex];
+    var triggerName = current
+        ? (current.label || current.id || "トリガー")
+        : "トリガー";
+
+    if (!window.confirm("「" + triggerName + "」を削除しますか？")) {
+        updateEditorStatus("トリガーの削除を取り消しました");
+        return;
+    }
+
+    markEditorDirty();
+    editHistory.push({ type: "triggers", prev: cloneTriggers() });
+    triggers.splice(editingTriggerIndex, 1);
+
+    editStep = 0;
+    currentHoverTile = null;
+    editingTriggerIndex = -1;
+
+    updateEditorStatus("トリガーを削除しました。Undoで元に戻せます");
+}
+
+
+
+function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; }
+function copyGrid() { return cloneCollisionGrid(baseCollisionGrid.length ? baseCollisionGrid : collisionGrid); }
+
+function handleEditorTap(tx, ty) {
+    if (editTarget === 'props') {
+        return;
+    }
+
+    if (editTarget === 'blockedPoints') {
+        markEditorDirty();
+    editHistory.push({ type: 'grid', prev: copyGrid() });
+        if (baseCollisionGrid[ty]) baseCollisionGrid[ty][tx] = 2;
+        rebuildCollisionGridFromBase();
+        updateEditorStatus("Point追加: (" + tx + ", " + ty + ")");
+        return;
+    }
+
+    if (editStep === 0) {
+        if (editTarget === 'triggers') {
+            ensureTriggerEditorExtraFields();
+
+            var hitIndex = getTriggerIndexAtTile(tx, ty);
+            if (hitIndex >= 0) {
+                selectExistingTriggerForEdit(hitIndex);
+                return;
+            }
+
+            editingTriggerIndex = -1;
+        }
+
+        editStartX = tx;
+        editStartY = ty;
+        editStep = 1;
+        currentHoverTile = { x: tx, y: ty };
+
+        if (editTarget === 'triggers') {
+            updateEditorStatus("新規トリガー範囲の終点をタップしてください");
+        } else {
+            updateEditorStatus("終点をタップしてください");
+        }
+
+        return;
+    }
+
+    if (editStep === 1) {
+        var minX = Math.min(editStartX, tx);
+        var minY = Math.min(editStartY, ty);
+        var w = Math.max(editStartX, tx) - minX + 1;
+        var h = Math.max(editStartY, ty) - minY + 1;
+        var newRect = { x: minX, y: minY, w: w, h: h };
+
+        if (editTarget === 'passableRects' || editTarget === 'blockedRects') {
+            markEditorDirty();
+    editHistory.push({ type: 'grid', prev: copyGrid() });
+            var val = (editTarget === 'passableRects') ? 1 : 2;
+
+            for (var cy = minY; cy < minY + h; cy++) {
+                for (var cx = minX; cx < minX + w; cx++) {
+                    if (cx >= 0 && cx < MAP_WIDTH && cy >= 0 && cy < MAP_HEIGHT) {
+                        if (baseCollisionGrid[cy]) baseCollisionGrid[cy][cx] = val;
+                    }
+                }
+            }
+
+            rebuildCollisionGridFromBase();
+            editStep = 0;
+            currentHoverTile = null;
+            updateEditorStatus("追加完了。次の始点をタップ");
+            return;
+        }
+
+        if (editTarget === 'triggers') {
+            ensureTriggerEditorExtraFields();
+            markEditorDirty();
+    editHistory.push({ type: 'triggers', prev: cloneTriggers() });
+
+            if (editingTriggerIndex >= 0 && editingTriggerIndex < triggers.length) {
+                applyTriggerValues(editingTriggerIndex, getTriggerFormValues(newRect));
+                updateEditorStatus("既存トリガーの範囲と内容を更新しました");
+            } else {
+                var values = getTriggerFormValues(newRect);
+                triggers.push({
+                    id: values.id || "new_trigger",
+                    label: values.label || "新規トリガー",
+                    actionLabel: values.actionLabel || "調べる",
+                    area: values.area,
+                    type: values.type || "inspect",
+                    target: values.target || "",
+                    text: values.text || ""
+                });
+                updateEditorStatus("新規トリガーを追加しました");
+            }
+
+            editStep = 0;
+            currentHoverTile = null;
+            editingTriggerIndex = -1;
+            return;
+        }
+
+        editStep = 0;
+        currentHoverTile = null;
+        updateEditorStatus("追加完了。次の始点をタップ");
+    }
+}
+
+
+function gridToRects(targetValue, sourceGrid) {
+    var grid = sourceGrid || collisionGrid;
     var rects = []; var visited = [];
     for (var y = 0; y < MAP_HEIGHT; y++) { var row = []; for (var x = 0; x < MAP_WIDTH; x++) row.push(false); visited.push(row); }
     for (var y = 0; y < MAP_HEIGHT; y++) {
         for (var x = 0; x < MAP_WIDTH; x++) {
-            if (collisionGrid[y][x] === targetValue && !visited[y][x]) {
-                var w = 0; while (x + w < MAP_WIDTH && collisionGrid[y][x + w] === targetValue && !visited[y][x + w]) w++;
+            if (grid[y][x] === targetValue && !visited[y][x]) {
+                var w = 0; while (x + w < MAP_WIDTH && grid[y][x + w] === targetValue && !visited[y][x + w]) w++;
                 var h = 1; var canExpand = true;
                 while (y + h < MAP_HEIGHT && canExpand) {
-                    for (var i = 0; i < w; i++) if (collisionGrid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
+                    for (var i = 0; i < w; i++) if (grid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
                     if (canExpand) h++;
                 }
                 for (var dy = 0; dy < h; dy++) for (var dx = 0; dx < w; dx++) visited[y + dy][x + dx] = true;
@@ -2691,37 +5642,312 @@ function gridToRects(targetValue) {
     return rects;
 }
 
-function showExportModal() {
-    var pRects = gridToRects(1); var bAll = gridToRects(2);
-    var newBlockedRects = []; var newBlockedPoints = [];
-    for(var i=0; i<bAll.length; i++) {
-        if(bAll[i].w === 1 && bAll[i].h === 1) newBlockedPoints.push({ x: bAll[i].x, y: bAll[i].y });
-        else newBlockedRects.push(bAll[i]);
-    }
-    var str = "// data/station-plaza.js に貼り付けるエクスポート\n\nvar passableRects = [\n";
-    for(var i=0; i<pRects.length; i++) { str += "    { x: " + pRects[i].x + ", y: " + pRects[i].y + ", w: " + pRects[i].w + ", h: " + pRects[i].h + " }"; if(i < pRects.length - 1) str += ","; str += "\n"; }
-    str += "];\n\nvar blockedRects = [\n";
-    for(var i=0; i<newBlockedRects.length; i++) { str += "    { x: " + newBlockedRects[i].x + ", y: " + newBlockedRects[i].y + ", w: " + newBlockedRects[i].w + ", h: " + newBlockedRects[i].h + " }"; if(i < newBlockedRects.length - 1) str += ","; str += "\n"; }
-    str += "];\n\nvar blockedPoints = [\n";
-    for(var i=0; i<newBlockedPoints.length; i++) { str += "    { x: " + newBlockedPoints[i].x + ", y: " + newBlockedPoints[i].y + " }"; if(i < newBlockedPoints.length - 1) str += ","; str += "\n"; }
-    str += "];\n\nvar triggers = [\n";
-    for(var i=0; i<triggers.length; i++) {
-        var t = triggers[i];
-        str += "    {\n        id: \"" + t.id + "\", label: \"" + (t.label||"") + "\", actionLabel: \"" + (t.actionLabel||"調べる") + "\",\n";
-        str += "        area: { x: " + t.area.x + ", y: " + t.area.y + ", w: " + t.area.w + ", h: " + t.area.h + " },\n";
-        str += "        type: \"" + t.type + "\",\n"; if (t.target) str += "        target: \"" + t.target + "\",\n"; str += "        text: \"" + t.text + "\"\n    }";
-        if(i < triggers.length - 1) str += ","; str += "\n";
-    }
-    str += "\n];\n\nvar areaZones = [\n";
-    for(var i=0; i<areaZones.length; i++) {
-        var z = areaZones[i];
-        str += "    {\n        id: \"" + z.id + "\", title: \"" + z.title + "\", subtitle: \"" + z.subtitle + "\",\n";
-        str += "        area: { x: " + z.area.x + ", y: " + z.area.y + ", w: " + z.area.w + ", h: " + z.area.h + " }\n    }";
-        if(i < areaZones.length - 1) str += ","; str += "\n";
-    }
-    str += "\n];\n";
-    document.getElementById('export-textarea').value = str; document.getElementById('export-modal').style.display = 'flex';
+function getTownSceneExportInfo(sceneId) {
+    var table = {
+        station_plaza: {
+            title: "駅前広場",
+            fileName: "data/station-plaza.js",
+            mode: "station-data"
+        },
+
+        tomogushi_alley_map: {
+            title: "灯串横丁",
+            fileName: "data/town-maps.js",
+            mode: "scene-definition"
+        },
+
+        leisure_center_map: {
+            title: "湯窓レジャーセンター",
+            fileName: "data/town-maps.js",
+            mode: "scene-definition"
+        },
+
+        yumado_street_map: {
+            title: "湯窓通り",
+            fileName: "data/town-maps.js",
+            mode: "scene-definition"
+        },
+
+        onsen_slope_map: {
+            title: "温泉坂",
+            fileName: "data/town-maps.js",
+            mode: "scene-definition"
+        }
+    };
+
+    return table[sceneId] || {
+        title: (
+            activeTownSceneDef &&
+            activeTownSceneDef.title
+        ) || sceneId || "町マップ",
+
+        fileName: "data/town-maps.js",
+        mode: "scene-definition"
+    };
 }
+
+
+function buildExportCollisionData() {
+    // 固定地形だけを書き出す。
+    // パーツ由来の判定は prop.collision に保持する。
+    var exportGrid = baseCollisionGrid.length
+        ? baseCollisionGrid
+        : collisionGrid;
+
+    var passable = gridToRects(1, exportGrid);
+    var blockedAll = gridToRects(2, exportGrid);
+
+    var blockedRectsResult = [];
+    var blockedPointsResult = [];
+
+    for (var i = 0; i < blockedAll.length; i++) {
+        var rect = blockedAll[i];
+
+        if (rect.w === 1 && rect.h === 1) {
+            blockedPointsResult.push({
+                x: rect.x,
+                y: rect.y
+            });
+        } else {
+            blockedRectsResult.push(rect);
+        }
+    }
+
+    return {
+        passableRects: passable,
+        blockedRects: blockedRectsResult,
+        blockedPoints: blockedPointsResult
+    };
+}
+
+
+function buildStationPlazaExportCode(info, collisionData, exportedParts) {
+    var lines = [
+        "// ==========================================",
+        "// 湯間庭町 / " + info.title + " 編集データ",
+        "// 開発モードの「書き出す」で生成した完全版です。",
+        "// この内容で " + info.fileName + " を丸ごと置き換えてください。",
+        "// ==========================================",
+        "",
+
+        "var BG_IMAGE_PATH = " + JSON.stringify(
+            (
+                activeTownSceneDef &&
+                activeTownSceneDef.backgroundImagePath
+            ) ||
+            "assets/maps/grounds/station-plaza-ground.png"
+        ) + ";",
+
+        "var TILE_SIZE = " +
+            JSON.stringify(Number(TILE_SIZE) || 16) +
+            ";",
+
+        "var MAP_WIDTH = " +
+            JSON.stringify(Number(MAP_WIDTH) || 24) +
+            ";",
+
+        "var MAP_HEIGHT = " +
+            JSON.stringify(Number(MAP_HEIGHT) || 24) +
+            ";",
+
+        "var PLAYER_START = " + JSON.stringify({
+            x: Math.round(
+                (player && player.x ? player.x : 0) /
+                (Number(TILE_SIZE) || 16)
+            ),
+
+            y: Math.round(
+                (player && player.y ? player.y : 0) /
+                (Number(TILE_SIZE) || 16)
+            )
+        }, null, 4) + ";",
+
+        "",
+
+        "var passableRects = " +
+            JSON.stringify(
+                collisionData.passableRects,
+                null,
+                4
+            ) +
+            ";",
+
+        "",
+
+        "var blockedRects = " +
+            JSON.stringify(
+                collisionData.blockedRects,
+                null,
+                4
+            ) +
+            ";",
+
+        "",
+
+        "var blockedPoints = " +
+            JSON.stringify(
+                collisionData.blockedPoints,
+                null,
+                4
+            ) +
+            ";",
+
+        "",
+
+        "var triggers = " +
+            JSON.stringify(triggers, null, 4) +
+            ";",
+
+        "",
+
+        "var areaZones = " +
+            JSON.stringify(areaZones, null, 4) +
+            ";",
+
+        "",
+
+        "// マップパーツ。collision と interaction は画像内の相対比率（0〜1）です。",
+
+        "var stationPlazaProps = " +
+            JSON.stringify(exportedParts, null, 4) +
+            ";",
+
+        ""
+    ];
+
+    return lines.join("\n");
+}
+
+
+function buildTownSceneDefinitionExportCode(
+    info,
+    collisionData,
+    exportedParts
+) {
+    var def = activeTownSceneDef || {};
+    var sceneId = currentScene;
+
+    var exportedDefinition = {
+        id: sceneId,
+        title: def.title || info.title,
+        subtitle: def.subtitle || "",
+
+        mapWidth: Number(MAP_WIDTH) || def.mapWidth || 24,
+        mapHeight: Number(MAP_HEIGHT) || def.mapHeight || 24,
+
+        backgroundStyle: def.backgroundStyle || "",
+        backgroundImagePath: def.backgroundImagePath || "",
+
+        spawnPoints: JSON.parse(JSON.stringify(
+            def.spawnPoints || {
+                default: {
+                    x: Math.round(player.x / TILE_SIZE),
+                    y: Math.round(player.y / TILE_SIZE),
+                    dir: player.dir || "down"
+                }
+            }
+        )),
+
+        edgeWarps: JSON.parse(JSON.stringify(
+            def.edgeWarps || []
+        )),
+
+        passableRects: collisionData.passableRects,
+        blockedRects: collisionData.blockedRects,
+        blockedPoints: collisionData.blockedPoints,
+
+        areaZones: JSON.parse(JSON.stringify(
+            areaZones || []
+        )),
+
+        triggers: JSON.parse(JSON.stringify(
+            triggers || []
+        )),
+
+        groundRects: JSON.parse(JSON.stringify(
+            def.groundRects || []
+        )),
+
+        props: exportedParts,
+
+        decor: JSON.parse(JSON.stringify(
+            def.decor || []
+        ))
+    };
+
+    var json = JSON.stringify(
+        exportedDefinition,
+        null,
+        4
+    );
+
+    // JSONをJavaScriptのオブジェクト定義として貼りやすくする。
+    var lines = [
+        "// ==========================================",
+        "// 湯間庭町 / " + info.title + " 編集データ",
+        "// 開発モードの「書き出す」で生成しました。",
+        "// " + info.fileName + " 内の",
+        "// " + sceneId + ": { ... } を以下で置き換えてください。",
+        "// ==========================================",
+        "",
+        sceneId + ": " + json + ",",
+        ""
+    ];
+
+    return lines.join("\n");
+}
+
+
+function buildFullStationPlazaExportCode() {
+    var info = getTownSceneExportInfo(currentScene);
+    var collisionData = buildExportCollisionData();
+    var exportedParts = cloneTownParts();
+
+    if (info.mode === "station-data") {
+        return buildStationPlazaExportCode(
+            info,
+            collisionData,
+            exportedParts
+        );
+    }
+
+    return buildTownSceneDefinitionExportCode(
+        info,
+        collisionData,
+        exportedParts
+    );
+}
+
+
+function showExportModal() {
+    var textarea = document.getElementById("export-textarea");
+    if (!textarea) return;
+
+    var info = getTownSceneExportInfo(currentScene);
+
+    textarea.value = buildFullStationPlazaExportCode();
+
+    var modal = document.getElementById("export-modal");
+    if (modal) {
+        modal.style.display = "flex";
+    }
+
+    var copyButton = document.getElementById("btn-copy-export");
+
+    if (copyButton) {
+        copyButton.innerText =
+            info.title + "のコードをコピー";
+    }
+
+    updateEditorStatus(
+        editorHasUnsavedChanges
+            ? info.title +
+              "を書き出しています。コピーすると「コピー済み」になります"
+            : info.title +
+              "の現在の内容はコピー済みです"
+    );
+}
+
 
 // ==========================================
 // 6. メインループと更新・判定
@@ -2729,7 +5955,7 @@ function showExportModal() {
 function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 
 function update() {
-    if (isMessageOpen || currentScene !== 'station_plaza' || isEditMode) {
+    if (isMessageOpen || !isTownScene(currentScene) || isEditMode) {
         player.isMoving = false;
         updatePlayerWalkAnimation(0);
         return;
@@ -2779,6 +6005,15 @@ function update() {
         updateUI();
         updateInteractionHint();
         updateCurrentArea();
+
+        var warpSide = null;
+        if (player.isMoving) {
+            if (player.dir === 'left' && (keys['ArrowLeft'] || keys['a'] || keys['A'] || dpad.left)) warpSide = 'left';
+            if (player.dir === 'right' && (keys['ArrowRight'] || keys['d'] || keys['D'] || dpad.right)) warpSide = 'right';
+            if (player.dir === 'up' && (keys['ArrowUp'] || keys['w'] || keys['W'] || dpad.up)) warpSide = 'up';
+            if (player.dir === 'down' && (keys['ArrowDown'] || keys['s'] || keys['S'] || dpad.down)) warpSide = 'down';
+        }
+        if (warpSide && tryTownEdgeWarp(warpSide)) return;
     } else {
         // 経路の最初・最後の短い一歩も含め、タップ移動中は歩行アニメを維持する。
         var tapPathWasActive = !!tapMoveTargetTile;
@@ -2806,6 +6041,7 @@ function update() {
             updateUI();
             updateInteractionHint();
             updateCurrentArea();
+            if (tryTownEdgeWarp()) return;
         }
     }
 
@@ -2875,30 +6111,212 @@ function getNearbyTrigger() {
 }
 
 
-function updateInteractionHint() {
-    var hintEl = document.getElementById('interaction-hint');
-    var btnAction = document.getElementById('btn-action');
 
-    if (isEditMode || currentScene !== 'station_plaza') {
-        hintEl.classList.remove('visible');
-        btnAction.innerText = "調べる";
+var interactionHintLayoutFrame = 0;
+
+function getElementOuterWidth(el) {
+    if (!el) return 0;
+
+    var style = window.getComputedStyle(el);
+    var marginLeft = parseFloat(style.marginLeft) || 0;
+    var marginRight = parseFloat(style.marginRight) || 0;
+
+    return el.scrollWidth + marginLeft + marginRight;
+}
+
+function refreshInteractionHintTextLayout(hintEl) {
+    if (!hintEl) return;
+
+    if (interactionHintLayoutFrame) {
+        window.cancelAnimationFrame(interactionHintLayoutFrame);
+        interactionHintLayoutFrame = 0;
+    }
+
+    hintEl.classList.remove("hint-compact");
+    hintEl.classList.remove("hint-tight");
+
+    interactionHintLayoutFrame = window.requestAnimationFrame(function() {
+        interactionHintLayoutFrame = 0;
+
+        if (!hintEl.classList.contains("visible")) return;
+
+        var labelEl = document.getElementById("interaction-label");
+        var actionEl = document.getElementById("interaction-action");
+        var screenEl = document.getElementById("town-screen");
+        var screenWidth = screenEl ? screenEl.clientWidth : window.innerWidth;
+        var maxWidth = Math.max(180, screenWidth - 28);
+
+        function requiredWidth() {
+            var style = window.getComputedStyle(hintEl);
+            var gap = parseFloat(style.columnGap || style.gap) || 0;
+            var padding =
+                (parseFloat(style.paddingLeft) || 0) +
+                (parseFloat(style.paddingRight) || 0);
+            var border =
+                (parseFloat(style.borderLeftWidth) || 0) +
+                (parseFloat(style.borderRightWidth) || 0);
+
+            return (
+                getElementOuterWidth(labelEl) +
+                getElementOuterWidth(actionEl) +
+                gap +
+                padding +
+                border
+            );
+        }
+
+        if (requiredWidth() > maxWidth) {
+            hintEl.classList.add("hint-compact");
+        }
+
+        if (requiredWidth() > maxWidth) {
+            hintEl.classList.add("hint-tight");
+        }
+    });
+}
+
+function getAreaTitleLines(zone) {
+    if (!zone) return [""];
+
+    if (Array.isArray(zone.titleLines)) {
+        var explicitLines = zone.titleLines
+            .map(function(line) { return String(line || "").trim(); })
+            .filter(function(line) { return !!line; })
+            .slice(0, 2);
+
+        if (explicitLines.length) {
+            return explicitLines;
+        }
+    }
+
+    var title = String(zone.title || "").trim();
+    if (!title) return [""];
+
+    if (title.indexOf("\n") >= 0) {
+        var writtenLines = title
+            .split(/\n+/)
+            .map(function(line) { return line.trim(); })
+            .filter(function(line) { return !!line; })
+            .slice(0, 2);
+
+        if (writtenLines.length) {
+            return writtenLines;
+        }
+    }
+
+    var chars = Array.from(title);
+
+    // 画面幅に十分収まる短い名称は、むやみに分割しない。
+    if (chars.length <= 8) {
+        return [title];
+    }
+
+    // 施設名でよく使う語尾を優先し、意味の切れ目で改行する。
+    var preferredSuffixes = [
+        "センター",
+        "研究所",
+        "案内所",
+        "資料館",
+        "美術館",
+        "博物館",
+        "商店街"
+    ];
+
+    for (var i = 0; i < preferredSuffixes.length; i++) {
+        var suffix = preferredSuffixes[i];
+
+        if (
+            title.endsWith(suffix) &&
+            title.length > suffix.length + 2
+        ) {
+            var prefix = title.slice(0, -suffix.length).trim();
+
+            if (prefix) {
+                return [prefix, suffix];
+            }
+        }
+    }
+
+    // 空白がある名称は、中央に近い空白を候補にする。
+    var spaces = [];
+    for (var n = 0; n < chars.length; n++) {
+        if (/\s/.test(chars[n])) spaces.push(n);
+    }
+
+    if (spaces.length) {
+        var middle = chars.length / 2;
+        spaces.sort(function(a, b) {
+            return Math.abs(a - middle) - Math.abs(b - middle);
+        });
+
+        var splitAtSpace = spaces[0];
+        var first = chars.slice(0, splitAtSpace).join("").trim();
+        var second = chars.slice(splitAtSpace + 1).join("").trim();
+
+        if (first && second) {
+            return [first, second];
+        }
+    }
+
+    // 最後の保険として、極端に片方が短くならない位置で2行に均等化する。
+    var splitAt = Math.ceil(chars.length / 2);
+    splitAt = Math.max(3, Math.min(chars.length - 3, splitAt));
+
+    return [
+        chars.slice(0, splitAt).join(""),
+        chars.slice(splitAt).join("")
+    ];
+}
+
+function updateInteractionHint() {
+    var hintEl = document.getElementById("interaction-hint");
+
+    if (!hintEl) {
+        return;
+    }
+
+    if (
+        isEditMode ||
+        !isTownScene(currentScene)
+    ) {
+        hintEl.classList.remove("visible");
+        hintEl.classList.remove("hint-pressed");
+        hintEl.classList.remove("hint-compact");
+        hintEl.classList.remove("hint-tight");
+        hintEl.setAttribute("aria-hidden", "true");
         return;
     }
 
     var t = getNearbyTrigger();
+
     if (t) {
-        document.getElementById('interaction-label').innerText = t.label || "";
-        document.getElementById('interaction-action').innerText = t.actionLabel || "調べる";
-        hintEl.classList.add('visible');
-        btnAction.innerText = t.actionLabel || "調べる";
+        var label = t.label || "";
+        var actionLabel = t.actionLabel || "調べる";
+        var labelEl = document.getElementById("interaction-label");
+        var actionEl = document.getElementById("interaction-action");
+
+        if (labelEl) labelEl.innerText = label;
+        if (actionEl) actionEl.innerText = actionLabel;
+
+        hintEl.classList.add("visible");
+        hintEl.setAttribute("aria-hidden", "false");
+        hintEl.setAttribute(
+            "aria-label",
+            label ? label + "を" + actionLabel : actionLabel
+        );
+
+        refreshInteractionHintTextLayout(hintEl);
     } else {
-        hintEl.classList.remove('visible');
-        btnAction.innerText = "調べる";
+        hintEl.classList.remove("visible");
+        hintEl.classList.remove("hint-pressed");
+        hintEl.classList.remove("hint-compact");
+        hintEl.classList.remove("hint-tight");
+        hintEl.setAttribute("aria-hidden", "true");
     }
 }
 
 function updateCurrentArea() {
-    if (currentScene !== 'station_plaza') return;
+    if (!isTownScene(currentScene)) return;
 
     var pRect = getPlayerHitbox(player.x, player.y);
     var centerX = pRect.x + pRect.w / 2;
@@ -2923,15 +6341,28 @@ function updateCurrentArea() {
 
 function showAreaTitle(zone) {
     if (isEditMode) return;
-    var titleEl = document.getElementById('area-title');
-    document.getElementById('area-title-main').innerText = zone.title;
-    document.getElementById('area-title-sub').innerText = zone.subtitle;
 
-    titleEl.classList.remove('visible');
-    setTimeout(function() { titleEl.classList.add('visible'); }, 50);
+    var titleEl = document.getElementById("area-title");
+    var mainEl = document.getElementById("area-title-main");
+    var subEl = document.getElementById("area-title-sub");
+
+    if (!titleEl || !mainEl || !subEl) return;
+
+    var titleLines = getAreaTitleLines(zone);
+
+    mainEl.textContent = titleLines.join("\n");
+    subEl.textContent = zone.subtitle || "";
+    titleEl.classList.toggle("multi-line", titleLines.length > 1);
+
+    titleEl.classList.remove("visible");
+    setTimeout(function() {
+        titleEl.classList.add("visible");
+    }, 50);
 
     if (areaTitleTimer) clearTimeout(areaTitleTimer);
-    areaTitleTimer = setTimeout(function() { titleEl.classList.remove('visible'); }, 2200);
+    areaTitleTimer = setTimeout(function() {
+        titleEl.classList.remove("visible");
+    }, 2200);
 }
 
 function handleAction() {
@@ -2939,6 +6370,18 @@ function handleAction() {
     if (t) {
         if (t.id === "tourist_map") {
             openStationGuideMap();
+            return;
+        }
+
+        if (t.type === "work") {
+            var work = t.workId ? getWorkById(t.workId) : null;
+
+            if (work) {
+                launchWork(work);
+            } else {
+                showMessage(t.text || "この作品は、まだ準備中です。");
+            }
+
             return;
         }
 
@@ -2960,9 +6403,10 @@ function handleAction() {
 function updateUI() {
     var tileX = Math.floor((player.x + player.w/2) / TILE_SIZE);
     var tileY = Math.floor((player.y + player.h/2) / TILE_SIZE);
-    var sceneNameMap = { 'station_plaza': '駅前広場' };
-    if (DESTINATIONS[currentScene]) sceneNameMap[currentScene] = DESTINATIONS[currentScene].title;
-    document.getElementById('scene-name').innerText = sceneNameMap[currentScene] || currentScene;
+    var sceneName = currentScene;
+    if (isTownScene(currentScene)) sceneName = getTownSceneTitle(currentScene);
+    else if (DESTINATIONS[currentScene]) sceneName = DESTINATIONS[currentScene].title;
+    document.getElementById('scene-name').innerText = sceneName;
     if (debugMode) document.getElementById('coord-display').innerText = "現在座標: (" + tileX + ", " + tileY + ")";
 }
 
@@ -3018,31 +6462,66 @@ function resetDestinationState() {
     currentDestinationMessageTitle = "";
 }
 
+function getDestinationReturnSceneId(destOrId) {
+    var dest = (typeof destOrId === "string") ? DESTINATIONS[destOrId] : destOrId;
+
+    if (dest && dest.returnScene && isTownScene(dest.returnScene)) {
+        return dest.returnScene;
+    }
+
+    return "station_plaza";
+}
+
+function getDestinationReturnLabel(destOrId) {
+    var dest = (typeof destOrId === "string") ? DESTINATIONS[destOrId] : destOrId;
+
+    if (dest && dest.returnLabel) {
+        return dest.returnLabel;
+    }
+
+    return "駅前";
+}
+
+window.backToDestinationReturnScene = function(destId) {
+    restoreTownWindowReturnPoint(
+        getDestinationReturnSceneId(destId || currentDestinationId)
+    );
+};
+
+
 // ★ RPG共通メニューの生成と遷移
-window.changeScene = function(sceneId) {
+window.changeScene = function(sceneId, spawnKey) {
+    // 町内から、お店・看板などの専用画面へ移る直前に位置を保存
+    if (isTownScene(currentScene) && !isTownScene(sceneId)) {
+        rememberTownWindowReturnPoint();
+    }
+
     currentScene = sceneId;
-    updateUI();
 
     var sceneContainer = document.getElementById('scene-container');
     document.getElementById('area-title').classList.remove('visible');
     document.getElementById('interaction-hint').classList.remove('visible');
+
     var btnAction = document.getElementById('btn-action');
     if (btnAction) {
         btnAction.innerText = "調べる";
     }
 
-    if (sceneId === 'station_plaza') {
+    if (isTownScene(sceneId)) {
         resetDestinationState();
         closeDestinationScene();
+        applyTownSceneDefinition(sceneId, spawnKey || 'default');
         clearDpadInput();
         updateControlVisibility();
         return;
     }
 
+    updateUI();
     openDestination(sceneId);
     clearDpadInput();
     updateControlVisibility();
 };
+
 
 
 window.openDestination = function(destId) {
@@ -3093,7 +6572,7 @@ window.renderDestinationIntro = function(dest) {
 
     html += '<div class="rpg-menu-list">';
     html += '<button class="rpg-menu-item" onclick="returnDestinationMenu()">つづける</button>';
-    html += '<button class="rpg-menu-item rpg-back" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+    html += '<button class="rpg-menu-item rpg-back" onclick="backToDestinationReturnScene(\'' + dest.id + '\')">' + getDestinationReturnLabel(dest) + 'へ戻る</button>';
     html += '</div></div>';
 
     return html;
@@ -3131,34 +6610,211 @@ function getDestinationMenuItems(dest) {
 }
 
 window.renderDestinationMenu = function(dest) {
+    if (!document.getElementById("destination-work-shelf-style")) {
+        var style = document.createElement("style");
+        style.id = "destination-work-shelf-style";
+
+        style.textContent =
+            ".rpg-menu-item.rpg-work-shelf-item{" +
+                "display:block;" +
+                "position:relative;" +
+                "width:100%;" +
+                "box-sizing:border-box;" +
+                "text-align:left;" +
+                "padding:13px 14px 12px 27px;" +
+                "line-height:1.45;" +
+            "}" +
+
+            // 既存の選択カーソルがカード左端に出ても、
+            // 文字に重ならないよう本文側の余白を確保する。
+            ".rpg-menu-item.rpg-work-shelf-item.rpg-menu-selected{" +
+                "padding-left:38px;" +
+            "}" +
+
+            ".rpg-work-shelf-category{" +
+                "display:block;" +
+                "margin-bottom:4px;" +
+                "font-size:10px;" +
+                "font-weight:800;" +
+                "letter-spacing:.12em;" +
+                "opacity:.68;" +
+            "}" +
+
+            ".rpg-work-shelf-title{" +
+                "display:block;" +
+                "font-size:15px;" +
+                "font-weight:800;" +
+                "line-height:1.5;" +
+            "}" +
+
+            ".rpg-work-shelf-description{" +
+                "display:block;" +
+                "margin-top:5px;" +
+                "font-size:12px;" +
+                "font-weight:500;" +
+                "line-height:1.55;" +
+                "opacity:.78;" +
+            "}" +
+
+            ".rpg-work-shelf-played{" +
+                "display:inline-block;" +
+                "margin-top:7px;" +
+                "padding:2px 7px;" +
+                "border-radius:999px;" +
+                "font-size:10px;" +
+                "font-weight:800;" +
+                "letter-spacing:.04em;" +
+                "background:rgba(255,244,223,.12);" +
+                "opacity:.82;" +
+            "}" +
+
+            ".rpg-work-shelf-return-guide{" +
+                "box-sizing:border-box;" +
+                "margin:0 0 16px;" +
+                "padding:11px 13px;" +
+                "border:2px solid rgba(255,239,200,.34);" +
+                "border-radius:12px;" +
+                "background:rgba(255,244,223,.07);" +
+                "font-size:13px;" +
+                "line-height:1.7;" +
+                "opacity:.9;" +
+            "}" +
+
+            "@media (max-width:720px){" +
+                ".rpg-menu-item.rpg-work-shelf-item{" +
+                    "padding:12px 12px 11px 27px;" +
+                "}" +
+
+                ".rpg-menu-item.rpg-work-shelf-item.rpg-menu-selected{" +
+                    "padding-left:38px;" +
+                "}" +
+
+                ".rpg-work-shelf-title{" +
+                    "font-size:14px;" +
+                "}" +
+
+                ".rpg-work-shelf-description{" +
+                    "font-size:11px;" +
+                "}" +
+            "}";
+
+        document.head.appendChild(style);
+    }
+
     var html = '<div class="rpg-window">';
+
     html += '<div class="rpg-window-header">';
     html += '<div class="rpg-title">' + dest.title + '</div>';
-    if (dest.subtitle) html += '<div class="rpg-subtitle">' + dest.subtitle + '</div>';
+
+    if (dest.subtitle) {
+        html += '<div class="rpg-subtitle">' + dest.subtitle + '</div>';
+    }
+
     html += '</div>';
 
-    if (dest.menuTitle) html += '<div class="rpg-menu-title">' + dest.menuTitle + '</div>';
+    if (
+        typeof destinationReturnGuideText !== "undefined" &&
+        destinationReturnGuideText
+    ) {
+        html += '<div class="rpg-work-shelf-return-guide">';
+        html += formatText(destinationReturnGuideText);
+        html += '</div>';
+    }
+
+    if (dest.menuTitle) {
+        html += '<div class="rpg-menu-title">' + dest.menuTitle + '</div>';
+    }
 
     html += '<div class="rpg-menu-list">';
+
     var menuItems = getDestinationMenuItems(dest);
+
     for (var i = 0; i < menuItems.length; i++) {
         var item = menuItems[i];
-        var btnClass = 'rpg-menu-item';
-        
-        if (item.kind === 'back') {
-            btnClass += ' rpg-back';
-            html += '<button class="' + btnClass + '" onclick="changeScene(\'station_plaza\')">' + item.label + '</button>';
-        } else {
-            var label = item.label;
-            // 生成済みのメニュー配列を直接渡すことで、
-            // works.jsの並びと表示内容を必ず一致させる。
-            html += '<button class="' + btnClass + '" onclick="handleDestinationMenuItem(\'' + dest.id + '\', ' + i + ')">' + label + '</button>';
+        if (!item) continue;
+
+        // 「これから増えるゲーム」は表示しない。
+        if (
+            item.label === "これから増えるゲーム" ||
+            item.label === "これから増える作品"
+        ) {
+            continue;
         }
+
+        if (item.kind === "back") {
+            html +=
+                '<button type="button" class="rpg-menu-item rpg-back" ' +
+                'onclick="backToDestinationReturnScene(\'' +
+                dest.id +
+                '\')">' +
+                item.label +
+                '</button>';
+
+            continue;
+        }
+
+        var isWorkItem = !!item.workId;
+        var buttonClass = "rpg-menu-item";
+
+        if (isWorkItem) {
+            buttonClass += " rpg-work-shelf-item";
+        }
+
+        html +=
+            '<button type="button" class="' +
+            buttonClass +
+            '" onclick="handleDestinationMenuItem(\'' +
+            dest.id +
+            "', " +
+            i +
+            ')">';
+
+        if (isWorkItem) {
+            if (item.menuCategory) {
+                html +=
+                    '<span class="rpg-work-shelf-category">' +
+                    item.menuCategory +
+                    '</span>';
+            }
+
+            html +=
+                '<span class="rpg-work-shelf-title">' +
+                item.label +
+                '</span>';
+
+            if (item.menuDescription) {
+                html +=
+                    '<span class="rpg-work-shelf-description">' +
+                    item.menuDescription +
+                    '</span>';
+            }
+
+            if (
+                typeof lastClosedWorkId !== "undefined" &&
+                lastClosedWorkId &&
+                item.workId === lastClosedWorkId
+            ) {
+                html +=
+                    '<span class="rpg-work-shelf-played">' +
+                    "さっき遊びました" +
+                    '</span>';
+            }
+        } else {
+            html += item.label;
+        }
+
+        html += '</button>';
     }
-    html += '</div></div>';
+
+    html += '</div>';
+    html += '</div>';
 
     return html;
 };
+
+
+
+
 
 window.renderDestinationMessage = function(dest, title, text) {
     var html = '<div class="rpg-window">';
@@ -3170,7 +6826,7 @@ window.renderDestinationMessage = function(dest, title, text) {
 
     html += '<div class="rpg-menu-list" style="margin-top: 20px;">';
     html += '<button class="rpg-menu-item" onclick="returnDestinationMenu()">選択肢へ戻る</button>';
-    html += '<button class="rpg-menu-item rpg-back" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+    html += '<button class="rpg-menu-item rpg-back" onclick="backToDestinationReturnScene(\'' + dest.id + '\')">' + getDestinationReturnLabel(dest) + 'へ戻る</button>';
     html += '</div></div>';
 
     return html;
@@ -3515,7 +7171,9 @@ window.renderNoteCardRack = function(dest) {
         html += '<div class="shinpo-rack-subtitle">' + escapeNoteRackHtml(dest.subtitle) + '</div>';
     }
     html += '</div>';
-    html += '<button class="shinpo-rack-back" type="button" onclick="changeScene(\'station_plaza\')">駅前へ戻る</button>';
+
+    // 駅前固定ではなく、掲示板を開いた場所へ戻る
+    html += '<button class="shinpo-rack-back" type="button" onclick="backToDestinationReturnScene(\'shinpo_board\')">元の場所へ戻る</button>';
     html += '</div>';
 
     html += '<p class="shinpo-rack-lead">今日の棚には、少しずつ違う紙面が届いています。</p>';
@@ -3533,6 +7191,7 @@ window.renderNoteCardRack = function(dest) {
     html += '</div>';
     return html;
 };
+
 
 window.openNoteReader = function(article) {
     var embedUrl = getNoteEmbedUrl(article);
@@ -3670,7 +7329,9 @@ window.openWorkPlayer = function(work) {
     if (!work || !source) {
         showDestinationMessage(
             work && work.title ? work.title : "作品",
-            work && work.emptyText ? work.emptyText : "この作品は、まだ準備中です。"
+            work && work.emptyText
+                ? work.emptyText
+                : "この作品は、まだ準備中です。"
         );
         return;
     }
@@ -3688,23 +7349,32 @@ window.openWorkPlayer = function(work) {
         cancelTapMove();
     }
 
+    // 施設メニューから別作品を選んだ時点で、
+    // 前の作品についての案内表示は終了する。
+    if (!isDirectWorkVisit) {
+        destinationReturnGuideText = "";
+        lastClosedWorkId = null;
+    }
+
     currentWorkId = work.id || null;
     currentFrameSourceUrl = "";
-    workPlayerReturnDestinationId = currentDestinationId;
+
+    workPlayerReturnDestinationId = (
+        !isTownScene(currentScene) &&
+        currentDestinationId &&
+        DESTINATIONS[currentDestinationId]
+    )
+        ? currentDestinationId
+        : null;
+
     isWorkPlayerOpen = true;
 
-    // 作品ごとに見せ方を選べるよう、フレームのモードをデータとして保持する。
-    // 現在は standard が基本。将来、らくがきだけ控えめな soft 表示にもできる。
     playerLayer.dataset.frameMode = work.frameMode || "standard";
-
-    // 縦長ゲームは、iPadやPCでもiPhone相当の画面として中央に置く。
-    // 触れるらくがきは playerLayout 未指定のまま、従来どおり画面全体を使う。
     setWorkPlayerLayout(work, playerLayer);
 
     title.innerText = getWorkPlayerFrameTitle(work);
     frame.title = work.title || "町内コンテンツ";
 
-    // itch.ioの埋め込みゲームでも、音・全画面・ゲームパッド利用を許可する。
     frame.setAttribute("allow", "autoplay; fullscreen; gamepad");
     frame.setAttribute("allowfullscreen", "");
     frame.allowFullscreen = true;
@@ -3715,11 +7385,16 @@ window.openWorkPlayer = function(work) {
     }
 
     var destinationLabel = getWorkPlayerReturnLabel(work);
+
     if (returnLabel) {
         returnLabel.innerText = destinationLabel;
     }
+
     if (closeButton) {
-        closeButton.setAttribute("aria-label", destinationLabel + "へ戻る");
+        closeButton.setAttribute(
+            "aria-label",
+            destinationLabel + "へ戻る"
+        );
     }
 
     setWorkPlayerLoading(true, getWorkOpeningLabel(work));
@@ -3728,15 +7403,17 @@ window.openWorkPlayer = function(work) {
     playerLayer.classList.add("visible");
     playerLayer.setAttribute("aria-hidden", "false");
 
-    // 上部バーの高さを含めた実際の余白が確定してから、ゲーム画面をフィットさせる。
     window.requestAnimationFrame(updateWorkPlayerLayoutSize);
 
     clearDpadInput();
     updateControlVisibility();
 };
 
+
 window.closeWorkPlayer = function() {
     if (!isWorkPlayerOpen) return;
+
+    var closedWorkId = currentWorkId;
 
     var playerLayer = document.getElementById("work-player");
     var frame = document.getElementById("work-player-frame");
@@ -3744,7 +7421,6 @@ window.closeWorkPlayer = function() {
     setWorkPlayerLoading(false);
 
     if (frame) {
-        // iframe を空ページへ戻して、作品側のアニメーション・音・入力を確実に止める。
         frame.src = "about:blank";
     }
 
@@ -3756,12 +7432,15 @@ window.closeWorkPlayer = function() {
     if (returnLabel) {
         returnLabel.innerText = "町";
     }
+
     if (closeButton) {
         closeButton.setAttribute("aria-label", "町へ戻る");
     }
+
     if (title) {
         title.innerText = "";
     }
+
     if (sourceButton) {
         sourceButton.hidden = true;
     }
@@ -3781,7 +7460,22 @@ window.closeWorkPlayer = function() {
     currentWorkId = null;
     currentFrameSourceUrl = "";
 
-    if (workPlayerReturnDestinationId && DESTINATIONS[workPlayerReturnDestinationId]) {
+    if (
+        isDirectWorkVisit &&
+        closedWorkId &&
+        workPlayerReturnDestinationId
+    ) {
+        lastClosedWorkId = closedWorkId;
+
+        destinationReturnGuideText =
+            "店先に戻ってきました。\n" +
+            "ここには、ほかの遊びも並んでいるようです。";
+    }
+
+    if (
+        workPlayerReturnDestinationId &&
+        DESTINATIONS[workPlayerReturnDestinationId]
+    ) {
         currentDestinationId = workPlayerReturnDestinationId;
         destinationViewMode = "menu";
         currentDestinationMessage = "";
@@ -3789,10 +7483,14 @@ window.closeWorkPlayer = function() {
         renderDestination();
     }
 
+    // 直リンク専用案内は、最初の作品を閉じた時だけ。
+    isDirectWorkVisit = false;
     workPlayerReturnDestinationId = null;
+
     clearDpadInput();
     updateControlVisibility();
 };
+
 
 window.launchWork = function(work) {
     if (!work) {
@@ -3809,6 +7507,12 @@ window.launchWork = function(work) {
     }
 
     var launch = work.launch || (work.url ? "external" : "embedded");
+
+    trackYumaniwaEvent("Work Open", {
+        work_id: work.id || "unknown",
+        launch: launch,
+        entry: isDirectWorkVisit ? "direct" : "town"
+    });
 
     if (launch === "embedded" || launch === "itch_embed") {
         openWorkPlayer(work);
@@ -3854,13 +7558,14 @@ window.handleDestinationMenuItem = function(destId, index) {
     }
 
     if (item.kind === 'back') {
-        changeScene('station_plaza');
+        backToDestinationReturnScene(destId);
     }
 };
 
 window.handleDestinationItem = function(destId, index) {
     var dest = DESTINATIONS[destId];
     if (!dest) return;
+
     var item = dest.items[index];
     if (!item) return;
 
@@ -3878,16 +7583,20 @@ window.handleDestinationItem = function(destId, index) {
         if (item.url && item.url !== "") {
             window.open(item.url, '_blank');
         } else {
-            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
+            showDestinationMessage(
+                item.label,
+                item.emptyText || "まだ準備中です。"
+            );
         }
         return;
     }
 
     if (item.kind === 'back') {
-        changeScene('station_plaza');
+        backToDestinationReturnScene(destId);
         return;
     }
 };
+
 
 // ==========================================
 // 8. 描画処理 (Canvas)
@@ -3900,8 +7609,7 @@ function draw() {
     ctx.scale(cam.zoom, cam.zoom);
     ctx.translate(-cam.cameraX, -cam.cameraY);
 
-    if (bgLoaded) ctx.drawImage(bgImage, 0, 0, cam.mapPixelW, cam.mapPixelH);
-    else { ctx.fillStyle = '#b0a080'; ctx.fillRect(0, 0, cam.mapPixelW, cam.mapPixelH); }
+    drawTownSceneBackground(cam);
 
     if (tapMarkerTimer > 0 && tapMarkerPos && !isEditMode && !debugMode) {
         ctx.beginPath();
@@ -3911,45 +7619,10 @@ function draw() {
     }
 
     if (debugMode || isEditMode) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; ctx.lineWidth = 1;
-        for (var x = 0; x <= cam.mapPixelW; x += TILE_SIZE) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cam.mapPixelH); ctx.stroke(); }
-        for (var y = 0; y <= cam.mapPixelH; y += TILE_SIZE) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cam.mapPixelW, y); ctx.stroke(); }
-
-        ctx.fillStyle = 'rgba(0, 120, 255, 0.25)';
-        for (var y = 0; y < MAP_HEIGHT; y++) {
-            for (var x = 0; x < MAP_WIDTH; x++) { if (collisionGrid[y][x] === 1) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); }
-        }
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.35)';
-        for (var y = 0; y < MAP_HEIGHT; y++) {
-            for (var x = 0; x < MAP_WIDTH; x++) { if (collisionGrid[y][x] === 2) ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); }
-        }
-
-        ctx.fillStyle = 'rgba(255, 230, 0, 0.45)';
-        for (var k = 0; k < triggers.length; k++) ctx.fillRect(triggers[k].area.x * TILE_SIZE, triggers[k].area.y * TILE_SIZE, triggers[k].area.w * TILE_SIZE, triggers[k].area.h * TILE_SIZE);
-
-        for (var a = 0; a < areaZones.length; a++) {
-            var z = areaZones[a].area;
-            ctx.fillStyle = 'rgba(180, 80, 255, 0.20)'; ctx.fillRect(z.x * TILE_SIZE, z.y * TILE_SIZE, z.w * TILE_SIZE, z.h * TILE_SIZE);
-            ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.fillText(areaZones[a].title, z.x * TILE_SIZE + 2, z.y * TILE_SIZE + 10);
-        }
-
-        if (isEditMode) {
-            if (editStep === 1 && currentHoverTile) {
-                var minX = Math.min(editStartX, currentHoverTile.x); var minY = Math.min(editStartY, currentHoverTile.y);
-                var w = Math.max(editStartX, currentHoverTile.x) - minX + 1; var h = Math.max(editStartY, currentHoverTile.y) - minY + 1;
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.4)'; ctx.fillRect(minX * TILE_SIZE, minY * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
-            }
-            if (currentHoverTile && editStep === 0 && editTarget === 'blockedPoints') {
-                ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.fillRect(currentHoverTile.x * TILE_SIZE, currentHoverTile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            } else if (editStep === 1) {
-                ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.fillRect(editStartX * TILE_SIZE, editStartY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        } else if (currentHoverTile) {
-            ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.fillRect(currentHoverTile.x * TILE_SIZE, currentHoverTile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        }
+        drawTownDevOverlay(cam);
     }
 
-    if (currentScene === 'station_plaza') {
+    if (isTownScene(currentScene)) {
         var px = player.x;
         var py = player.y;
 
