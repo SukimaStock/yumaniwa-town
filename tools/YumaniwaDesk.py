@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-Yumaniwa Desk v0.7.1
+Yumaniwa Desk v0.8
 Pythonista 用:湯間庭町の「中身」だけを安全に更新する小さな管理室。
 
 Working Copy 運用の想定配置:
@@ -16,6 +16,16 @@ Working Copy 運用の想定配置:
 Webの開発モードで書き出した駅前広場 / 町マップの編集データも安全に取り込めます。
 main.js / engine / 作品の sketch.js は直接編集しません。
 設定・バックアップ・Undo情報はリポジトリ外の Pythonista Documents に保存します。
+
+v0.8:
+- 書き込み前に「Working Copy同期確認済み」の作業セッションを必須化
+- 保存後は未Push状態を記録し、次回起動時にも警告
+- Working CopyのStatus画面をDeskから1タップで開ける導線を追加
+- 町の取り込み時に既存シーンのフィールド消失を検出して拒否
+- 町データのID重複・参照切れ・画像不足・異常座標を事前検証
+- 反映内容の要約(パーツ/トリガー/当たり判定)を保存前に表示
+- 書き込み後に期待した内容と完全一致するかSHA-256で再確認
+- ボタンの多重タップを抑止
 
 v0.7.1:
 - 開発モード書き出しの判定を、日本語説明文の完全一致からコード構造ベースへ変更
@@ -74,6 +84,7 @@ from __future__ import print_function
 
 import datetime
 import hashlib
+import math
 import json
 import os
 import re
@@ -81,6 +92,7 @@ import shutil
 import tempfile
 import uuid
 import traceback
+import webbrowser
 
 try:
     import ui
@@ -109,6 +121,9 @@ BACKUP_ROOT_DIR = os.path.join(DESK_DATA_DIR, "backups")
 STATE_ROOT_DIR = os.path.join(DESK_DATA_DIR, "state")
 LAST_TRANSACTION_NAME = "last_transaction.json"
 MAX_BACKUPS = 40
+SAFE_SESSION_MAX_MINUTES = 180
+OPERATION_STATE_KEY = "operation_state"
+WORKING_COPY_REPO_NAME = "yumaniwa-town"
 
 COLORS = {
     "bg": "#11161B",
@@ -309,6 +324,77 @@ def default_project_root():
     if project_looks_valid(stored):
         return stored
     return ""
+
+
+def _parse_iso_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(str(value))
+    except Exception:
+        return None
+
+
+def operation_state():
+    settings = read_settings()
+    state = settings.get(OPERATION_STATE_KEY, {})
+    return dict(state) if isinstance(state, dict) else {}
+
+
+def save_operation_state(state):
+    settings = read_settings()
+    settings[OPERATION_STATE_KEY] = dict(state or {})
+    save_settings(settings)
+
+
+def safe_session_info():
+    state = operation_state()
+    confirmed = _parse_iso_datetime(state.get("sync_confirmed_at"))
+    age_minutes = None
+    valid = False
+    if confirmed is not None:
+        try:
+            age_minutes = max(0.0, (datetime.datetime.now() - confirmed).total_seconds() / 60.0)
+            valid = age_minutes <= SAFE_SESSION_MAX_MINUTES
+        except Exception:
+            pass
+    return {
+        "valid": valid,
+        "confirmed_at": confirmed,
+        "age_minutes": age_minutes,
+        "pending_push": bool(state.get("pending_push")),
+        "last_change_label": str(state.get("last_change_label") or ""),
+        "last_change_files": list(state.get("last_change_files") or []),
+    }
+
+
+def confirm_safe_session():
+    state = operation_state()
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    state["sync_confirmed_at"] = now
+    state["pending_push"] = False
+    state["last_sync_confirmed_at"] = now
+    save_operation_state(state)
+
+
+def require_safe_write_session():
+    info = safe_session_info()
+    if info.get("valid"):
+        return True
+    raise RuntimeError(
+        "安全ロック中です。書き込む前に[案内]でWorking Copyを開き、"
+        "Pull後に HEAD / main / origin/main が一致し、未コミット変更がないことを確認してから"
+        "「同期確認済み」を押してください。"
+    )
+
+
+def mark_pending_push(label, files):
+    state = operation_state()
+    state["pending_push"] = True
+    state["last_change_label"] = str(label or "update")
+    state["last_change_files"] = list(files or [])
+    state["last_change_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    save_operation_state(state)
 
 
 # -----------------------------------------------------------------------------
@@ -732,6 +818,308 @@ def _replace_scene_in_town_maps(current_text, scene_id, scene_data):
     return result
 
 
+
+def _extract_scene_block(current_text, scene_id):
+    root_match = re.search(r"window\.TOWN_SCENE_MAPS\s*=\s*\{", current_text)
+    if not root_match:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS を見つけられません。")
+    root_open = current_text.find("{", root_match.start())
+    root_close = find_matching(current_text, root_open, "{", "}")
+    if root_close < 0:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS が閉じていません。")
+    body_start = root_open + 1
+    body = current_text[body_start:root_close]
+    pattern = re.compile(r"(?m)^([ \t]*)" + re.escape(scene_id) + r"\s*:\s*(\{)")
+    matches = list(pattern.finditer(body))
+    if len(matches) != 1:
+        raise ValueError("data/town-maps.js のシーンを一意に読めません: " + scene_id)
+    match = matches[0]
+    abs_open = body_start + match.start(2)
+    abs_close = find_matching(current_text, abs_open, "{", "}")
+    if abs_close < 0:
+        raise ValueError("シーンの括弧を読めません: " + scene_id)
+    return current_text[abs_open:abs_close + 1]
+
+
+def _top_level_object_keys(object_text):
+    text = object_text or ""
+    keys = set()
+    if not text.lstrip().startswith("{"):
+        return keys
+    start = text.find("{")
+    i = start + 1
+    depth = 1
+    quote = None
+    escaped = False
+    line_comment = False
+    block_comment = False
+
+    while i < len(text) and depth > 0:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ""
+
+        if line_comment:
+            if ch == "\n":
+                line_comment = False
+            i += 1
+            continue
+        if block_comment:
+            if ch == "*" and nxt == "/":
+                block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            block_comment = True
+            i += 2
+            continue
+
+        if ch == "{":
+            depth += 1
+            i += 1
+            continue
+        if ch == "}":
+            depth -= 1
+            i += 1
+            continue
+
+        if depth == 1 and (ch.isspace() or ch == ","):
+            i += 1
+            continue
+
+        if depth == 1:
+            key = None
+            j = i
+            if ch in ("'", '"'):
+                q = ch
+                j += 1
+                buf = []
+                esc = False
+                while j < len(text):
+                    c = text[j]
+                    if esc:
+                        buf.append(c)
+                        esc = False
+                    elif c == "\\":
+                        esc = True
+                    elif c == q:
+                        break
+                    else:
+                        buf.append(c)
+                    j += 1
+                if j < len(text) and text[j] == q:
+                    key = "".join(buf)
+                    j += 1
+            else:
+                m = re.match(r"[A-Za-z_][A-Za-z0-9_]*", text[i:])
+                if m:
+                    key = m.group(0)
+                    j = i + len(key)
+
+            if key:
+                while j < len(text) and text[j].isspace():
+                    j += 1
+                if j < len(text) and text[j] == ":":
+                    keys.add(key)
+                    i = j + 1
+                    continue
+
+        if ch in ("'", '"', "`"):
+            quote = ch
+        i += 1
+
+    return keys
+
+
+def _extract_named_array(object_text, key):
+    pattern = re.compile(r'(?m)(?:"' + re.escape(key) + r'"|' + re.escape(key) + r')\s*:\s*(\[)')
+    m = pattern.search(object_text or "")
+    if not m:
+        return ""
+    open_index = m.start(1)
+    close_index = find_matching(object_text, open_index, "[", "]")
+    if close_index < 0:
+        return ""
+    return object_text[open_index + 1:close_index]
+
+
+def _array_object_ids(array_body):
+    ids = []
+    for block in extract_object_blocks(array_body or ""):
+        m = re.search(r'\b(?:id)\s*:\s*"([^"]+)"', block)
+        if not m:
+            m = re.search(r'"id"\s*:\s*"([^"]+)"', block)
+        if m:
+            ids.append(m.group(1))
+    return ids
+
+
+def _count_rect_items(array_body):
+    if not (array_body or "").strip():
+        return 0
+    rect_calls = len(re.findall(r'\brect\s*\(', array_body))
+    objects = len(extract_object_blocks(array_body))
+    return rect_calls + objects
+
+
+def _scene_change_summary(current_text, scene_id, scene_data):
+    old_block = _extract_scene_block(current_text, scene_id)
+    old_props = _array_object_ids(_extract_named_array(old_block, "props"))
+    old_triggers = _array_object_ids(_extract_named_array(old_block, "triggers"))
+    new_props = [str(p.get("id") or "") for p in (scene_data.get("props") or []) if isinstance(p, dict)]
+    new_triggers = [str(t.get("id") or "") for t in (scene_data.get("triggers") or []) if isinstance(t, dict)]
+
+    old_prop_set, new_prop_set = set(old_props), set(new_props)
+    old_trigger_set, new_trigger_set = set(old_triggers), set(new_triggers)
+
+    old_passable = _count_rect_items(_extract_named_array(old_block, "passableRects"))
+    old_blocked = _count_rect_items(_extract_named_array(old_block, "blockedRects"))
+    new_passable = len(scene_data.get("passableRects") or [])
+    new_blocked = len(scene_data.get("blockedRects") or [])
+
+    lines = [
+        "パーツ: {0} → {1}".format(len(old_props), len(new_props)),
+        "トリガー: {0} → {1}".format(len(old_triggers), len(new_triggers)),
+        "通行領域: {0} → {1}".format(old_passable, new_passable),
+        "通行不可領域: {0} → {1}".format(old_blocked, new_blocked),
+    ]
+    added_props = sorted(new_prop_set - old_prop_set)
+    removed_props = sorted(old_prop_set - new_prop_set)
+    added_triggers = sorted(new_trigger_set - old_trigger_set)
+    removed_triggers = sorted(old_trigger_set - new_trigger_set)
+    if added_props:
+        lines.append("追加パーツ: " + ", ".join(added_props))
+    if removed_props:
+        lines.append("削除パーツ: " + ", ".join(removed_props))
+    if added_triggers:
+        lines.append("追加トリガー: " + ", ".join(added_triggers))
+    if removed_triggers:
+        lines.append("削除トリガー: " + ", ".join(removed_triggers))
+    return "\n".join(lines)
+
+
+def _known_scene_ids(current_text):
+    result = {"station_plaza"}
+    root_match = re.search(r"window\.TOWN_SCENE_MAPS\s*=\s*\{", current_text or "")
+    if not root_match:
+        return result
+    root_open = current_text.find("{", root_match.start())
+    root_close = find_matching(current_text, root_open, "{", "}")
+    if root_close < 0:
+        return result
+    body = current_text[root_open + 1:root_close]
+    for m in re.finditer(r'(?m)^[ \t]*(?:\"([^"]+)\"|([A-Za-z_][A-Za-z0-9_]*))\s*:\s*\{', body):
+        result.add(m.group(1) or m.group(2))
+    return result
+
+
+def _validate_scene_export(root, current_text, scene_id, scene_data):
+    errors = []
+    warnings = []
+
+    if not isinstance(scene_data, dict) or scene_data.get("id") != scene_id:
+        errors.append("シーンIDが一致していません。")
+
+    try:
+        map_w = float(scene_data.get("mapWidth"))
+        map_h = float(scene_data.get("mapHeight"))
+        if not (1 <= map_w <= 128 and 1 <= map_h <= 128):
+            errors.append("マップサイズが想定範囲外です。")
+    except Exception:
+        errors.append("mapWidth / mapHeight を数値として読めません。")
+        map_w = map_h = 24
+
+    triggers = scene_data.get("triggers") or []
+    props = scene_data.get("props") or []
+    if not isinstance(triggers, list) or not isinstance(props, list):
+        errors.append("triggers / props が配列ではありません。")
+        return errors, warnings
+
+    trigger_ids = [str(t.get("id") or "") for t in triggers if isinstance(t, dict)]
+    prop_ids = [str(p.get("id") or "") for p in props if isinstance(p, dict)]
+    if any(not x for x in trigger_ids):
+        errors.append("IDのないトリガーがあります。")
+    if any(not x for x in prop_ids):
+        errors.append("IDのないパーツがあります。")
+    if len(trigger_ids) != len(set(trigger_ids)):
+        errors.append("トリガーIDが重複しています。")
+    if len(prop_ids) != len(set(prop_ids)):
+        errors.append("パーツIDが重複しています。")
+
+    trigger_set = set(trigger_ids)
+    for prop in props:
+        if not isinstance(prop, dict):
+            errors.append("パーツデータにオブジェクト以外が含まれています。")
+            continue
+        for key in ("x", "y", "w", "h"):
+            try:
+                value = float(prop.get(key))
+                if not math.isfinite(value):
+                    raise ValueError()
+                limit = max(map_w, map_h) * 3
+                if abs(value) > limit:
+                    errors.append("{0} の {1} が異常に大きい値です。".format(prop.get("id", "part"), key))
+            except Exception:
+                errors.append("{0} の {1} を数値として読めません。".format(prop.get("id", "part"), key))
+        src = str(prop.get("src") or "")
+        if src and not src.startswith(("http://", "https://")):
+            rel = src.split("?", 1)[0].split("#", 1)[0].lstrip("./")
+            if rel and not os.path.exists(os.path.join(root, rel)):
+                errors.append("画像ファイルが見つかりません: " + rel)
+        interaction = prop.get("interaction") or {}
+        if isinstance(interaction, dict) and interaction.get("enabled"):
+            trigger_id = str(interaction.get("triggerId") or "")
+            if trigger_id and trigger_id not in trigger_set:
+                errors.append("{0} の interaction が存在しないtriggerIdを参照しています: {1}".format(prop.get("id", "part"), trigger_id))
+
+    work_ids = set()
+    try:
+        for work in load_data_records(root, "works"):
+            if work.get("id"):
+                work_ids.add(str(work.get("id")))
+    except Exception:
+        pass
+
+    known_scenes = _known_scene_ids(current_text)
+    for trigger in triggers:
+        if not isinstance(trigger, dict):
+            continue
+        if trigger.get("type") == "work":
+            work_id = str(trigger.get("workId") or "")
+            if work_id and work_ids and work_id not in work_ids:
+                errors.append("作品トリガーが存在しないworkIdを参照しています: " + work_id)
+
+    for warp in scene_data.get("edgeWarps") or []:
+        if isinstance(warp, dict):
+            target = str(warp.get("target") or "")
+            if target and target not in known_scenes:
+                errors.append("edgeWarpが存在しないシーンを参照しています: " + target)
+
+    old_block = _extract_scene_block(current_text, scene_id)
+    old_keys = _top_level_object_keys(old_block)
+    new_keys = set(scene_data.keys())
+    lost = sorted(old_keys - new_keys)
+    if lost:
+        errors.append("この書き出しを反映すると既存フィールドが消えます: " + ", ".join(lost))
+
+    return errors, warnings
+
+
 def plan_town_editor_import(root, clipboard_text):
     if not project_looks_valid(root):
         raise ValueError("湯間庭町プロジェクトへ接続されていません。")
@@ -772,9 +1160,12 @@ def plan_town_editor_import(root, clipboard_text):
             "title": "駅前広場",
             "target_rel": target_rel,
             "current_hash": _sha256_text(current),
+            "new_hash": _sha256_text(text),
             "new_text": text,
             "changed": current.replace("\r\n", "\n") != text,
             "summary": "駅前広場の完全版を data/station-plaza.js へ反映",
+            "change_summary": "駅前広場は専用データファイル全体を置換します。Working Copyの差分を必ず確認してください。",
+            "warnings": ["駅前広場は全体置換です。"],
         }
 
     # その他の町マップは data/town-maps.js の1シーンだけを書き出す。
@@ -785,6 +1176,9 @@ def plan_town_editor_import(root, clipboard_text):
         if not os.path.isfile(target_abs):
             raise FileNotFoundError(target_rel + " がありません。")
         current = safe_read(target_abs)
+        errors, warnings = _validate_scene_export(root, current, scene_id, scene_data)
+        if errors:
+            raise ValueError("安全確認に失敗しました:\n・" + "\n・".join(errors))
         new_text = _replace_scene_in_town_maps(current, scene_id, scene_data)
         title = str(scene_data.get("title") or scene_id)
         return {
@@ -793,9 +1187,12 @@ def plan_town_editor_import(root, clipboard_text):
             "title": title,
             "target_rel": target_rel,
             "current_hash": _sha256_text(current),
+            "new_hash": _sha256_text(new_text),
             "new_text": new_text,
             "changed": current != new_text,
             "summary": title + " (" + scene_id + ") を data/town-maps.js 内で置換",
+            "change_summary": _scene_change_summary(current, scene_id, scene_data),
+            "warnings": warnings,
         }
 
     raise ValueError("対応する書き出し形式ではありません。駅前広場または町マップの[書き出す]コードをコピーしてください。")
@@ -828,6 +1225,7 @@ def backup_dir_for(root, label):
 
 
 def create_transaction(root, label, target_rel_paths):
+    require_safe_write_session()
     destination = backup_dir_for(root, label)
     os.makedirs(destination)
     files = []
@@ -864,6 +1262,7 @@ def finish_transaction(root, transaction):
         os.makedirs(state_dir)
     safe_json_dump(transaction, last_transaction_path(root))
     prune_backups(root)
+    mark_pending_push(transaction.get("label", "update"), transaction.get("files", []))
 
 
 def prune_backups(root):
@@ -917,6 +1316,7 @@ def undo_last_transaction(root):
     tx["undone_at"] = datetime.datetime.now().isoformat(timespec="seconds")
     safe_json_dump(tx, os.path.join(backup_abs, "manifest.json"))
     safe_json_dump(tx, last_transaction_path(root))
+    mark_pending_push("undo-" + str(tx.get("label") or "update"), tx.get("files", []))
 
 
 def validate_project(root):
@@ -1201,7 +1601,15 @@ def make_button(title, color_key="accent", action=None):
     # Pythonista 公式ドキュメントでも alert を使う action には
     # ui.in_background が推奨されている。
     if action is not None:
-        button.action = ui.in_background(action)
+        def guarded_action(sender):
+            if getattr(sender, "_yumaniwa_busy", False):
+                return
+            sender._yumaniwa_busy = True
+            try:
+                action(sender)
+            finally:
+                sender._yumaniwa_busy = False
+        button.action = ui.in_background(guarded_action)
     return button
 
 
@@ -1816,8 +2224,16 @@ class YumaniwaDesk(ui.View):
     def update_status(self):
         if project_looks_valid(self.project_root):
             name = os.path.basename(self.project_root.rstrip("/")) or "湯間庭町"
-            self.status_label.text = "接続中: " + name
-            self.status_label.text_color = COLORS["green"]
+            info = safe_session_info()
+            if info.get("pending_push"):
+                self.status_label.text = "未Push確認あり"
+                self.status_label.text_color = COLORS["accent"]
+            elif info.get("valid"):
+                self.status_label.text = "同期確認済み"
+                self.status_label.text_color = COLORS["green"]
+            else:
+                self.status_label.text = "安全ロック中"
+                self.status_label.text_color = COLORS["red"]
         else:
             self.status_label.text = "プロジェクト未選択"
             self.status_label.text_color = COLORS["red"]
@@ -1866,11 +2282,42 @@ class YumaniwaDesk(ui.View):
         self.show_tab(0)
         return False
 
+    def open_working_copy_status(self, sender):
+        try:
+            webbrowser.open("working-copy://open?repo={0}&mode=status".format(WORKING_COPY_REPO_NAME))
+        except Exception as exc:
+            alert("Working Copyを開けません", str(exc))
+
+    def confirm_working_copy_sync(self, sender):
+        message = (
+            "Working CopyでPullを行い、次の2点を確認しましたか?\n\n"
+            "・HEAD / main / origin/main が同じコミット\n"
+            "・コミット前の変更ファイルが残っていない\n\n"
+            "確認できている場合だけ同期済みにします。"
+        )
+        if not confirm("同期確認", message, "確認済み"):
+            return
+        confirm_safe_session()
+        hud("安全ロックを解除しました", "success")
+        self.show_tab(self.current_tab)
+
     # -----------------------------------------------------------------
     # 案内
     # -----------------------------------------------------------------
     def build_home(self, b):
         b.title("湯間庭町 管理室", "Working Copy の町を直接編集します。GitHubへの反映は Working Copy で差分確認してから行います。")
+        info = safe_session_info()
+        b.section("作業前の安全確認")
+        if info.get("valid"):
+            when = info.get("confirmed_at").strftime("%H:%M") if info.get("confirmed_at") else ""
+            b.label("同期確認済み ({0})。このセッションでは書き込みできます。".format(when), lines=0, color=COLORS["green"], size=14, gap=8)
+        else:
+            b.label("安全ロック中です。Pullと同期状態を確認するまでDeskはファイルを書き換えません。", lines=0, color=COLORS["red"], size=14, gap=8)
+        if info.get("pending_push"):
+            files = "、".join(info.get("last_change_files") or [])
+            b.label("前回の変更がWorking Copyに残っている可能性があります。Push済みか確認してください。\n対象: " + (files or "変更ファイル"), lines=0, color=COLORS["accent"], size=14, gap=8)
+        b.button("Working CopyのStatusを開く", "blue", self.open_working_copy_status)
+        b.button("Pull・同期状態を確認済み", "panel_alt", self.confirm_working_copy_sync)
         b.section("このアプリが扱うもの")
         b.label("・note記事の追加\n・作品台帳への登録\n・町の更新履歴の追加\n・開発モードで編集した町マップの取り込み\n・更新前バックアップと直前の取り消し", lines=0, color=COLORS["text"], size=15, gap=14)
         b.section("プロジェクト")
@@ -2385,6 +2832,12 @@ class YumaniwaDesk(ui.View):
     # -----------------------------------------------------------------
     def build_town(self, b):
         b.title("町の編集を取り込む", "Webの開発モードで調整した配置・当たり判定・看板の役割を、Working Copyの町へ安全に反映します。")
+        info = safe_session_info()
+        if not info.get("valid"):
+            b.section("安全ロック")
+            b.label("町へ反映する前に、Working CopyでPullと同期状態を確認してください。", lines=0, color=COLORS["red"], size=14, gap=8)
+            b.button("Working CopyのStatusを開く", "blue", self.open_working_copy_status)
+            b.button("Pull・同期状態を確認済み", "panel_alt", self.confirm_working_copy_sync)
         b.section("使い方")
         b.label("1. 作業前にWorking CopyでPull\n2. 湯間庭町を ?dev=1 で開く\n3. 開発モードで編集\n4. [書き出す]→コードをコピー\n5. この画面でクリップボードを確認\n6. 内容を確認して反映\n7. Working Copyで差分確認→Commit→Push", lines=0, color=COLORS["text"], size=14, gap=14)
         b.button("クリップボードの書き出しを確認", "blue", self.inspect_town_clipboard)
@@ -2397,6 +2850,11 @@ class YumaniwaDesk(ui.View):
 
         b.section("検出した書き出し")
         b.label("場所: {0}\nシーンID: {1}\n反映先: {2}".format(plan.get("title", ""), plan.get("scene_id", ""), plan.get("target_rel", "")), lines=0, color=COLORS["text"], size=15, gap=12)
+        if plan.get("change_summary"):
+            b.section("変更内容")
+            b.label(plan.get("change_summary"), lines=0, color=COLORS["text"], size=14, gap=10)
+        if plan.get("warnings"):
+            b.label("注意:\n・" + "\n・".join(plan.get("warnings")), lines=0, color=COLORS["accent"], size=14, gap=10)
         if plan.get("changed"):
             b.label("現在のファイルとの差分があります。反映するとWorking Copyでこのファイルが modified になります。", lines=0, color=COLORS["accent"], size=14, gap=12)
             b.button("この開発データを町へ反映する", "accent", self.apply_town_import)
@@ -2453,11 +2911,15 @@ class YumaniwaDesk(ui.View):
             # 書き込み後にも最低限の構文確認を行う。失敗時はバックアップから即復元。
             written = safe_read(target_abs)
             ok, syntax_message = basic_js_balance(written)
-            if not ok:
+            if not ok or _sha256_text(written) != plan.get("new_hash"):
                 backup_abs = backup_abs_from_transaction(self.project_root, tx)
                 backup_file = os.path.join(backup_abs, target_rel)
                 shutil.copyfile(backup_file, target_abs)
-                raise ValueError("反映後の構文確認に失敗したため元へ戻しました: " + syntax_message)
+                if not ok:
+                    reason = "構文確認に失敗: " + syntax_message
+                else:
+                    reason = "書き込んだ内容が予定内容と一致しません"
+                raise ValueError("反映後の安全確認に失敗したため元へ戻しました: " + reason)
             finish_transaction(self.project_root, tx)
         except Exception as exc:
             alert("町へ反映できませんでした", str(exc))
