@@ -1,0 +1,60 @@
+name: Migrate staging snapshot
+
+on:
+  push:
+    branches:
+      - staging-release-20260814
+    paths:
+      - .github/workflows/migrate-staging.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: staging-release-20260814
+          fetch-depth: 0
+
+      - name: Copy tested staging snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/SukimaStock/yumaniwa-town-staging.git /tmp/yumaniwa-staging
+          rsync -a --exclude '.git/' --exclude '.github/' /tmp/yumaniwa-staging/ ./
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          text = p.read_text(encoding='utf-8')
+          variants = [
+              '<meta content="noindex,nofollow" name="robots"/>\n',
+              '<meta name="robots" content="noindex,nofollow"/>\n',
+              '<meta content="noindex,nofollow" name="robots">\n',
+              '<meta name="robots" content="noindex,nofollow">\n',
+          ]
+          for item in variants:
+              text = text.replace(item, '')
+          p.write_text(text, encoding='utf-8')
+          PY
+
+          if grep -Eqi 'noindex|nofollow' index.html; then
+            echo 'Production index still contains noindex/nofollow; aborting.' >&2
+            exit 1
+          fi
+
+          git config user.name 'SukimaStock migration'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo 'No migration changes to commit.'
+            exit 0
+          fi
+
+          git commit -m 'Migrate tested staging snapshot'
+          git push origin HEAD:staging-release-20260814
