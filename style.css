@@ -1378,3 +1378,220 @@ body {
     }
 }
 
+/* ==========================================
+   湯間庭町 / 下中央の片手用コントローラー
+   ========================================== */
+
+/*
+ * 左右どちらの親指でも使えるよう、操作盤を画面下中央へ置く。
+ * 操作盤の外側16pxも入力保護領域とし、マップタップを通さない。
+ */
+#town-screen #mobile-controls {
+    left: 50%;
+    right: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: 140px;
+    height: 140px;
+    padding: 16px;
+    transform: translateX(-50%);
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+#action-btns,
+#btn-action {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+#dpad {
+    position: relative;
+    flex: 0 0 auto;
+    width: 108px;
+    height: 108px;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    opacity: 1;
+    isolation: isolate;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+/* 十字キーの周囲もタップ移動させない安全地帯にする。 */
+#dpad::before {
+    content: "";
+    position: absolute;
+    inset: -16px;
+    z-index: 0;
+    background: transparent;
+    pointer-events: auto;
+}
+
+#dpad:active {
+    opacity: 1;
+}
+
+/* 通常時は控えめ。押している方向だけを明るくする。 */
+#dpad .dpad-btn {
+    z-index: 2;
+    opacity: 0.52;
+    transition:
+        opacity 0.12s ease,
+        background-color 0.12s ease,
+        border-color 0.12s ease,
+        color 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+#dpad .dpad-btn:active,
+#dpad .dpad-btn.pressed {
+    opacity: 1;
+    background: rgba(242, 226, 192, 0.92);
+    border-color: rgba(255, 245, 218, 0.98);
+    color: #29231d;
+    box-shadow:
+        0 0 0 2px rgba(255, 238, 200, 0.14),
+        0 3px 8px rgba(0, 0, 0, 0.34);
+}
+
+/* 十字キー中央は、親指を休めるための空白として残す。
+ * ボタン間の空白を押しても、マップへのタップ移動は発生しない。 */
+
+/* 案内は操作盤のすぐ上。案内そのものも引き続きタップできる。 */
+#town-screen #interaction-hint {
+    bottom: 170px;
+    touch-action: manipulation;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    transition:
+        opacity 0.18s ease,
+        transform 0.14s ease,
+        background-color 0.14s ease,
+        border-color 0.14s ease;
+}
+
+#interaction-hint.visible {
+    pointer-events: auto;
+}
+
+#interaction-hint.hint-pressed {
+    transform: translateX(-50%) translateY(2px) scale(0.985);
+    background: rgba(23, 30, 40, 0.96);
+    border-color: rgba(255, 240, 205, 0.78);
+}
+
+#interaction-label,
+#interaction-action {
+    pointer-events: none;
+}
+
+@media (max-height: 720px) {
+    #town-screen #mobile-controls {
+        bottom: max(8px, env(safe-area-inset-bottom));
+        width: 132px;
+        height: 132px;
+        padding: 12px;
+    }
+
+    #dpad::before {
+        inset: -12px;
+    }
+
+    #town-screen #interaction-hint {
+        bottom: 154px;
+    }
+}
+
+/* ==========================================
+   湯間庭町 / 文字組み・改行ルール
+   ========================================== */
+
+/* エリア名は、画面右半分だけで縮まないように表示幅を明示する。 */
+#town-screen #area-title {
+    width: max-content;
+    max-width: calc(100% - 32px);
+}
+
+#area-title-main {
+    width: max-content;
+    max-width: min(86vw, 340px);
+    white-space: pre-line;
+    word-break: keep-all;
+    overflow-wrap: normal;
+    text-wrap: balance;
+    line-height: 1.24;
+}
+
+#area-title.multi-line #area-title-main {
+    font-size: 22px;
+    line-height: 1.28;
+}
+
+#area-title-sub {
+    max-width: min(86vw, 340px);
+    text-wrap: balance;
+    line-height: 1.35;
+}
+
+/* 操作案内はボタンとして一行を維持する。 */
+#town-screen #interaction-hint {
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100% - 28px);
+    flex-wrap: nowrap;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+#interaction-label {
+    min-width: 0;
+    flex: 0 1 auto;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+}
+
+#interaction-action {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    word-break: keep-all;
+}
+
+/* 長い施設名だけ、実測結果に応じて一段ずつ小さくする。 */
+#interaction-hint.hint-compact {
+    gap: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+#interaction-hint.hint-compact #interaction-label {
+    font-size: 13px;
+    letter-spacing: 0;
+}
+
+#interaction-hint.hint-compact #interaction-action {
+    font-size: 11px;
+    padding-left: 7px;
+    padding-right: 7px;
+}
+
+#interaction-hint.hint-tight {
+    gap: 6px;
+    padding-left: 9px;
+    padding-right: 9px;
+}
+
+#interaction-hint.hint-tight #interaction-label {
+    font-size: 12px;
+}
+
+#interaction-hint.hint-tight #interaction-action {
+    font-size: 10px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
