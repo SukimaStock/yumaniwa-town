@@ -296,11 +296,11 @@
             {
                 "id": "yakitori_yumado_shop",
                 "src": "assets/maps/props/tomogushi-alley/yakitori-yumado.png?rev=20260716-1",
-                "x": 11.708333333333334,
-                "y": 0,
-                "w": 8,
-                "h": 8,
-                "footY": 8,
+                "x": 12.858217304249944,
+                "y": 1.8127802690582993,
+                "w": 6.25,
+                "h": 6.25,
+                "footY": 8.0627802690583,
                 "enabled": true,
                 "collision": {
                     "enabled": true,
@@ -322,11 +322,11 @@
             {
                 "id": "common_temporary_storefront",
                 "src": "assets/maps/props/tomogushi-alley/common-temporary-storefront.png?v=20260813-1",
-                "x": 13,
-                "y": 14.7,
-                "w": 3,
-                "h": 4.2,
-                "footY": 18.9,
+                "x": 12.875,
+                "y": 13.75,
+                "w": 3.5625,
+                "h": 5,
+                "footY": 18.75,
                 "enabled": true,
                 "collision": {
                     "enabled": true,

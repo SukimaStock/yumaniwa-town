@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-Yumaniwa Desk v0.6
+Yumaniwa Desk v0.7.1
 Pythonista 用:湯間庭町の「中身」だけを安全に更新する小さな管理室。
 
 Working Copy 運用の想定配置:
@@ -13,8 +13,24 @@ Working Copy 運用の想定配置:
     works/_template/
 
 日々の追加と、別室での過去記録編集を安全に扱います。
-main.js / engine / station-plaza.js / 作品の sketch.js は扱いません。
+Webの開発モードで書き出した駅前広場 / 町マップの編集データも安全に取り込めます。
+main.js / engine / 作品の sketch.js は直接編集しません。
 設定・バックアップ・Undo情報はリポジトリ外の Pythonista Documents に保存します。
+
+v0.7.1:
+- 開発モード書き出しの判定を、日本語説明文の完全一致からコード構造ベースへ変更
+- iOSクリップボード経由で説明文の文字表現が変化しても取り込めるよう改善
+
+v0.7:
+- 「町」タブを追加し、開発モードの「書き出す」コードをクリップボードから取り込み
+- 駅前広場は data/station-plaza.js の完全版として安全に反映
+- 灯串横丁などの町マップは data/town-maps.js 内の該当シーン定義だけを置換
+- 取り込み前に対象・差分有無を確認し、反映前のファイルをリポジトリ外へ自動バックアップ
+- 取り込み後も[安全]から直前の更新をUndo可能
+- 反映前のプレビュー後に対象ファイルが変化していた場合は取り込みを中止
+
+v0.6.1:
+- Pythonista の Button action を ui.in_background で実行し、確認・保存ダイアログが反応しない問題を修正
 
 v0.6:
 - Working Copy の clone 内から起動すると、親フォルダをたどって湯間庭町を自動認識
@@ -70,6 +86,7 @@ try:
     import ui
     import dialogs
     import console
+    import clipboard
 except ImportError:
     raise RuntimeError("このアプリは Pythonista で実行してください。")
 
@@ -630,6 +647,161 @@ def basic_js_balance(text):
 
 
 # -----------------------------------------------------------------------------
+# Web開発モードの書き出しデータ取り込み
+# -----------------------------------------------------------------------------
+
+def _sha256_text(text):
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def _normalize_editor_export(text):
+    text = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    return text + ("\n" if text else "")
+
+
+def _extract_scene_export(text):
+    """
+    開発モードが生成する
+      scene_id: { ... },
+    形式から scene_id と JSON オブジェクトを取り出す。
+    JSON.stringify 由来なのでオブジェクト本体は json.loads で検証できる。
+    """
+    match = re.search(r"(?m)^\s*([A-Za-z0-9_]+)\s*:\s*(\{)", text)
+    if not match:
+        raise ValueError("町マップのシーン定義を見つけられません。")
+    scene_id = match.group(1)
+    open_index = match.start(2)
+    close_index = find_matching(text, open_index, "{", "}")
+    if close_index < 0:
+        raise ValueError("町マップのシーン定義の括弧が閉じていません。")
+    object_text = text[open_index:close_index + 1]
+    try:
+        data = json.loads(object_text)
+    except Exception as exc:
+        raise ValueError("町マップの書き出しJSONを読めません: " + str(exc))
+    if not isinstance(data, dict):
+        raise ValueError("町マップの書き出し内容がオブジェクトではありません。")
+    if str(data.get("id", "")) != scene_id:
+        raise ValueError("シーンIDと書き出しデータ内の id が一致しません。")
+    return scene_id, data
+
+
+def _replace_scene_in_town_maps(current_text, scene_id, scene_data):
+    root_match = re.search(r"window\.TOWN_SCENE_MAPS\s*=\s*\{", current_text)
+    if not root_match:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS を見つけられません。")
+    root_open = current_text.find("{", root_match.start())
+    root_close = find_matching(current_text, root_open, "{", "}")
+    if root_close < 0:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS が閉じていません。")
+
+    body_start = root_open + 1
+    body = current_text[body_start:root_close]
+    pattern = re.compile(r"(?m)^([ \t]*)" + re.escape(scene_id) + r"\s*:\s*(\{)")
+    matches = list(pattern.finditer(body))
+    if len(matches) != 1:
+        if not matches:
+            raise ValueError("data/town-maps.js にシーンがありません: " + scene_id)
+        raise ValueError("data/town-maps.js に同じシーンIDが複数あります: " + scene_id)
+
+    match = matches[0]
+    indent = match.group(1)
+    abs_property_start = body_start + match.start()
+    abs_open = body_start + match.start(2)
+    abs_close = find_matching(current_text, abs_open, "{", "}")
+    if abs_close < 0 or abs_close > root_close:
+        raise ValueError("置換対象シーンの括弧を正しく読めません。")
+
+    abs_end = abs_close + 1
+    while abs_end < root_close and current_text[abs_end] in " \t":
+        abs_end += 1
+    if abs_end < root_close and current_text[abs_end] == ",":
+        abs_end += 1
+
+    json_text = json.dumps(scene_data, ensure_ascii=False, indent=4)
+    json_lines = json_text.splitlines()
+    replacement = indent + scene_id + ": " + json_lines[0]
+    if len(json_lines) > 1:
+        replacement += "\n" + "\n".join(indent + line for line in json_lines[1:])
+    replacement += ","
+
+    result = current_text[:abs_property_start] + replacement + current_text[abs_end:]
+    ok, message = basic_js_balance(result)
+    if not ok:
+        raise ValueError("town-maps.js へ反映すると構文が崩れます: " + message)
+    return result
+
+
+def plan_town_editor_import(root, clipboard_text):
+    if not project_looks_valid(root):
+        raise ValueError("湯間庭町プロジェクトへ接続されていません。")
+    text = _normalize_editor_export(clipboard_text)
+    if not text:
+        raise ValueError("クリップボードが空です。開発モードの[書き出す]→[コピー]を先に行ってください。")
+    # 説明文の日本語そのものには依存しない。
+    # iOS のクリップボード経由では、見た目が同じ文字でも内部表現が変わる場合があるため、
+    # 実際のコード構造と反映先の記述で湯間庭町の書き出しかどうかを判定する。
+    looks_like_station_export = (
+        "data/station-plaza.js" in text
+        and "var stationPlazaProps" in text
+        and "var MAP_WIDTH" in text
+    )
+    looks_like_scene_export = (
+        "data/town-maps.js" in text
+        and re.search(r"(?m)^\s*[A-Za-z0-9_]+\s*:\s*\{", text) is not None
+    )
+    if not looks_like_station_export and not looks_like_scene_export:
+        raise ValueError(
+            "湯間庭町の開発モード書き出しとして認識できません。"
+            " [書き出す]→[コードをコピー]をもう一度行ってください。"
+        )
+
+    # 駅前広場は専用 data/station-plaza.js の完全版を書き出す。
+    if looks_like_station_export:
+        target_rel = "data/station-plaza.js"
+        target_abs = os.path.join(root, target_rel)
+        if not os.path.isfile(target_abs):
+            raise FileNotFoundError(target_rel + " がありません。")
+        ok, message = basic_js_balance(text)
+        if not ok:
+            raise ValueError("駅前広場の書き出しコードを反映できません: " + message)
+        current = safe_read(target_abs)
+        return {
+            "kind": "station-data",
+            "scene_id": "station_plaza",
+            "title": "駅前広場",
+            "target_rel": target_rel,
+            "current_hash": _sha256_text(current),
+            "new_text": text,
+            "changed": current.replace("\r\n", "\n") != text,
+            "summary": "駅前広場の完全版を data/station-plaza.js へ反映",
+        }
+
+    # その他の町マップは data/town-maps.js の1シーンだけを書き出す。
+    if looks_like_scene_export:
+        scene_id, scene_data = _extract_scene_export(text)
+        target_rel = "data/town-maps.js"
+        target_abs = os.path.join(root, target_rel)
+        if not os.path.isfile(target_abs):
+            raise FileNotFoundError(target_rel + " がありません。")
+        current = safe_read(target_abs)
+        new_text = _replace_scene_in_town_maps(current, scene_id, scene_data)
+        title = str(scene_data.get("title") or scene_id)
+        return {
+            "kind": "scene-definition",
+            "scene_id": scene_id,
+            "title": title,
+            "target_rel": target_rel,
+            "current_hash": _sha256_text(current),
+            "new_text": new_text,
+            "changed": current != new_text,
+            "summary": title + " (" + scene_id + ") を data/town-maps.js 内で置換",
+        }
+
+    raise ValueError("対応する書き出し形式ではありません。駅前広場または町マップの[書き出す]コードをコピーしてください。")
+
+
+# -----------------------------------------------------------------------------
 # 更新・バックアップ・検証
 # -----------------------------------------------------------------------------
 
@@ -1020,7 +1192,16 @@ def make_button(title, color_key="accent", action=None):
     button.tint_color = COLORS["bg"] if color_key == "accent" else COLORS["text"]
     button.background_color = COLORS.get(color_key, COLORS["accent"])
     button.corner_radius = 9
-    button.action = action
+    button.enabled = True
+    button.touch_enabled = True
+
+    # Pythonista の ui.Button action は UI スレッドで呼ばれる。
+    # dialogs.alert / console.alert のようなブロッキング UI を action から
+    # 直接呼ぶと反応しなくなるため、通常ボタンは interpreter thread へ移す。
+    # Pythonista 公式ドキュメントでも alert を使う action には
+    # ui.in_background が推奨されている。
+    if action is not None:
+        button.action = ui.in_background(action)
     return button
 
 
@@ -1578,7 +1759,7 @@ class PastRecordsEditor(ui.View):
 
 
 class YumaniwaDesk(ui.View):
-    TAB_TITLES = ["案内", "記事", "作品", "履歴", "安全"]
+    TAB_TITLES = ["案内", "記事", "作品", "履歴", "町", "安全"]
 
     def __init__(self):
         # Pythonistaの ui.View は必ず基底クラスを初期化します。
@@ -1594,6 +1775,7 @@ class YumaniwaDesk(ui.View):
         self.current_tab = 0
         self._last_layout_width = 0
         self._initial_page_built = False
+        self.pending_town_import = None
 
         self.header = ui.View()
         self.header.background_color = COLORS["panel"]
@@ -1668,6 +1850,8 @@ class YumaniwaDesk(ui.View):
             self.build_works(builder)
         elif index == 3:
             self.build_updates(builder)
+        elif index == 4:
+            self.build_town(builder)
         else:
             self.build_safety(builder)
 
@@ -1688,7 +1872,7 @@ class YumaniwaDesk(ui.View):
     def build_home(self, b):
         b.title("湯間庭町 管理室", "Working Copy の町を直接編集します。GitHubへの反映は Working Copy で差分確認してから行います。")
         b.section("このアプリが扱うもの")
-        b.label("・note記事の追加\n・作品台帳への登録\n・町の更新履歴の追加\n・更新前バックアップと直前の取り消し", lines=0, color=COLORS["text"], size=15, gap=14)
+        b.label("・note記事の追加\n・作品台帳への登録\n・町の更新履歴の追加\n・開発モードで編集した町マップの取り込み\n・更新前バックアップと直前の取り消し", lines=0, color=COLORS["text"], size=15, gap=14)
         b.section("プロジェクト")
         root_text = self.project_root or "まだ自動検出できていません"
         root_view = make_text_view(root_text)
@@ -1699,7 +1883,7 @@ class YumaniwaDesk(ui.View):
         b.section("Working Copy 運用")
         b.label("このスクリプトを Working Copy の yumaniwa-town 内(直下または tools/)に置いて起動します。保存すると Working Copy に変更として現れます。\n\n保存後は Working Copy で差分を確認 → Commit → Push。GPTがGitHub側を更新した後は、Deskを使う前に Working Copy で Pull します。", lines=0, color=COLORS["text"], size=15, gap=14)
         b.section("安全な使い方")
-        b.label("日々の更新は[記事][作品][履歴]だけを使います。保存のたびに対象ファイルをリポジトリ外へバックアップします。\n\nmain.js / engine / station-plaza.js / works/*/sketch.js は、この管理室では扱いません。設定・バックアップ・Undo情報も Git の変更には出ません。", lines=0, color=COLORS["muted"], size=15, gap=14)
+        b.label("作業前にWorking CopyでPullし、日々の台帳更新は[記事][作品][履歴]を使います。町の配置変更はWebの開発モード→[書き出す]→[町]から取り込みます。保存のたびに対象ファイルをリポジトリ外へバックアップします。\n\nmain.js / engine / works/*/sketch.js は直接編集しません。設定・バックアップ・Undo情報も Git の変更には出ません。", lines=0, color=COLORS["muted"], size=15, gap=14)
         b.section("過去の記録を直すとき")
         b.label("過去の記事・作品・更新履歴の編集は、追加画面とは別の編集室から行います。上書き保存の前には確認があり、削除機能はありません。", lines=0, color=COLORS["text"], size=15, gap=10)
         b.button("過去の記録を編集する(別室)", "panel_alt", self.open_past_records)
@@ -2197,6 +2381,93 @@ class YumaniwaDesk(ui.View):
         self.show_tab(3)
 
     # -----------------------------------------------------------------
+    # 町 / 開発モード取り込み
+    # -----------------------------------------------------------------
+    def build_town(self, b):
+        b.title("町の編集を取り込む", "Webの開発モードで調整した配置・当たり判定・看板の役割を、Working Copyの町へ安全に反映します。")
+        b.section("使い方")
+        b.label("1. 作業前にWorking CopyでPull\n2. 湯間庭町を ?dev=1 で開く\n3. 開発モードで編集\n4. [書き出す]→コードをコピー\n5. この画面でクリップボードを確認\n6. 内容を確認して反映\n7. Working Copyで差分確認→Commit→Push", lines=0, color=COLORS["text"], size=14, gap=14)
+        b.button("クリップボードの書き出しを確認", "blue", self.inspect_town_clipboard)
+
+        plan = self.pending_town_import
+        if not plan:
+            b.section("対応しているもの")
+            b.label("・駅前広場: data/station-plaza.js の完全版\n・灯串横丁 / 湯窓通り / 温泉方面 / レジャーセンター等: data/town-maps.js 内の該当シーンだけ\n\nWeb側からGitHubへ直接保存はしません。Deskがバックアップと検証をしてからWorking Copyへ反映します。", lines=0, color=COLORS["muted"], size=14, gap=14)
+            return
+
+        b.section("検出した書き出し")
+        b.label("場所: {0}\nシーンID: {1}\n反映先: {2}".format(plan.get("title", ""), plan.get("scene_id", ""), plan.get("target_rel", "")), lines=0, color=COLORS["text"], size=15, gap=12)
+        if plan.get("changed"):
+            b.label("現在のファイルとの差分があります。反映するとWorking Copyでこのファイルが modified になります。", lines=0, color=COLORS["accent"], size=14, gap=12)
+            b.button("この開発データを町へ反映する", "accent", self.apply_town_import)
+        else:
+            b.label("現在のWorking Copyと同じ内容です。反映する必要はありません。", lines=0, color=COLORS["green"], size=14, gap=12)
+        b.button("取り込み候補を破棄", "panel_alt", self.clear_town_import)
+
+    def inspect_town_clipboard(self, sender):
+        if not self.require_project():
+            return
+        try:
+            text = clipboard.get() or ""
+            self.pending_town_import = plan_town_editor_import(self.project_root, text)
+        except Exception as exc:
+            self.pending_town_import = None
+            alert("書き出しを読み取れません", str(exc))
+            return
+        self.show_tab(4)
+
+    def clear_town_import(self, sender):
+        self.pending_town_import = None
+        self.show_tab(4)
+
+    def apply_town_import(self, sender):
+        if not self.require_project():
+            return
+        plan = self.pending_town_import
+        if not plan:
+            alert("取り込み候補がありません", "先にクリップボードの書き出しを確認してください。")
+            return
+        target_rel = plan.get("target_rel", "")
+        target_abs = os.path.join(self.project_root, target_rel)
+        if not os.path.isfile(target_abs):
+            alert("反映できません", target_rel + " が見つかりません。")
+            return
+
+        current = safe_read(target_abs)
+        if _sha256_text(current) != plan.get("current_hash"):
+            self.pending_town_import = None
+            alert("ファイルが更新されています", "プレビュー後に対象ファイルが変わりました。Working Copyの状態を確認し、もう一度クリップボードから読み取ってください。")
+            self.show_tab(4)
+            return
+        if not plan.get("changed"):
+            alert("差分はありません", "現在のWorking Copyと同じ内容です。")
+            return
+
+        message = "{0}\n\n反映先: {1}\n\n変更前ファイルはリポジトリ外へバックアップします。反映後はWorking Copyで差分を確認してください。".format(plan.get("summary", "町の編集データを反映"), target_rel)
+        if not confirm("開発モードの編集を反映", message, "反映する"):
+            return
+
+        try:
+            tx = create_transaction(self.project_root, "import-town-" + str(plan.get("scene_id") or "scene"), [target_rel])
+            atomic_write(target_abs, plan.get("new_text", ""))
+            # 書き込み後にも最低限の構文確認を行う。失敗時はバックアップから即復元。
+            written = safe_read(target_abs)
+            ok, syntax_message = basic_js_balance(written)
+            if not ok:
+                backup_abs = backup_abs_from_transaction(self.project_root, tx)
+                backup_file = os.path.join(backup_abs, target_rel)
+                shutil.copyfile(backup_file, target_abs)
+                raise ValueError("反映後の構文確認に失敗したため元へ戻しました: " + syntax_message)
+            finish_transaction(self.project_root, tx)
+        except Exception as exc:
+            alert("町へ反映できませんでした", str(exc))
+            return
+
+        self.pending_town_import = None
+        hud("町の編集をWorking Copyへ反映しました", "success")
+        self.show_tab(4)
+
+    # -----------------------------------------------------------------
     # 安全確認
     # -----------------------------------------------------------------
     def build_safety(self, b):
@@ -2245,7 +2516,7 @@ class YumaniwaDesk(ui.View):
         b.label("保存ごとに、変更前のファイルを Git 管理外の Pythonista Documents/YumaniwaDesk-data/backups/ にコピーします。直前の1回はこの画面から取り消せます。古いバックアップは最大 {0} 件まで残します。\n\nWorking Copy には、実際に編集した町のファイルだけが変更として表示されます。".format(MAX_BACKUPS), lines=0, color=COLORS["muted"], size=14, gap=14)
 
     def refresh_safety(self, sender):
-        self.show_tab(4)
+        self.show_tab(5)
 
     def undo_last(self, sender):
         if not self.require_project():
@@ -2265,7 +2536,7 @@ class YumaniwaDesk(ui.View):
             alert("取り消せませんでした", str(exc))
             return
         hud("直前の更新を戻しました", "success")
-        self.show_tab(4)
+        self.show_tab(5)
 
 
 def main():
