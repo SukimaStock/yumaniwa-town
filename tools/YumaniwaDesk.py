@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-Yumaniwa Desk v0.8
+Yumaniwa Desk v0.8.2
 Pythonista 用:湯間庭町の「中身」だけを安全に更新する小さな管理室。
 
 Working Copy 運用の想定配置:
@@ -16,6 +16,15 @@ Working Copy 運用の想定配置:
 Webの開発モードで書き出した駅前広場 / 町マップの編集データも安全に取り込めます。
 main.js / engine / 作品の sketch.js は直接編集しません。
 設定・バックアップ・Undo情報はリポジトリ外の Pythonista Documents に保存します。
+
+v0.8.2:
+- 同期確認が終わるまで[記事][作品][履歴][町]の編集UIを表示しない安全ロックを追加
+- Deskを起動し直した場合は、前回の確認時刻に関係なくWorking Copyの同期確認を再必須化
+- 過去記録の編集室も同期確認前は開かないよう統一
+
+v0.8.1:
+- 白い入力欄に合わせ、入力済み文字を濃色へ調整
+- TextField のプレースホルダー色を明示指定し、薄すぎる表示を改善
 
 v0.8:
 - 書き込み前に「Working Copy同期確認済み」の作業セッションを必須化
@@ -125,6 +134,10 @@ SAFE_SESSION_MAX_MINUTES = 180
 OPERATION_STATE_KEY = "operation_state"
 WORKING_COPY_REPO_NAME = "yumaniwa-town"
 
+# 同期確認は「このDeskを起動している間」だけ有効にする。
+# settings.json には前回確認時刻を残すが、アプリを起動し直したら必ず再確認する。
+RUNTIME_SYNC_CONFIRMED = False
+
 COLORS = {
     "bg": "#11161B",
     "panel": "#192129",
@@ -138,6 +151,8 @@ COLORS = {
     "red": "#D97872",
     "blue": "#84AAC4",
     "input": "#0F151A",
+    "input_text": "#1B2329",
+    "placeholder": "#9AA8AE",
 }
 
 REQUIRED_DATA = {
@@ -355,7 +370,8 @@ def safe_session_info():
     if confirmed is not None:
         try:
             age_minutes = max(0.0, (datetime.datetime.now() - confirmed).total_seconds() / 60.0)
-            valid = age_minutes <= SAFE_SESSION_MAX_MINUTES
+            # 時刻だけではなく、このDesk起動中に確認したことも必須。
+            valid = bool(RUNTIME_SYNC_CONFIRMED) and age_minutes <= SAFE_SESSION_MAX_MINUTES
         except Exception:
             pass
     return {
@@ -369,12 +385,14 @@ def safe_session_info():
 
 
 def confirm_safe_session():
+    global RUNTIME_SYNC_CONFIRMED
     state = operation_state()
     now = datetime.datetime.now().isoformat(timespec="seconds")
     state["sync_confirmed_at"] = now
     state["pending_push"] = False
     state["last_sync_confirmed_at"] = now
     save_operation_state(state)
+    RUNTIME_SYNC_CONFIRMED = True
 
 
 def require_safe_write_session():
@@ -1613,18 +1631,47 @@ def make_button(title, color_key="accent", action=None):
     return button
 
 
+def _hex_to_rgba(hex_color):
+    value = hex_color.lstrip("#")
+    if len(value) != 6:
+        raise ValueError("expected #RRGGBB")
+    return tuple(int(value[i:i + 2], 16) / 255.0 for i in (0, 2, 4)) + (1.0,)
+
+
+def _set_text_field_placeholder_color(field, placeholder, color):
+    """Pythonista の ui.TextField では placeholder 色を直接指定できないため、
+    UIKit の attributedPlaceholder を使って読みやすい色を設定する。
+    ObjC ブリッジが使えない環境では標準表示へ安全にフォールバックする。
+    """
+    if not placeholder:
+        return
+    try:
+        from objc_util import ObjCClass, ObjCInstance
+        UIColor = ObjCClass("UIColor")
+        NSAttributedString = ObjCClass("NSAttributedString")
+        NSDictionary = ObjCClass("NSDictionary")
+        r, g, b, a = _hex_to_rgba(color)
+        ui_color = UIColor.colorWithRed_green_blue_alpha_(r, g, b, a)
+        attrs = NSDictionary.dictionaryWithObject_forKey_(ui_color, "NSColor")
+        attributed = NSAttributedString.alloc().initWithString_attributes_(placeholder, attrs)
+        ObjCInstance(field).setAttributedPlaceholder_(attributed)
+    except Exception:
+        pass
+
+
 def make_text_field(placeholder="", text="", secure=False):
     field = ui.TextField()
     field.placeholder = placeholder
     field.text = text
     field.font = ("<system>", 16)
-    field.text_color = COLORS["text"]
+    field.text_color = COLORS["input_text"]
     field.background_color = COLORS["input"]
     field.border_width = 1
     field.border_color = COLORS["line"]
     field.corner_radius = 8
     field.secure = secure
     field.clear_button_mode = "while_editing"
+    _set_text_field_placeholder_color(field, placeholder, COLORS["placeholder"])
     return field
 
 
@@ -1632,7 +1679,7 @@ def make_text_view(text=""):
     view = ui.TextView()
     view.text = text
     view.font = ("<system>", 16)
-    view.text_color = COLORS["text"]
+    view.text_color = COLORS["input_text"]
     view.background_color = COLORS["input"]
     view.border_width = 1
     view.border_color = COLORS["line"]
@@ -2152,6 +2199,9 @@ class PastRecordsEditor(ui.View):
         self.scroll.content_size = (self.width, max(total, self.scroll.height + 1))
 
     def open_record(self, sender):
+        if not self.desk.require_edit_session():
+            self.close()
+            return
         record = getattr(sender, "record", None)
         key = getattr(sender, "record_kind", "")
         if not record:
@@ -2168,6 +2218,7 @@ class PastRecordsEditor(ui.View):
 
 class YumaniwaDesk(ui.View):
     TAB_TITLES = ["案内", "記事", "作品", "履歴", "町", "安全"]
+    EDIT_TAB_INDEXES = (1, 2, 3, 4)
 
     def __init__(self):
         # Pythonistaの ui.View は必ず基底クラスを初期化します。
@@ -2258,7 +2309,9 @@ class YumaniwaDesk(ui.View):
         self.scroll.add_subview(page)
         builder = PageBuilder(page, width)
 
-        if index == 0:
+        if index in self.EDIT_TAB_INDEXES and not self.edit_session_ready():
+            self.build_edit_lock(builder, index)
+        elif index == 0:
             self.build_home(builder)
         elif index == 1:
             self.build_notes(builder)
@@ -2275,6 +2328,48 @@ class YumaniwaDesk(ui.View):
         self.scroll.content_size = (width, max(total_height, self.scroll.height + 1))
         self.update_status()
 
+    def edit_session_ready(self):
+        """編集UIを見せてよい状態か。プロジェクト接続と、この起動中の同期確認を両方要求する。"""
+        return project_looks_valid(self.project_root) and bool(safe_session_info().get("valid"))
+
+    def build_edit_lock(self, b, index):
+        tab_name = self.TAB_TITLES[index] if 0 <= index < len(self.TAB_TITLES) else "編集"
+        b.title("安全ロック中", "{0}の入力欄は、Working Copyの同期確認が終わるまで表示しません。".format(tab_name))
+
+        if not project_looks_valid(self.project_root):
+            b.section("先にプロジェクトを接続")
+            b.label("Working Copy の yumaniwa-town 内からこのDeskを起動し、[案内]で町を再検出してください。接続できるまで編集は開始できません。", lines=0, color=COLORS["red"], size=14, gap=12)
+            b.button("案内へ戻る", "panel_alt", lambda sender: self.show_tab(0))
+            return
+
+        info = safe_session_info()
+        b.section("作業前の確認")
+        b.label("""1. Working CopyでStatusを開く
+2. Pullを行う
+3. HEAD / main / origin/main が一致し、未コミット変更がないことを確認
+4. 下の『Pull・同期状態を確認済み』を押す""", lines=0, color=COLORS["text"], size=14, gap=12)
+        if info.get("pending_push"):
+            files = "、".join(info.get("last_change_files") or [])
+            b.label("""前回の変更がWorking Copyに残っている可能性があります。Push済みかも確認してください。
+対象: """ + (files or "変更ファイル"), lines=0, color=COLORS["accent"], size=14, gap=10)
+        b.button("Working CopyのStatusを開く", "blue", self.open_working_copy_status)
+        b.button("Pull・同期状態を確認済み", "panel_alt", self.confirm_working_copy_sync)
+        b.section("なぜ入力欄を隠すか")
+        b.label("同期前の古いWorking Copyに入力してしまい、あとから作業をやり直す事故を防ぐためです。同期確認が終わると、このタブをそのまま通常の編集画面へ切り替えます。", lines=0, color=COLORS["muted"], size=14, gap=14)
+
+    def require_edit_session(self):
+        """別室など、タブ外から編集画面を開く入口にも同じロックを適用する。"""
+        if not project_looks_valid(self.project_root):
+            self.require_project()
+            return False
+        if safe_session_info().get("valid"):
+            return True
+        alert(
+            "安全ロック中です",
+            "入力を始める前に[案内]でWorking CopyのStatusを確認し、Pull後に『Pull・同期状態を確認済み』を押してください。\n\n同期確認が終わるまで編集画面は開きません。"
+        )
+        return False
+
     def require_project(self):
         if project_looks_valid(self.project_root):
             return True
@@ -2289,6 +2384,10 @@ class YumaniwaDesk(ui.View):
             alert("Working Copyを開けません", str(exc))
 
     def confirm_working_copy_sync(self, sender):
+        if not project_looks_valid(self.project_root):
+            alert("プロジェクトが未選択です", "先に[案内]でWorking Copyの湯間庭町を再検出してください。")
+            self.show_tab(0)
+            return
         message = (
             "Working CopyでPullを行い、次の2点を確認しましたか?\n\n"
             "・HEAD / main / origin/main が同じコミット\n"
@@ -2312,7 +2411,7 @@ class YumaniwaDesk(ui.View):
             when = info.get("confirmed_at").strftime("%H:%M") if info.get("confirmed_at") else ""
             b.label("同期確認済み ({0})。このセッションでは書き込みできます。".format(when), lines=0, color=COLORS["green"], size=14, gap=8)
         else:
-            b.label("安全ロック中です。Pullと同期状態を確認するまでDeskはファイルを書き換えません。", lines=0, color=COLORS["red"], size=14, gap=8)
+            b.label("安全ロック中です。Pullと同期状態を確認するまで[記事][作品][履歴][町]の入力画面は開きません。", lines=0, color=COLORS["red"], size=14, gap=8)
         if info.get("pending_push"):
             files = "、".join(info.get("last_change_files") or [])
             b.label("前回の変更がWorking Copyに残っている可能性があります。Push済みか確認してください。\n対象: " + (files or "変更ファイル"), lines=0, color=COLORS["accent"], size=14, gap=8)
@@ -2597,7 +2696,7 @@ class YumaniwaDesk(ui.View):
         self.show_tab(2)
 
     def open_existing_work_editor(self, sender):
-        if not self.require_project():
+        if not self.require_edit_session():
             return
         work = getattr(sender, "work_record", None)
         if not work or not work.get("id"):
@@ -2678,7 +2777,7 @@ class YumaniwaDesk(ui.View):
         return True
 
     def open_past_records(self, sender=None):
-        if not self.require_project():
+        if not self.require_edit_session():
             return
         message = "ここでは過去の note記事・作品・更新履歴を編集できます。\n\n追加画面とは分け、保存のたびに対象ファイルをバックアップします。削除はできません。"
         if not confirm("過去の記録を編集", message, "編集室を開く"):
