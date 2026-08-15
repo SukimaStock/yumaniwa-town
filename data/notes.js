@@ -40,6 +40,14 @@ var SHINPO_RACK = {
 var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
     {
+        id: "note-20260814-4fd937ca",
+        title: "私が小説になった",
+        url: "https://note.com/hamamah/n/n92689b85a39f",
+        publishedAt: "2026-08-14",
+        featured: false
+    },
+
+    {
         id: "note-20260807-n845da26b1b0b",
         title: "正解のないゲームを探していた",
         url: "https://note.com/hamamah/n/n845da26b1b0b",
