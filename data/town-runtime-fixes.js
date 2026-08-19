@@ -144,6 +144,45 @@
     }
   }
 
+  // 駅前広場は staging で確定した見た目の位置・サイズだけを本番へ反映する。
+  // 元データ全体は上書きせず、差分がある3パーツだけを補正する。
+  function applyStationPropScale() {
+    var maps = window.TOWN_SCENE_MAPS;
+    var station = maps && maps.station_plaza;
+    if (!station || !Array.isArray(station.props)) return;
+
+    for (var i = 0; i < station.props.length; i++) {
+      var prop = station.props[i];
+      if (!prop) continue;
+
+      if (prop.id === 'station_tourist_map') {
+        prop.x = 11.875;
+        prop.y = 7.375;
+        prop.w = 3.75;
+        prop.h = 3.75;
+        prop.footY = 11.125;
+        continue;
+      }
+
+      if (prop.id === 'station_bench_left') {
+        prop.x = 7.3125;
+        prop.y = 5.9375;
+        prop.w = 3;
+        prop.h = 2.5;
+        prop.footY = 8.4375;
+        continue;
+      }
+
+      if (prop.id === 'station_bench_right') {
+        prop.x = 17.125;
+        prop.y = 7.9375;
+        prop.w = 3;
+        prop.h = 2.5;
+        prop.footY = 10.4375;
+      }
+    }
+  }
+
   // ゲーム案内所は、駅前広場の主人公を基準にした小型案内所サイズへ揃える。
   // trigger.area は既存の広い範囲をそのまま使う。
   function applyGuidePropScale() {
@@ -171,6 +210,7 @@
   }
 
   applyCommonSignAssets();
+  applyStationPropScale();
   applyGuidePropScale();
   applyCameraZoom();
   preserveExplicitTriggerAreas();
