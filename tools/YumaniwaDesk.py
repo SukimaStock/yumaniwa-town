@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-Yumaniwa Desk v0.8.2
+Yumaniwa Desk v0.9
 Pythonista 用:湯間庭町の「中身」だけを安全に更新する小さな管理室。
 
 Working Copy 運用の想定配置:
@@ -16,6 +16,13 @@ Working Copy 運用の想定配置:
 Webの開発モードで書き出した駅前広場 / 町マップの編集データも安全に取り込めます。
 main.js / engine / 作品の sketch.js は直接編集しません。
 設定・バックアップ・Undo情報はリポジトリ外の Pythonista Documents に保存します。
+
+v0.9:
+- Web開発モードの yumaniwa-editor-diff-v1 差分形式を正式対応
+- 1回の取り込みで複数の正本ファイルを安全にまとめて更新
+- props / triggers / collision / areaZones の差分だけを反映し、完全版置換を不要化
+- source ごとに反映先を検証し、複数ファイルを一括バックアップ・SHA-256再確認
+- 旧形式（駅前完全版 / 町マップ1シーン完全版）も互換維持
 
 v0.8.2:
 - 同期確認が終わるまで[記事][作品][履歴][町]の編集UIを表示しない安全ロックを追加
@@ -1138,15 +1145,457 @@ def _validate_scene_export(root, current_text, scene_id, scene_data):
     return errors, warnings
 
 
+
+EDITOR_DIFF_FORMAT = "yumaniwa-editor-diff-v1"
+EDITOR_DIFF_ALLOWED_SOURCES = {
+    "data/station-plaza.js",
+    "data/town-maps.js",
+    "data/town-runtime-fixes.js",
+    "town-update-sign.js",
+    "town-feedback-box.js",
+    "town-ghost-npc.js",
+}
+
+
+def _extract_editor_diff_manifest(text):
+    """コメント付きの開発モード出力から diff-v1 のJSON本体だけを安全に読む。"""
+    source = text or ""
+    marker = '"format"'
+    marker_pos = source.find(marker)
+    if marker_pos < 0 or EDITOR_DIFF_FORMAT not in source:
+        return None
+
+    # format より前にある { を後ろから試し、JSONとして成立する最小のルートを採用する。
+    starts = [i for i, ch in enumerate(source[:marker_pos + 1]) if ch == "{"]
+    for start in reversed(starts):
+        end = find_matching(source, start, "{", "}")
+        if end < marker_pos:
+            continue
+        try:
+            data = json.loads(source[start:end + 1])
+        except Exception:
+            continue
+        if isinstance(data, dict) and data.get("format") == EDITOR_DIFF_FORMAT:
+            return data
+
+    raise ValueError("差分JSONを読み取れません。開発モードで[変更を書き出す]→[変更差分をコピー]をもう一度行ってください。")
+
+
+def _js_render(value, prefix=""):
+    raw = json.dumps(value, ensure_ascii=False, indent=4)
+    if not prefix or "\n" not in raw:
+        return raw
+    return raw.replace("\n", "\n" + prefix)
+
+
+def _line_indent(text, index):
+    line_start = text.rfind("\n", 0, index) + 1
+    m = re.match(r"[ \t]*", text[line_start:index])
+    return m.group(0) if m else ""
+
+
+def _object_id_from_block(block):
+    for pattern in (
+        r'\bid\s*:\s*"([^"]+)"',
+        r"\bid\s*:\s*'([^']+)'",
+        r'"id"\s*:\s*"([^"]+)"',
+        r"'id'\s*:\s*'([^']+)'",
+    ):
+        m = re.search(pattern, block or "")
+        if m:
+            return m.group(1)
+    return ""
+
+
+def _find_var_array_span(text, var_name):
+    m = re.search(r"\bvar\s+" + re.escape(var_name) + r"\s*=\s*(\[)", text)
+    if not m:
+        raise ValueError("配列を見つけられません: " + var_name)
+    open_index = m.start(1)
+    close_index = find_matching(text, open_index, "[", "]")
+    if close_index < 0:
+        raise ValueError("配列の終端を読めません: " + var_name)
+    return open_index, close_index
+
+
+def _find_scene_span(text, scene_id):
+    root_match = re.search(r"window\.TOWN_SCENE_MAPS\s*=\s*\{", text)
+    if not root_match:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS を見つけられません。")
+    root_open = text.find("{", root_match.start())
+    root_close = find_matching(text, root_open, "{", "}")
+    if root_close < 0:
+        raise ValueError("data/town-maps.js の TOWN_SCENE_MAPS が閉じていません。")
+    body_start = root_open + 1
+    body = text[body_start:root_close]
+    pattern = re.compile(r"(?m)^([ \t]*)" + re.escape(scene_id) + r"\s*:\s*(\{)")
+    matches = list(pattern.finditer(body))
+    if len(matches) != 1:
+        raise ValueError("data/town-maps.js のシーンを一意に読めません: " + scene_id)
+    open_index = body_start + matches[0].start(2)
+    close_index = find_matching(text, open_index, "{", "}")
+    if close_index < 0:
+        raise ValueError("シーンの括弧を読めません: " + scene_id)
+    return open_index, close_index
+
+
+def _find_named_array_span(text, key, scope_start, scope_end):
+    scope = text[scope_start:scope_end + 1]
+    pattern = re.compile(r'(?m)(?:"' + re.escape(key) + r'"|\'' + re.escape(key) + r"\'|" + re.escape(key) + r")\s*:\s*(\[)")
+    m = pattern.search(scope)
+    if not m:
+        raise ValueError("シーン内の配列を見つけられません: " + key)
+    open_index = scope_start + m.start(1)
+    close_index = find_matching(text, open_index, "[", "]")
+    if close_index < 0 or close_index > scope_end:
+        raise ValueError("シーン内の配列を正しく読めません: " + key)
+    return open_index, close_index
+
+
+def _replace_object_in_array(text, open_index, close_index, object_id, after):
+    for start, end in extract_object_spans(text, open_index + 1, close_index):
+        if _object_id_from_block(text[start:end]) != object_id:
+            continue
+        prefix = _line_indent(text, start)
+        replacement = _js_render(after, prefix)
+        return text[:start] + replacement + text[end:]
+    raise ValueError("配列内に編集対象IDがありません: " + object_id)
+
+
+def _replace_var_array_object(text, var_name, object_id, after):
+    open_index, close_index = _find_var_array_span(text, var_name)
+    return _replace_object_in_array(text, open_index, close_index, object_id, after)
+
+
+def _replace_scene_array_object(text, scene_id, array_name, object_id, after):
+    scene_open, scene_close = _find_scene_span(text, scene_id)
+    arr_open, arr_close = _find_named_array_span(text, array_name, scene_open, scene_close)
+    return _replace_object_in_array(text, arr_open, arr_close, object_id, after)
+
+
+def _replace_var_array_value(text, var_name, value):
+    open_index, close_index = _find_var_array_span(text, var_name)
+    prefix = _line_indent(text, open_index)
+    replacement = _js_render(value, prefix)
+    return text[:open_index] + replacement + text[close_index + 1:]
+
+
+def _replace_scene_array_value(text, scene_id, key, value):
+    scene_open, scene_close = _find_scene_span(text, scene_id)
+    open_index, close_index = _find_named_array_span(text, key, scene_open, scene_close)
+    prefix = _line_indent(text, open_index)
+    replacement = _js_render(value, prefix)
+    return text[:open_index] + replacement + text[close_index + 1:]
+
+
+def _replace_var_object(text, var_name, value):
+    m = re.search(r"\bvar\s+" + re.escape(var_name) + r"\s*=\s*(\{)", text)
+    if not m:
+        raise ValueError("オブジェクトを見つけられません: " + var_name)
+    open_index = m.start(1)
+    close_index = find_matching(text, open_index, "{", "}")
+    if close_index < 0:
+        raise ValueError("オブジェクトの終端を読めません: " + var_name)
+    prefix = _line_indent(text, open_index)
+    replacement = _js_render(value, prefix)
+    return text[:open_index] + replacement + text[close_index + 1:]
+
+
+def _find_literal_id_object_span(text, object_id):
+    patterns = [
+        r"\bid\s*:\s*'" + re.escape(object_id) + r"'",
+        r'\bid\s*:\s*"' + re.escape(object_id) + r'"',
+        r'"id"\s*:\s*"' + re.escape(object_id) + r'"',
+    ]
+    match = None
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            break
+    if not match:
+        raise ValueError("IDを持つオブジェクトを見つけられません: " + object_id)
+
+    candidates = [i for i, ch in enumerate(text[:match.start() + 1]) if ch == "{"]
+    for start in reversed(candidates):
+        end = find_matching(text, start, "{", "}")
+        if end >= match.end():
+            return start, end + 1
+    raise ValueError("IDを持つオブジェクト範囲を読めません: " + object_id)
+
+
+def _replace_literal_id_object(text, object_id, value):
+    start, end = _find_literal_id_object_span(text, object_id)
+    prefix = _line_indent(text, start)
+    replacement = _js_render(value, prefix)
+    return text[:start] + replacement + text[end:]
+
+
+def _replace_simple_var_number(text, var_name, value):
+    number = repr(float(value)) if isinstance(value, float) and not float(value).is_integer() else str(value)
+    pattern = re.compile(r"(\bvar\s+" + re.escape(var_name) + r"\s*=\s*)([^;]+)(;)")
+    if not pattern.search(text):
+        raise ValueError("数値設定を見つけられません: " + var_name)
+    return pattern.sub(lambda m: m.group(1) + number + m.group(3), text, count=1)
+
+
+def _replace_prop_assignment_block(text, object_id, after):
+    # runtime-fixes.js の if (prop.id === '...') { ... } 内だけを更新する。
+    pattern = re.compile(r"if\s*\(\s*prop\.id\s*===\s*['\"]" + re.escape(object_id) + r"['\"]\s*\)\s*\{")
+    m = pattern.search(text)
+    if not m:
+        raise ValueError("runtime-fixes.js のパーツ設定を見つけられません: " + object_id)
+    open_index = text.find("{", m.start())
+    close_index = find_matching(text, open_index, "{", "}")
+    if close_index < 0:
+        raise ValueError("runtime-fixes.js のパーツ設定が閉じていません: " + object_id)
+    block = text[open_index:close_index + 1]
+    for key in ("x", "y", "w", "h", "footY"):
+        if key not in after:
+            continue
+        number = repr(after[key])
+        key_pattern = re.compile(r"(\bprop\." + re.escape(key) + r"\s*=\s*)([^;]+)(;)")
+        if not key_pattern.search(block):
+            raise ValueError("runtime-fixes.js に " + object_id + "." + key + " がありません。")
+        block = key_pattern.sub(lambda mm, n=number: mm.group(1) + n + mm.group(3), block, count=1)
+    return text[:open_index] + block + text[close_index + 1:]
+
+
+def _changed_top_keys(before, after):
+    before = before if isinstance(before, dict) else {}
+    after = after if isinstance(after, dict) else {}
+    keys = set(before.keys()) | set(after.keys())
+    return {key for key in keys if before.get(key) != after.get(key)}
+
+
+def _patch_ghost_prop(text, before, after):
+    allowed = {"x", "y", "w", "h", "footY"}
+    unsupported = _changed_top_keys(before, after) - allowed
+    if unsupported:
+        raise ValueError("おばけNPCで位置・大きさ以外の変更はDeskから安全に反映できません: " + ", ".join(sorted(unsupported)))
+    text = _replace_simple_var_number(text, "propW", after.get("w"))
+    text = _replace_simple_var_number(text, "propH", after.get("h"))
+    text = _replace_simple_var_number(text, "baseFootY", after.get("footY"))
+    text = _replace_simple_var_number(text, "baseX", after.get("x"))
+    text = _replace_simple_var_number(text, "baseY", after.get("y"))
+    return text
+
+
+def _validate_diff_part(root, change):
+    after = change.get("after")
+    if not isinstance(after, dict):
+        raise ValueError("props の after がオブジェクトではありません: " + str(change.get("id") or ""))
+    object_id = str(change.get("id") or "")
+    if not object_id or str(after.get("id") or "") != object_id:
+        raise ValueError("props のIDが一致しません: " + object_id)
+    for key in ("x", "y", "w", "h"):
+        try:
+            value = float(after.get(key))
+            if not math.isfinite(value) or abs(value) > 256:
+                raise ValueError()
+        except Exception:
+            raise ValueError(object_id + " の " + key + " が異常です。")
+    src = str(after.get("src") or "")
+    if src and not src.startswith(("http://", "https://")):
+        rel = src.split("?", 1)[0].split("#", 1)[0].lstrip("./")
+        if rel and not os.path.exists(os.path.join(root, rel)):
+            raise ValueError("画像ファイルが見つかりません: " + rel)
+
+
+def _normalize_diff_source(value):
+    rel = relative_safe_path(str(value or ""))
+    if not rel or rel not in EDITOR_DIFF_ALLOWED_SOURCES:
+        raise ValueError("差分の反映先が許可されていません: " + str(value or ""))
+    return rel
+
+
+def _patch_diff_file(source, current_text, scene_id, prop_changes, trigger_changes, collision_change, area_change):
+    result = current_text
+
+    for change in prop_changes:
+        object_id = str(change.get("id") or "")
+        after = change.get("after")
+        before = change.get("before")
+        if source == "data/station-plaza.js":
+            result = _replace_var_array_object(result, "stationPlazaProps", object_id, after)
+        elif source == "data/town-maps.js":
+            result = _replace_scene_array_object(result, scene_id, "props", object_id, after)
+        elif source in ("town-update-sign.js", "town-feedback-box.js"):
+            result = _replace_var_object(result, "prop", after)
+        elif source == "town-ghost-npc.js":
+            result = _patch_ghost_prop(result, before, after)
+        elif source == "data/town-runtime-fixes.js":
+            if object_id in ("yakitori_yumado_shop", "common_temporary_storefront"):
+                unsupported = _changed_top_keys(before, after) - {"x", "y", "w", "h", "footY"}
+                if unsupported:
+                    raise ValueError(object_id + " で位置・大きさ以外の変更は安全に反映できません: " + ", ".join(sorted(unsupported)))
+                result = _replace_prop_assignment_block(result, object_id, after)
+            elif object_id in ("no_entry_sign", "standing_signboard"):
+                result = _replace_literal_id_object(result, object_id, after)
+            else:
+                raise ValueError("runtime-fixes.js の未対応パーツです: " + object_id)
+        else:
+            raise ValueError("props の未対応反映先です: " + source)
+
+    for change in trigger_changes:
+        object_id = str(change.get("id") or "")
+        after = change.get("after")
+        if not isinstance(after, dict) or str(after.get("id") or "") != object_id:
+            raise ValueError("trigger のIDが一致しません: " + object_id)
+        if source == "data/station-plaza.js":
+            result = _replace_var_array_object(result, "triggers", object_id, after)
+        elif source == "data/town-maps.js":
+            result = _replace_scene_array_object(result, scene_id, "triggers", object_id, after)
+        elif source in ("town-update-sign.js", "town-feedback-box.js", "town-ghost-npc.js"):
+            result = _replace_var_object(result, "trigger", after)
+        else:
+            raise ValueError("triggers の未対応反映先です: " + source)
+
+    if collision_change:
+        after_collision = collision_change.get("after") or {}
+        if not isinstance(after_collision, dict):
+            raise ValueError("collision.after がオブジェクトではありません。")
+        if source == "data/station-plaza.js":
+            for key in ("passableRects", "blockedRects", "blockedPoints"):
+                if key in after_collision:
+                    result = _replace_var_array_value(result, key, after_collision.get(key) or [])
+        elif source == "data/town-maps.js":
+            for key in ("passableRects", "blockedRects", "blockedPoints"):
+                if key in after_collision:
+                    result = _replace_scene_array_value(result, scene_id, key, after_collision.get(key) or [])
+        else:
+            raise ValueError("collision の反映先が不正です: " + source)
+
+    if area_change:
+        after_zones = area_change.get("after")
+        if not isinstance(after_zones, list):
+            raise ValueError("areaZones.after が配列ではありません。")
+        if source == "data/station-plaza.js":
+            result = _replace_var_array_value(result, "areaZones", after_zones)
+        elif source == "data/town-maps.js":
+            result = _replace_scene_array_value(result, scene_id, "areaZones", after_zones)
+        else:
+            raise ValueError("areaZones の反映先が不正です: " + source)
+
+    ok, message = basic_js_balance(result)
+    if not ok:
+        raise ValueError(source + " へ差分を反映すると構文が崩れます: " + message)
+    return result
+
+
+def _plan_editor_diff_import(root, manifest):
+    scene_id = str(manifest.get("scene") or "")
+    title = str(manifest.get("title") or scene_id or "町")
+    if not scene_id:
+        raise ValueError("差分に scene がありません。")
+    changes = manifest.get("changes")
+    if not isinstance(changes, dict):
+        raise ValueError("差分の changes がありません。")
+
+    props = changes.get("props") or []
+    triggers = changes.get("triggers") or []
+    collision = changes.get("collision")
+    area_zones = changes.get("areaZones")
+    if not isinstance(props, list) or not isinstance(triggers, list):
+        raise ValueError("props / triggers の差分形式が不正です。")
+
+    grouped = {}
+    detail_lines = []
+
+    def bucket(source):
+        source = _normalize_diff_source(source)
+        return grouped.setdefault(source, {"props": [], "triggers": [], "collision": None, "areaZones": None})
+
+    for change in props:
+        if not isinstance(change, dict) or change.get("op") != "update":
+            raise ValueError("v0.9 は props の update 差分だけを安全に取り込めます。")
+        _validate_diff_part(root, change)
+        source = _normalize_diff_source(change.get("source"))
+        bucket(source)["props"].append(change)
+        detail_lines.append("・{0}: パーツ {1}".format(source, change.get("id")))
+
+    for change in triggers:
+        if not isinstance(change, dict) or change.get("op") != "update":
+            raise ValueError("v0.9 は triggers の update 差分だけを安全に取り込めます。")
+        source = _normalize_diff_source(change.get("source"))
+        bucket(source)["triggers"].append(change)
+        detail_lines.append("・{0}: トリガー {1}".format(source, change.get("id")))
+
+    if collision:
+        if not isinstance(collision, dict):
+            raise ValueError("collision 差分の形式が不正です。")
+        source = _normalize_diff_source(collision.get("source"))
+        bucket(source)["collision"] = collision
+        detail_lines.append("・{0}: 当たり判定".format(source))
+
+    if area_zones:
+        if not isinstance(area_zones, dict):
+            raise ValueError("areaZones 差分の形式が不正です。")
+        source = _normalize_diff_source(area_zones.get("source"))
+        bucket(source)["areaZones"] = area_zones
+        detail_lines.append("・{0}: エリア表示".format(source))
+
+    file_plans = []
+    for source, group in grouped.items():
+        target_abs = os.path.join(root, source)
+        if not os.path.isfile(target_abs):
+            raise FileNotFoundError(source + " がありません。")
+        current = safe_read(target_abs)
+        new_text = _patch_diff_file(
+            source,
+            current,
+            scene_id,
+            group["props"],
+            group["triggers"],
+            group["collision"],
+            group["areaZones"],
+        )
+        file_plans.append({
+            "target_rel": source,
+            "current_hash": _sha256_text(current),
+            "new_hash": _sha256_text(new_text),
+            "new_text": new_text,
+            "changed": current != new_text,
+        })
+
+    changed_files = [p for p in file_plans if p.get("changed")]
+    change_count = len(props) + len(triggers) + (1 if collision else 0) + (1 if area_zones else 0)
+    if change_count == 0:
+        change_summary = "この編集セッションには変更がありません。"
+    else:
+        change_summary = "{0}件の変更 / {1}ファイル\n{2}".format(
+            change_count,
+            len(changed_files),
+            "\n".join(detail_lines),
+        )
+
+    target_rels = [p["target_rel"] for p in changed_files]
+    return {
+        "kind": "editor-diff-v1",
+        "scene_id": scene_id,
+        "title": title,
+        "target_rel": "、".join(target_rels) if target_rels else "(変更なし)",
+        "target_rels": target_rels,
+        "file_plans": file_plans,
+        "changed": bool(changed_files),
+        "summary": title + " の変更差分を反映",
+        "change_summary": change_summary,
+        "warnings": [],
+    }
+
+
 def plan_town_editor_import(root, clipboard_text):
     if not project_looks_valid(root):
         raise ValueError("湯間庭町プロジェクトへ接続されていません。")
     text = _normalize_editor_export(clipboard_text)
     if not text:
-        raise ValueError("クリップボードが空です。開発モードの[書き出す]→[コピー]を先に行ってください。")
-    # 説明文の日本語そのものには依存しない。
-    # iOS のクリップボード経由では、見た目が同じ文字でも内部表現が変わる場合があるため、
-    # 実際のコード構造と反映先の記述で湯間庭町の書き出しかどうかを判定する。
+        raise ValueError("クリップボードが空です。開発モードの[変更を書き出す]→[変更差分をコピー]を先に行ってください。")
+
+    # v0.9: 新しい差分形式を最優先で読む。
+    manifest = _extract_editor_diff_manifest(text)
+    if manifest is not None:
+        return _plan_editor_diff_import(root, manifest)
+
+    # 旧形式も互換のため残す。
     looks_like_station_export = (
         "data/station-plaza.js" in text
         and "var stationPlazaProps" in text
@@ -1159,10 +1608,9 @@ def plan_town_editor_import(root, clipboard_text):
     if not looks_like_station_export and not looks_like_scene_export:
         raise ValueError(
             "湯間庭町の開発モード書き出しとして認識できません。"
-            " [書き出す]→[コードをコピー]をもう一度行ってください。"
+            " [変更を書き出す]→[変更差分をコピー]をもう一度行ってください。"
         )
 
-    # 駅前広場は専用 data/station-plaza.js の完全版を書き出す。
     if looks_like_station_export:
         target_rel = "data/station-plaza.js"
         target_abs = os.path.join(root, target_rel)
@@ -1177,16 +1625,16 @@ def plan_town_editor_import(root, clipboard_text):
             "scene_id": "station_plaza",
             "title": "駅前広場",
             "target_rel": target_rel,
+            "target_rels": [target_rel],
             "current_hash": _sha256_text(current),
             "new_hash": _sha256_text(text),
             "new_text": text,
             "changed": current.replace("\r\n", "\n") != text,
             "summary": "駅前広場の完全版を data/station-plaza.js へ反映",
-            "change_summary": "駅前広場は専用データファイル全体を置換します。Working Copyの差分を必ず確認してください。",
-            "warnings": ["駅前広場は全体置換です。"],
+            "change_summary": "旧形式です。駅前広場の専用データファイル全体を置換します。",
+            "warnings": ["旧形式の完全版取り込みです。可能なら新しい変更差分形式を使ってください。"],
         }
 
-    # その他の町マップは data/town-maps.js の1シーンだけを書き出す。
     if looks_like_scene_export:
         scene_id, scene_data = _extract_scene_export(text)
         target_rel = "data/town-maps.js"
@@ -1199,11 +1647,13 @@ def plan_town_editor_import(root, clipboard_text):
             raise ValueError("安全確認に失敗しました:\n・" + "\n・".join(errors))
         new_text = _replace_scene_in_town_maps(current, scene_id, scene_data)
         title = str(scene_data.get("title") or scene_id)
+        warnings = list(warnings) + ["旧形式のシーン完全版取り込みです。可能なら新しい変更差分形式を使ってください。"]
         return {
             "kind": "scene-definition",
             "scene_id": scene_id,
             "title": title,
             "target_rel": target_rel,
+            "target_rels": [target_rel],
             "current_hash": _sha256_text(current),
             "new_hash": _sha256_text(new_text),
             "new_text": new_text,
@@ -1213,8 +1663,7 @@ def plan_town_editor_import(root, clipboard_text):
             "warnings": warnings,
         }
 
-    raise ValueError("対応する書き出し形式ではありません。駅前広場または町マップの[書き出す]コードをコピーしてください。")
-
+    raise ValueError("対応する書き出し形式ではありません。")
 
 # -----------------------------------------------------------------------------
 # 更新・バックアップ・検証
@@ -2930,7 +3379,7 @@ class YumaniwaDesk(ui.View):
     # 町 / 開発モード取り込み
     # -----------------------------------------------------------------
     def build_town(self, b):
-        b.title("町の編集を取り込む", "Webの開発モードで調整した配置・当たり判定・看板の役割を、Working Copyの町へ安全に反映します。")
+        b.title("町の編集を取り込む", "Webの開発モードで触った差分だけを読み取り、必要な正本ファイルへ安全に反映します。")
         info = safe_session_info()
         if not info.get("valid"):
             b.section("安全ロック")
@@ -2955,7 +3404,7 @@ class YumaniwaDesk(ui.View):
         if plan.get("warnings"):
             b.label("注意:\n・" + "\n・".join(plan.get("warnings")), lines=0, color=COLORS["accent"], size=14, gap=10)
         if plan.get("changed"):
-            b.label("現在のファイルとの差分があります。反映するとWorking Copyでこのファイルが modified になります。", lines=0, color=COLORS["accent"], size=14, gap=12)
+            b.label("現在のWorking Copyとの差分があります。反映すると上記ファイルが modified になります。", lines=0, color=COLORS["accent"], size=14, gap=12)
             b.button("この開発データを町へ反映する", "accent", self.apply_town_import)
         else:
             b.label("現在のWorking Copyと同じ内容です。反映する必要はありません。", lines=0, color=COLORS["green"], size=14, gap=12)
@@ -2984,48 +3433,84 @@ class YumaniwaDesk(ui.View):
         if not plan:
             alert("取り込み候補がありません", "先にクリップボードの書き出しを確認してください。")
             return
-        target_rel = plan.get("target_rel", "")
-        target_abs = os.path.join(self.project_root, target_rel)
-        if not os.path.isfile(target_abs):
-            alert("反映できません", target_rel + " が見つかりません。")
-            return
-
-        current = safe_read(target_abs)
-        if _sha256_text(current) != plan.get("current_hash"):
-            self.pending_town_import = None
-            alert("ファイルが更新されています", "プレビュー後に対象ファイルが変わりました。Working Copyの状態を確認し、もう一度クリップボードから読み取ってください。")
-            self.show_tab(4)
-            return
         if not plan.get("changed"):
             alert("差分はありません", "現在のWorking Copyと同じ内容です。")
             return
 
-        message = "{0}\n\n反映先: {1}\n\n変更前ファイルはリポジトリ外へバックアップします。反映後はWorking Copyで差分を確認してください。".format(plan.get("summary", "町の編集データを反映"), target_rel)
+        # 新しい差分形式は複数ファイル、旧形式は1ファイル。ここで同じ形へ揃える。
+        file_plans = plan.get("file_plans")
+        if not isinstance(file_plans, list):
+            target_rel = plan.get("target_rel", "")
+            file_plans = [{
+                "target_rel": target_rel,
+                "current_hash": plan.get("current_hash"),
+                "new_hash": plan.get("new_hash"),
+                "new_text": plan.get("new_text", ""),
+                "changed": plan.get("changed"),
+            }]
+        file_plans = [item for item in file_plans if item.get("changed")]
+        target_rels = [item.get("target_rel", "") for item in file_plans if item.get("target_rel")]
+        if not target_rels:
+            alert("差分はありません", "反映が必要なファイルはありません。")
+            return
+
+        # プレビュー後に1つでもファイルが変わっていれば、全体を中止する。
+        for item in file_plans:
+            target_rel = item.get("target_rel", "")
+            target_abs = os.path.join(self.project_root, target_rel)
+            if not os.path.isfile(target_abs):
+                alert("反映できません", target_rel + " が見つかりません。")
+                return
+            current = safe_read(target_abs)
+            if _sha256_text(current) != item.get("current_hash"):
+                self.pending_town_import = None
+                alert("ファイルが更新されています", target_rel + " がプレビュー後に変わりました。Working Copyの状態を確認し、もう一度クリップボードから読み取ってください。")
+                self.show_tab(4)
+                return
+
+        message = "{0}\n\n反映先:\n{1}\n\n変更前ファイルはすべてリポジトリ外へまとめてバックアップします。反映後はWorking Copyで差分を確認してください。".format(
+            plan.get("summary", "町の編集データを反映"),
+            "\n".join("・" + rel for rel in target_rels),
+        )
         if not confirm("開発モードの編集を反映", message, "反映する"):
             return
 
         try:
-            tx = create_transaction(self.project_root, "import-town-" + str(plan.get("scene_id") or "scene"), [target_rel])
-            atomic_write(target_abs, plan.get("new_text", ""))
-            # 書き込み後にも最低限の構文確認を行う。失敗時はバックアップから即復元。
-            written = safe_read(target_abs)
-            ok, syntax_message = basic_js_balance(written)
-            if not ok or _sha256_text(written) != plan.get("new_hash"):
-                backup_abs = backup_abs_from_transaction(self.project_root, tx)
-                backup_file = os.path.join(backup_abs, target_rel)
-                shutil.copyfile(backup_file, target_abs)
+            tx = create_transaction(self.project_root, "import-town-" + str(plan.get("scene_id") or "scene"), target_rels)
+            for item in file_plans:
+                target_rel = item.get("target_rel", "")
+                target_abs = os.path.join(self.project_root, target_rel)
+                atomic_write(target_abs, item.get("new_text", ""))
+
+            # 全ファイルを再読込し、1つでも不一致なら全体をバックアップから戻す。
+            failure = None
+            for item in file_plans:
+                target_rel = item.get("target_rel", "")
+                target_abs = os.path.join(self.project_root, target_rel)
+                written = safe_read(target_abs)
+                ok, syntax_message = basic_js_balance(written)
                 if not ok:
-                    reason = "構文確認に失敗: " + syntax_message
-                else:
-                    reason = "書き込んだ内容が予定内容と一致しません"
-                raise ValueError("反映後の安全確認に失敗したため元へ戻しました: " + reason)
+                    failure = target_rel + " の構文確認に失敗: " + syntax_message
+                    break
+                if _sha256_text(written) != item.get("new_hash"):
+                    failure = target_rel + " に書き込んだ内容が予定内容と一致しません"
+                    break
+
+            if failure:
+                backup_abs = backup_abs_from_transaction(self.project_root, tx)
+                for rel in target_rels:
+                    backup_file = os.path.join(backup_abs, rel)
+                    target_abs = os.path.join(self.project_root, rel)
+                    shutil.copyfile(backup_file, target_abs)
+                raise ValueError("反映後の安全確認に失敗したため全ファイルを元へ戻しました: " + failure)
+
             finish_transaction(self.project_root, tx)
         except Exception as exc:
             alert("町へ反映できませんでした", str(exc))
             return
 
         self.pending_town_import = None
-        hud("町の編集をWorking Copyへ反映しました", "success")
+        hud("町の変更差分をWorking Copyへ反映しました", "success")
         self.show_tab(4)
 
     # -----------------------------------------------------------------
