@@ -257,15 +257,15 @@
         tapPadding: 1
     };
 
-    // 本番の看板位置・サイズはそのまま維持する。
+    // Stagingで確定した看板位置・サイズを反映する。
     var prop = {
         id: PROP_ID,
         src: 'assets/maps/props/common/standing-signboard.png?v=20260816-1',
-        x: 14.278788130432376,
-        y: 14.040514449427004,
-        w: 2.375,
-        h: 2.375,
-        footY: 16.415514449427004,
+        x: 14.375,
+        y: 13.9375,
+        w: 2.625,
+        h: 2.625,
+        footY: 16.5625,
         enabled: true,
         catalogKey: 'standingSignboard',
         collision: {
