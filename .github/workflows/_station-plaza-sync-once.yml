@@ -1,0 +1,82 @@
+name: One-time station plaza sync
+
+on:
+  push:
+    paths:
+      - '.github/workflows/_station-plaza-sync-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.head_commit.message == 'Prepare one-time station plaza sync'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Promote station plaza files from staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/SukimaStock/yumaniwa-town-staging/main'
+          files=(
+            'data/station-plaza.js'
+            'town-update-sign.js'
+            'town-feedback-box.js'
+            'assets/maps/props/station-plaza/station-bench.png'
+            'assets/maps/props/station-plaza/station-building.png'
+            'assets/maps/props/station-plaza/station-notice-board.png'
+            'assets/maps/props/station-plaza/station-planter.png'
+            'assets/maps/props/common/standing-signboard.png'
+            'assets/maps/props/common/town-feedback-postbox.png'
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "$(dirname "$file")"
+            curl --fail --location --retry 3 --retry-delay 1 "$base/$file" -o "$file"
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (r'\.\/data\/station-plaza\.js\?rev=[^"\']+', './data/station-plaza.js?rev=20260822-1'),
+              (r'\.\/town-update-sign\.js\?v=[^"\']+', './town-update-sign.js?v=20260822-1'),
+              (r'\.\/town-feedback-box\.js\?v=[^"\']+', './town-feedback-box.js?v=20260822-1'),
+          ]
+          for pattern, replacement in replacements:
+              text, count = re.subn(pattern, replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit(f'Could not update cache-bust entry: {pattern}')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit promoted station plaza
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            data/station-plaza.js \
+            town-update-sign.js \
+            town-feedback-box.js \
+            index.html \
+            assets/maps/props/station-plaza/station-bench.png \
+            assets/maps/props/station-plaza/station-building.png \
+            assets/maps/props/station-plaza/station-notice-board.png \
+            assets/maps/props/station-plaza/station-planter.png \
+            assets/maps/props/common/standing-signboard.png \
+            assets/maps/props/common/town-feedback-postbox.png
+          if git diff --cached --quiet; then
+            echo 'Nothing to promote.'
+            exit 0
+          fi
+          git commit -m 'Promote cleaned station plaza assets from staging'
+          git push origin HEAD:main
