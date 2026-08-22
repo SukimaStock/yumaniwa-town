@@ -1,0 +1,144 @@
+name: Promote Leisure Center Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/_promote-leisure-center-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Promote leisure center from staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.request import urlopen
+          import re
+
+          STAGING_RAW = 'https://raw.githubusercontent.com/SukimaStock/yumaniwa-town-staging/main/'
+
+          def fetch_text(path):
+              with urlopen(STAGING_RAW + path) as r:
+                  return r.read().decode('utf-8')
+
+          def fetch_bytes(path):
+              with urlopen(STAGING_RAW + path) as r:
+                  return r.read()
+
+          def find_matching_brace(text, open_index):
+              depth = 0
+              quote = None
+              escaped = False
+              for i in range(open_index, len(text)):
+                  ch = text[i]
+                  if quote:
+                      if escaped:
+                          escaped = False
+                      elif ch == '\\':
+                          escaped = True
+                      elif ch == quote:
+                          quote = None
+                      continue
+                  if ch in ('\"', "'", '`'):
+                      quote = ch
+                      continue
+                  if ch == '{':
+                      depth += 1
+                  elif ch == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return i
+              raise RuntimeError('matching brace not found')
+
+          def extract_object_block(text, marker):
+              start = text.index(marker)
+              open_index = text.index('{', start + len(marker))
+              close_index = find_matching_brace(text, open_index)
+              end = close_index + 1
+              while end < len(text) and text[end] in ' \t':
+                  end += 1
+              if end < len(text) and text[end] == ',':
+                  end += 1
+              return start, end, text[start:end]
+
+          def replace_object_block(dst_text, src_text, marker):
+              ds, de, _ = extract_object_block(dst_text, marker)
+              _, _, src_block = extract_object_block(src_text, marker)
+              return dst_text[:ds] + src_block + dst_text[de:]
+
+          def extract_function(text, signature):
+              start = text.index(signature)
+              open_index = text.index('{', start + len(signature))
+              close_index = find_matching_brace(text, open_index)
+              return start, close_index + 1, text[start:close_index + 1]
+
+          # 1) leisure_center_map only
+          town_maps_path = Path('data/town-maps.js')
+          prod_maps = town_maps_path.read_text(encoding='utf-8')
+          staging_maps = fetch_text('data/town-maps.js')
+          prod_maps = replace_object_block(prod_maps, staging_maps, '    leisure_center_map:')
+          town_maps_path.write_text(prod_maps, encoding='utf-8')
+
+          # 2) editor catalog function only; do not replace unrelated runtime fixes
+          runtime_path = Path('data/town-runtime-fixes.js')
+          prod_runtime = runtime_path.read_text(encoding='utf-8')
+          staging_runtime = fetch_text('data/town-runtime-fixes.js')
+          signature = '  function registerLeisureCenterEditorAssets()'
+          _, _, staging_fn = extract_function(staging_runtime, signature)
+
+          if signature in prod_runtime:
+              ps, pe, _ = extract_function(prod_runtime, signature)
+              prod_runtime = prod_runtime[:ps] + staging_fn + prod_runtime[pe:]
+          else:
+              insert_at = prod_runtime.index('  applyCommonSignAssets();')
+              prod_runtime = prod_runtime[:insert_at] + staging_fn + '\n\n' + prod_runtime[insert_at:]
+
+          if '  registerLeisureCenterEditorAssets();' not in prod_runtime:
+              call_at = prod_runtime.index('  applyCommonSignAssets();')
+              prod_runtime = prod_runtime[:call_at] + '  registerLeisureCenterEditorAssets();\n' + prod_runtime[call_at:]
+
+          runtime_path.write_text(prod_runtime, encoding='utf-8')
+
+          # 3) four new leisure-center assets
+          assets = [
+              'assets/maps/props/leisure-center/leisure-bulletin-board.png',
+              'assets/maps/props/leisure-center/leisure-direction-sign.png',
+              'assets/maps/props/leisure-center/leisure-guide-terminal.png',
+              'assets/maps/props/leisure-center/leisure-pamphlet-rack.png',
+          ]
+          for rel in assets:
+              path = Path(rel)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(fetch_bytes(rel))
+
+          # 4) cache bust only relevant scripts
+          index_path = Path('index.html')
+          index = index_path.read_text(encoding='utf-8')
+          index = re.sub(r'(data/town-maps\.js\?rev=)[^\"\']+', r'\g<1>20260822-2', index)
+          index = re.sub(r'(data/town-runtime-fixes\.js\?v=)[^\"\']+', r'\g<1>20260822-2', index)
+          index_path.write_text(index, encoding='utf-8')
+
+          # one-time workflow removes itself in the promotion commit
+          Path('.github/workflows/_promote-leisure-center-once.yml').unlink()
+          PY
+
+          node --check data/town-maps.js
+          node --check data/town-runtime-fixes.js
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Promote leisure center from staging'
+          git push
