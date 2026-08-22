@@ -12,85 +12,77 @@
     if (typeof DEV_MODE_ENABLED !== "undefined") {
         DEV_MODE_ENABLED = enabled;
     }
-})();
 
-// 開発モードのシーン書き出し安全策。
-// main.js が現在認識していない将来フィールドが TOWN_SCENE_MAPS に増えても、
-// 「書き出す」で消さずにそのまま保持する。
-(function () {
-    if (typeof DEV_MODE_ENABLED !== "undefined" && !DEV_MODE_ENABLED) return;
-    if (typeof buildTownSceneDefinitionExportCode !== "function") return;
-    if (buildTownSceneDefinitionExportCode.__yumaniwaPreservesUnknownFields) return;
+    if (!enabled || typeof window.getTriggerFormValues !== 'function') return;
 
-    var baseBuildTownSceneDefinitionExportCode = buildTownSceneDefinitionExportCode;
-
-    function clonePlainData(value) {
-        return JSON.parse(JSON.stringify(value || {}));
+    function sanitizeSceneId(value) {
+        var id = String(value || 'scene')
+            .replace(/_map$/i, '')
+            .replace(/[^A-Za-z0-9_]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        return id || 'scene';
     }
 
-    function findClosingObjectBrace(text, openIndex) {
-        if (!text || openIndex < 0 || text.charAt(openIndex) !== "{") return -1;
-        var depth = 0;
-        var quote = "";
-        var escaped = false;
+    function triggerIdExists(id) {
+        var needle = String(id || '');
+        if (!needle) return false;
 
-        for (var i = openIndex; i < text.length; i++) {
-            var ch = text.charAt(i);
-            if (quote) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch === "\\") {
-                    escaped = true;
-                } else if (ch === quote) {
-                    quote = "";
-                }
-                continue;
-            }
-            if (ch === '"' || ch === "'") {
-                quote = ch;
-                continue;
-            }
-            if (ch === "{") depth++;
-            if (ch === "}") {
-                depth--;
-                if (depth === 0) return i;
+        if (Array.isArray(window.triggers)) {
+            for (var i = 0; i < window.triggers.length; i++) {
+                var trigger = window.triggers[i];
+                if (trigger && String(trigger.id || '') === needle) return true;
             }
         }
-        return -1;
+
+        var templates = window.townPartTriggerTemplates;
+        return !!(
+            templates &&
+            Object.prototype.hasOwnProperty.call(templates, needle)
+        );
     }
 
-    var safeBuildTownSceneDefinitionExportCode = function () {
-        var code = baseBuildTownSceneDefinitionExportCode.apply(this, arguments);
-        try {
-            var sceneId = typeof currentScene !== "undefined" ? String(currentScene || "") : "";
-            var currentDefinition =
-                typeof activeTownSceneDef !== "undefined" && activeTownSceneDef
-                    ? activeTownSceneDef
-                    : null;
-            if (!sceneId || !currentDefinition || !code) return code;
+    function makeAutoTriggerId() {
+        var base = sanitizeSceneId(window.currentScene) + '_trigger';
+        var index = 1;
+        var candidate = base + '_' + index;
 
-            var marker = sceneId + ":";
-            var markerIndex = code.indexOf(marker);
-            if (markerIndex < 0) return code;
-
-            var openIndex = code.indexOf("{", markerIndex + marker.length);
-            var closeIndex = findClosingObjectBrace(code, openIndex);
-            if (openIndex < 0 || closeIndex < 0) return code;
-
-            var exportedDefinition = JSON.parse(code.slice(openIndex, closeIndex + 1));
-            var mergedDefinition = clonePlainData(currentDefinition);
-            Object.keys(exportedDefinition).forEach(function (key) {
-                mergedDefinition[key] = exportedDefinition[key];
-            });
-
-            var mergedJson = JSON.stringify(mergedDefinition, null, 4);
-            return code.slice(0, openIndex) + mergedJson + code.slice(closeIndex + 1);
-        } catch (error) {
-            console.error("[Yumaniwa editor] safe export merge failed", error);
-            return code;
+        while (triggerIdExists(candidate)) {
+            index += 1;
+            candidate = base + '_' + index;
         }
+        return candidate;
+    }
+
+    var baseGetTriggerFormValues = window.getTriggerFormValues;
+    window.getTriggerFormValues = function () {
+        var values = baseGetTriggerFormValues.apply(this, arguments) || {};
+        var id = String(values.id || '').trim();
+        var isCreating =
+            typeof window.editingTriggerIndex !== 'number' ||
+            window.editingTriggerIndex < 0;
+
+        if (
+            isCreating &&
+            (!id || id === 'new_trigger' || triggerIdExists(id))
+        ) {
+            id = makeAutoTriggerId();
+            values.id = id;
+
+            var idInput = document.getElementById('trigger-id');
+            if (idInput) idInput.value = id;
+        }
+
+        return values;
     };
 
-    safeBuildTownSceneDefinitionExportCode.__yumaniwaPreservesUnknownFields = true;
-    buildTownSceneDefinitionExportCode = safeBuildTownSceneDefinitionExportCode;
+    function prepareIdField() {
+        var input = document.getElementById('trigger-id');
+        if (!input) return;
+        if (input.value === 'new_trigger') input.value = '';
+        input.placeholder = '自動';
+        input.autocomplete = 'off';
+    }
+
+    prepareIdField();
+    window.addEventListener('load', prepareIdField);
 })();
