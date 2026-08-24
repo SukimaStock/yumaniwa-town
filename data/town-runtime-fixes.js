@@ -180,11 +180,11 @@
       if (!prop) continue;
 
       if (prop.id === 'yakitori_yumado_shop') {
-        prop.x = 13.731457260698665;
-        prop.y = 1.913957399103139;
-        prop.w = 6.25;
-        prop.h = 6.25;
-        prop.footY = 8.16395739910314;
+        prop.x = 14.421723043422098;
+        prop.y = 3.218423019431988;
+        prop.w = 5;
+        prop.h = 5;
+        prop.footY = 8.218423019431988;
         continue;
       }
 
