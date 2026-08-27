@@ -1,0 +1,17 @@
+{
+  "site_base": "https://sukimastock.github.io/yumaniwa-town",
+  "pages": [
+    {
+      "slug": "dotweather",
+      "page_title": "DotWeather｜湯間庭町",
+      "app_title": "DotWeather",
+      "description": "世界の空を、静かなドットで眺める天気アプリ。",
+      "theme_color": "#070a17",
+      "entry_url": "../works/dotweather/",
+      "og_image": "assets/ogp/dotweather.png?v=1",
+      "og_image_alt": "夜空と月を描いたDotWeatherの東京の天気画面",
+      "icon_180": "assets/icons/dotweather-180.png",
+      "icon_32": "assets/icons/dotweather-32.png"
+    }
+  ]
+}
