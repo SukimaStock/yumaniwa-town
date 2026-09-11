@@ -2,6 +2,8 @@
 // Bump CACHE_VERSION when shipping a new release that should replace cached files.
 const CACHE_VERSION = "steamclock-v6";
 
+// Keep installation light. Decorative images are cached by the fetch handler
+// when they are requested after the first screen has appeared.
 const PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -12,25 +14,13 @@ const PRECACHE_URLS = [
 
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/icon-512-maskable.png",
 
   "./assets/background.jpg",
   "./assets/dial.png",
-  "./assets/center_piece.png",
   "./assets/hour_hand.png",
   "./assets/minute_hand.png",
   "./assets/second_hand.png",
-  "./assets/nixie_tube.png",
-  "./assets/gear1.png",
-  "./assets/gear2.png",
-  "./assets/pendulum.png",
-  "./assets/barometer_dial.png",
-  "./assets/barometer_needle.png",
-  "./assets/pipe_elbow.png",
-  "./assets/pipe_straight.png",
-  "./assets/valve.png",
-  "./assets/gauge_dummy.png"
+  "./assets/nixie_tube.png"
 ];
 
 self.addEventListener("install", (event) => {
