@@ -15,7 +15,7 @@ const PRECACHE_URLS = [
   "./icons/icon-512.png",
   "./icons/icon-512-maskable.png",
 
-  "./assets/background.png",
+  "./assets/background.jpg",
   "./assets/dial.png",
   "./assets/center_piece.png",
   "./assets/hour_hand.png",
