@@ -96,8 +96,10 @@
       const CodeaImageClass = window.CodeaImage;
       if (typeof originalReadImage !== "function" || typeof CodeaImageClass !== "function") return;
 
+      // Truly transparent 1x1 GIF. The previous placeholder was opaque, so
+      // deferred sprites briefly appeared as gray rectangles on Safari.
       const transparentPixel =
-        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
       const deferredAssets = new Map([
         ["assets/center_piece.png", 0],
