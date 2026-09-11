@@ -10,6 +10,10 @@
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://sukimastock.github.io/yumaniwa-town/?work=steamclock">
 
+  <!-- Start the two largest above-the-fold images before the runtime scripts. -->
+  <link rel="preload" as="image" href="./assets/background.jpg" fetchpriority="high">
+  <link rel="preload" as="image" href="./assets/dial.png" fetchpriority="high">
+
   <!-- Privacy-friendly analytics by Plausible. -->
   <script>
     (() => {
@@ -81,6 +85,70 @@
 
   <script src="codea-lite.js"></script>
   <script src="sukimastock-engine.js"></script>
+
+  <!--
+    Keep the first load focused on the clock itself. Decorative machinery starts
+    only after the page load event, then fills in over a short interval.
+  -->
+  <script>
+    (() => {
+      const originalReadImage = window.readImage;
+      const CodeaImageClass = window.CodeaImage;
+      if (typeof originalReadImage !== "function" || typeof CodeaImageClass !== "function") return;
+
+      const transparentPixel =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+      const deferredAssets = new Map([
+        ["assets/center_piece.png", 0],
+        ["assets/gear1.png", 0],
+        ["assets/gear2.png", 0],
+        ["assets/pendulum.png", 0],
+        ["assets/barometer_dial.png", 150],
+        ["assets/barometer_needle.png", 150],
+        ["assets/pipe_elbow.png", 300],
+        ["assets/pipe_straight.png", 300],
+        ["assets/valve.png", 300],
+        ["assets/gauge_dummy.png", 300]
+      ]);
+
+      function afterPageLoad(callback, delay) {
+        const run = () => window.setTimeout(callback, delay);
+        if (document.readyState === "complete") {
+          run();
+        } else {
+          window.addEventListener("load", run, { once: true });
+        }
+      }
+
+      window.readImage = function steamClockReadImage(src) {
+        const key = String(src);
+
+        // Legacy asset: the current scene never draws it, so do not request it.
+        if (key === "assets/spring.png") {
+          return new CodeaImageClass(transparentPixel);
+        }
+
+        const delay = deferredAssets.get(key);
+        if (delay === undefined) return originalReadImage(src);
+
+        const image = new CodeaImageClass(transparentPixel);
+        if (image.element && "fetchPriority" in image.element) {
+          image.element.fetchPriority = "low";
+        }
+
+        afterPageLoad(() => {
+          image.src = key;
+          image.loaded = false;
+          image.error = null;
+          image.element.src = key;
+        }, delay);
+
+        return image;
+      };
+    })();
+  </script>
+
   <script src="sketch.js"></script>
 
   <script>
