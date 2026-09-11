@@ -822,7 +822,7 @@
       noStroke();
       initEffects(DESIGN_W, DESIGN_H);
       installDebugPanel();
-      images.background = readImage("assets/background.png");
+      images.background = readImage("assets/background.jpg");
       images.dial = readImage("assets/dial.png");
       images.centerPiece = readImage("assets/center_piece.png");
       images.hourHand = readImage("assets/hour_hand.png");
