@@ -179,8 +179,16 @@
           stack: '"Wire One", sans-serif'
         },
         raleway: {
-          label: "RALEWAY",
-          stack: '"Raleway", sans-serif'
+          label: "RAL STD",
+          stack: '"Raleway", sans-serif',
+          sizeScale: 1,
+          yOffset: 0
+        },
+        ralewayTuned: {
+          label: "RAL TUNED",
+          stack: '"Raleway", sans-serif',
+          sizeScale: 0.94,
+          yOffset: 5
         },
         josefin: {
           label: "JOSEFIN",
@@ -188,8 +196,11 @@
         }
       };
 
-      let selected = "current";
+      let selected = "raleway";
+      let nixieFontActive = false;
       const originalFont = window.font;
+      const originalFontSize = window.fontSize;
+      const originalText = window.text;
 
       const fontSheet = document.createElement("link");
       fontSheet.rel = "stylesheet";
@@ -201,10 +212,29 @@
         if (arguments.length === 0) return originalFont();
         const isNixieFontRequest =
           typeof fontName === "string" && fontName.includes("AvenirNext-UltraLight");
+        nixieFontActive = isNixieFontRequest;
         if (isNixieFontRequest && selected !== "current") {
           return originalFont(choices[selected].stack);
         }
         return originalFont(fontName);
+      };
+
+      window.fontSize = function steamClockDebugFontSize(size) {
+        const choice = choices[selected];
+        const scale =
+          nixieFontActive && choice && Number.isFinite(choice.sizeScale)
+            ? choice.sizeScale
+            : 1;
+        return originalFontSize(Number(size) * scale);
+      };
+
+      window.text = function steamClockDebugText(value, x, y) {
+        const choice = choices[selected];
+        const offset =
+          nixieFontActive && choice && Number.isFinite(choice.yOffset)
+            ? choice.yOffset
+            : 0;
+        return originalText(value, x, y + offset);
       };
 
       function setFont(key) {
@@ -232,19 +262,26 @@
             background: #f5c777;
             border-color: #f5c777;
           }
+          #steamclock-debug-panel .sc-debug-note {
+            margin-top: 6px;
+            color: rgba(241, 223, 189, 0.54);
+            font-size: 9px;
+          }
         `;
         document.head.appendChild(style);
 
         const section = document.createElement("div");
         section.dataset.role = "nixie-font-switcher";
         section.innerHTML = `
-          <div class="sc-debug-label">NIXIE FONT</div>
+          <div class="sc-debug-label">NIXIE FONT / POSITION</div>
           <div class="sc-debug-grid">
-            <button data-nixie-font="current" aria-pressed="true">CURRENT</button>
+            <button data-nixie-font="raleway" aria-pressed="true">RAL STD</button>
+            <button data-nixie-font="ralewayTuned" aria-pressed="false">RAL TUNED</button>
+            <button data-nixie-font="current" aria-pressed="false">CURRENT</button>
             <button data-nixie-font="wire" aria-pressed="false">WIRE ONE</button>
-            <button data-nixie-font="raleway" aria-pressed="false">RALEWAY</button>
             <button data-nixie-font="josefin" aria-pressed="false">JOSEFIN</button>
           </div>
+          <div class="sc-debug-note">TUNED = 6% smaller / 5px higher</div>
         `;
         body.appendChild(section);
 
