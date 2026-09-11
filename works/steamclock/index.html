@@ -170,71 +170,41 @@
       if (!enabled || typeof window.font !== "function") return;
 
       const choices = {
-        current: {
-          label: "CURRENT",
-          stack: '"AvenirNext-UltraLight", "Avenir Next", Avenir, system-ui, sans-serif'
-        },
-        wire: {
-          label: "WIRE ONE",
-          stack: '"Wire One", sans-serif'
-        },
         raleway: {
-          label: "RAL STD",
-          stack: '"Raleway", sans-serif',
-          sizeScale: 1,
-          yOffset: 0
+          label: "RALEWAY",
+          stack: '"Raleway", sans-serif'
         },
-        ralewayTuned: {
-          label: "RAL TUNED",
-          stack: '"Raleway", sans-serif',
-          sizeScale: 0.94,
-          yOffset: 5
+        roboto: {
+          label: "ROBOTO COND",
+          stack: '"Roboto Condensed", sans-serif'
         },
-        josefin: {
-          label: "JOSEFIN",
-          stack: '"Josefin Sans", sans-serif'
+        barlow: {
+          label: "BARLOW COND",
+          stack: '"Barlow Condensed", sans-serif'
+        },
+        ibm: {
+          label: "IBM PLEX COND",
+          stack: '"IBM Plex Sans Condensed", sans-serif'
         }
       };
 
       let selected = "raleway";
-      let nixieFontActive = false;
       const originalFont = window.font;
-      const originalFontSize = window.fontSize;
-      const originalText = window.text;
 
       const fontSheet = document.createElement("link");
       fontSheet.rel = "stylesheet";
       fontSheet.href =
-        "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100&family=Raleway:wght@100&family=Wire+One&display=swap";
+        "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@100&family=IBM+Plex+Sans+Condensed:wght@100&family=Raleway:wght@100&family=Roboto+Condensed:wght@100&display=swap";
       document.head.appendChild(fontSheet);
 
       window.font = function steamClockDebugFont(fontName) {
         if (arguments.length === 0) return originalFont();
         const isNixieFontRequest =
           typeof fontName === "string" && fontName.includes("AvenirNext-UltraLight");
-        nixieFontActive = isNixieFontRequest;
-        if (isNixieFontRequest && selected !== "current") {
+        if (isNixieFontRequest) {
           return originalFont(choices[selected].stack);
         }
         return originalFont(fontName);
-      };
-
-      window.fontSize = function steamClockDebugFontSize(size) {
-        const choice = choices[selected];
-        const scale =
-          nixieFontActive && choice && Number.isFinite(choice.sizeScale)
-            ? choice.sizeScale
-            : 1;
-        return originalFontSize(Number(size) * scale);
-      };
-
-      window.text = function steamClockDebugText(value, x, y) {
-        const choice = choices[selected];
-        const offset =
-          nixieFontActive && choice && Number.isFinite(choice.yOffset)
-            ? choice.yOffset
-            : 0;
-        return originalText(value, x, y + offset);
       };
 
       function setFont(key) {
@@ -273,15 +243,14 @@
         const section = document.createElement("div");
         section.dataset.role = "nixie-font-switcher";
         section.innerHTML = `
-          <div class="sc-debug-label">NIXIE FONT / POSITION</div>
+          <div class="sc-debug-label">NIXIE FONT</div>
           <div class="sc-debug-grid">
-            <button data-nixie-font="raleway" aria-pressed="true">RAL STD</button>
-            <button data-nixie-font="ralewayTuned" aria-pressed="false">RAL TUNED</button>
-            <button data-nixie-font="current" aria-pressed="false">CURRENT</button>
-            <button data-nixie-font="wire" aria-pressed="false">WIRE ONE</button>
-            <button data-nixie-font="josefin" aria-pressed="false">JOSEFIN</button>
+            <button data-nixie-font="raleway" aria-pressed="true">RALEWAY</button>
+            <button data-nixie-font="roboto" aria-pressed="false">ROBOTO COND</button>
+            <button data-nixie-font="barlow" aria-pressed="false">BARLOW COND</button>
+            <button data-nixie-font="ibm" aria-pressed="false">IBM PLEX COND</button>
           </div>
-          <div class="sc-debug-note">TUNED = 6% smaller / 5px higher</div>
+          <div class="sc-debug-note">All candidates use weight 100.</div>
         `;
         body.appendChild(section);
 
