@@ -87,9 +87,8 @@
   <script src="sukimastock-engine.js"></script>
 
   <!--
-    Give the clock face/background/hands/nixie tubes first access to bandwidth.
-    Decorative machinery is loaded shortly afterwards. The sketch already
-    tolerates images that are not ready yet, so the scene fills in naturally.
+    Keep the first load focused on the clock itself. Decorative machinery starts
+    only after the page load event, then fills in over a short interval.
   -->
   <script>
     (() => {
@@ -101,17 +100,26 @@
         "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
       const deferredAssets = new Map([
-        ["assets/center_piece.png", 300],
-        ["assets/gear1.png", 350],
-        ["assets/gear2.png", 350],
-        ["assets/pendulum.png", 350],
-        ["assets/barometer_dial.png", 650],
-        ["assets/barometer_needle.png", 650],
-        ["assets/pipe_elbow.png", 900],
-        ["assets/pipe_straight.png", 900],
-        ["assets/valve.png", 900],
-        ["assets/gauge_dummy.png", 900]
+        ["assets/center_piece.png", 0],
+        ["assets/gear1.png", 0],
+        ["assets/gear2.png", 0],
+        ["assets/pendulum.png", 0],
+        ["assets/barometer_dial.png", 150],
+        ["assets/barometer_needle.png", 150],
+        ["assets/pipe_elbow.png", 300],
+        ["assets/pipe_straight.png", 300],
+        ["assets/valve.png", 300],
+        ["assets/gauge_dummy.png", 300]
       ]);
+
+      function afterPageLoad(callback, delay) {
+        const run = () => window.setTimeout(callback, delay);
+        if (document.readyState === "complete") {
+          run();
+        } else {
+          window.addEventListener("load", run, { once: true });
+        }
+      }
 
       window.readImage = function steamClockReadImage(src) {
         const key = String(src);
@@ -129,7 +137,7 @@
           image.element.fetchPriority = "low";
         }
 
-        window.setTimeout(() => {
+        afterPageLoad(() => {
           image.src = key;
           image.loaded = false;
           image.error = null;
