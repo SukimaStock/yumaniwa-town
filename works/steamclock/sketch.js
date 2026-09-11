@@ -741,10 +741,10 @@
       blendMode(ADDITIVE);
       fontSize(fs * 0.85);
       fill(255, 120, 0, glowAlpha);
-      text(d, x, y * 0.955);
+      text(d, x, y * 0.955+4);
       fontSize(fs * 0.8);
       fill(255, 180, 100, coreAlpha);
-      text(d, x, y * 0.95);
+      text(d, x, y * 0.95+4);
       blendMode(NORMAL);
     }
   }
