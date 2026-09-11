@@ -10,6 +10,10 @@
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://sukimastock.github.io/yumaniwa-town/?work=steamclock">
 
+  <!-- Start the two largest above-the-fold images before the runtime scripts. -->
+  <link rel="preload" as="image" href="./assets/background.jpg" fetchpriority="high">
+  <link rel="preload" as="image" href="./assets/dial.png" fetchpriority="high">
+
   <!-- Privacy-friendly analytics by Plausible. -->
   <script>
     (() => {
@@ -81,6 +85,62 @@
 
   <script src="codea-lite.js"></script>
   <script src="sukimastock-engine.js"></script>
+
+  <!--
+    Give the clock face/background/hands/nixie tubes first access to bandwidth.
+    Decorative machinery is loaded shortly afterwards. The sketch already
+    tolerates images that are not ready yet, so the scene fills in naturally.
+  -->
+  <script>
+    (() => {
+      const originalReadImage = window.readImage;
+      const CodeaImageClass = window.CodeaImage;
+      if (typeof originalReadImage !== "function" || typeof CodeaImageClass !== "function") return;
+
+      const transparentPixel =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+      const deferredAssets = new Map([
+        ["assets/center_piece.png", 300],
+        ["assets/gear1.png", 350],
+        ["assets/gear2.png", 350],
+        ["assets/pendulum.png", 350],
+        ["assets/barometer_dial.png", 650],
+        ["assets/barometer_needle.png", 650],
+        ["assets/pipe_elbow.png", 900],
+        ["assets/pipe_straight.png", 900],
+        ["assets/valve.png", 900],
+        ["assets/gauge_dummy.png", 900]
+      ]);
+
+      window.readImage = function steamClockReadImage(src) {
+        const key = String(src);
+
+        // Legacy asset: the current scene never draws it, so do not request it.
+        if (key === "assets/spring.png") {
+          return new CodeaImageClass(transparentPixel);
+        }
+
+        const delay = deferredAssets.get(key);
+        if (delay === undefined) return originalReadImage(src);
+
+        const image = new CodeaImageClass(transparentPixel);
+        if (image.element && "fetchPriority" in image.element) {
+          image.element.fetchPriority = "low";
+        }
+
+        window.setTimeout(() => {
+          image.src = key;
+          image.loaded = false;
+          image.error = null;
+          image.element.src = key;
+        }, delay);
+
+        return image;
+      };
+    })();
+  </script>
+
   <script src="sketch.js"></script>
 
   <script>
