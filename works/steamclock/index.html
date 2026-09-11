@@ -151,10 +151,130 @@
     })();
   </script>
 
+  <!-- Debug-only nixie font comparison. Normal visitors load no Google Fonts. -->
+  <script>
+    (() => {
+      function hasDebug(targetWindow) {
+        try {
+          const value = new URLSearchParams(targetWindow.location.search).get("debug");
+          return value === "1" || value === "true";
+        } catch (_error) {
+          return false;
+        }
+      }
+
+      const enabled =
+        hasDebug(window) ||
+        (window.top && window.top !== window && hasDebug(window.top));
+
+      if (!enabled || typeof window.font !== "function") return;
+
+      const choices = {
+        current: {
+          label: "CURRENT",
+          stack: '"AvenirNext-UltraLight", "Avenir Next", Avenir, system-ui, sans-serif'
+        },
+        wire: {
+          label: "WIRE ONE",
+          stack: '"Wire One", sans-serif'
+        },
+        raleway: {
+          label: "RALEWAY",
+          stack: '"Raleway", sans-serif'
+        },
+        josefin: {
+          label: "JOSEFIN",
+          stack: '"Josefin Sans", sans-serif'
+        }
+      };
+
+      let selected = "current";
+      const originalFont = window.font;
+
+      const fontSheet = document.createElement("link");
+      fontSheet.rel = "stylesheet";
+      fontSheet.href =
+        "https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100&family=Raleway:wght@100&family=Wire+One&display=swap";
+      document.head.appendChild(fontSheet);
+
+      window.font = function steamClockDebugFont(fontName) {
+        if (arguments.length === 0) return originalFont();
+        const isNixieFontRequest =
+          typeof fontName === "string" && fontName.includes("AvenirNext-UltraLight");
+        if (isNixieFontRequest && selected !== "current") {
+          return originalFont(choices[selected].stack);
+        }
+        return originalFont(fontName);
+      };
+
+      function setFont(key) {
+        if (!choices[key]) return selected;
+        selected = key;
+        const buttons = document.querySelectorAll("[data-nixie-font]");
+        for (const button of buttons) {
+          const active = button.dataset.nixieFont === selected;
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        }
+        return selected;
+      }
+
+      function mount() {
+        const body = document.querySelector("#steamclock-debug-panel .sc-debug-body");
+        if (!body || body.querySelector("[data-role='nixie-font-switcher']")) return false;
+
+        const style = document.createElement("style");
+        style.textContent = `
+          #steamclock-debug-panel [data-role="nixie-font-switcher"] {
+            margin-top: 9px;
+          }
+          #steamclock-debug-panel [data-nixie-font][aria-pressed="true"] {
+            color: #17100d;
+            background: #f5c777;
+            border-color: #f5c777;
+          }
+        `;
+        document.head.appendChild(style);
+
+        const section = document.createElement("div");
+        section.dataset.role = "nixie-font-switcher";
+        section.innerHTML = `
+          <div class="sc-debug-label">NIXIE FONT</div>
+          <div class="sc-debug-grid">
+            <button data-nixie-font="current" aria-pressed="true">CURRENT</button>
+            <button data-nixie-font="wire" aria-pressed="false">WIRE ONE</button>
+            <button data-nixie-font="raleway" aria-pressed="false">RALEWAY</button>
+            <button data-nixie-font="josefin" aria-pressed="false">JOSEFIN</button>
+          </div>
+        `;
+        body.appendChild(section);
+
+        for (const button of section.querySelectorAll("[data-nixie-font]")) {
+          button.addEventListener("click", () => setFont(button.dataset.nixieFont));
+        }
+
+        if (window.SteamClockDebug) {
+          const previousGetState = window.SteamClockDebug.getState;
+          window.SteamClockDebug.setNixieFont = setFont;
+          window.SteamClockDebug.getNixieFont = () => selected;
+          window.SteamClockDebug.getState = () => ({
+            ...(typeof previousGetState === "function" ? previousGetState() : {}),
+            nixieFont: selected
+          });
+        }
+
+        setFont(selected);
+        return true;
+      }
+
+      window.SteamClockFontDebug = { mount, setFont, getFont: () => selected };
+    })();
+  </script>
+
   <script src="sketch.js"></script>
 
   <script>
     CodeaLite.start("gameCanvas");
+    if (window.SteamClockFontDebug) window.SteamClockFontDebug.mount();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
