@@ -6,6 +6,12 @@
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
     {
+        date: "2026-09-14",
+        title: "灯串横丁に『路地裏マサラ』が開店",
+        body: "夜の路地を走って、冷める前にカレーを届ける店が開きました。",
+        tags: ["tomogushi-alley", "game", "open"]
+    },
+    {
         date: "2026-09-12",
         title: "レジャーセンターに『SteamClock』を設置",
         body: "歯車と蒸気が静かに動き続ける、スチームパンクの時計です。",
