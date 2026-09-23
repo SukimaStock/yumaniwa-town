@@ -15,6 +15,10 @@
 
     if (!/^[a-z0-9-]+$/.test(workId)) return;
 
+    var iconlessWorkIds = {
+        "diorama-calendar": true
+    };
+
     function addLink(rel, href) {
         var link = document.createElement("link");
         link.rel = rel;
@@ -22,10 +26,12 @@
         document.head.appendChild(link);
     }
 
-    addLink(
-        "apple-touch-icon",
-        "./assets/works/" + workId + "/icon.png"
-    );
+    if (!iconlessWorkIds[workId]) {
+        addLink(
+            "apple-touch-icon",
+            "./assets/works/" + workId + "/icon.png"
+        );
+    }
 
     addLink(
         "manifest",
