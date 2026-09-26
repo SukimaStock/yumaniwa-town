@@ -1,6 +1,6 @@
 # coding: utf-8
 """
-Yumaniwa Desk v0.10.3
+Yumaniwa Desk v0.10.9
 Pythonista 用:湯間庭町の「中身」だけを安全に更新する小さな管理室。
 
 Working Copy 運用の想定配置:
@@ -16,6 +16,39 @@ Working Copy 運用の想定配置:
 Webの開発モードで書き出した駅前広場 / 町マップの編集データも安全に取り込めます。
 main.js / engine / 作品の sketch.js は直接編集しません。
 設定・バックアップ・Undo情報はリポジトリ外の Pythonista Documents に保存します。
+
+v0.10.9:
+- おばけNPC専用sourceも var prop / var trigger を安全に読み取り、通常差分と同じbefore照合を実施
+- おばけNPC propは位置・サイズ・footY・collisionだけ更新可、triggerはareaだけ更新可に契約を明確化
+- 古い/改変済みbeforeを持つおばけNPC差分はfail-closedで拒否
+
+v0.10.8:
+- collision.before照合を矩形配列の完全一致からセル意味一致へ変更
+- passableRects / blockedRects / blockedPoints をruntimeと同じ優先順でセル展開し、矩形分割や配列順だけの差は許容
+- 通行可能/不可の意味が1セルでも違う場合は従来どおり拒否
+
+v0.10.7:
+- propsのbefore照合をEditorと同じ永続化形へ正規化し、runtime補完値だけで競合しないよう修正
+- prop.triggerArea はruntime/editor bridgeとして照合・保存対象から除外
+- 灯串横丁WORLD OBJECT shopへ実行時補完されていた catalogKey=worldObjectShop も保存対象から除外
+- src / objectId / collision / interaction / 座標等のbefore照合は従来どおり厳密に維持
+
+v0.10.6:
+- Town Editorの複数ファイル反映で、書込途中・再読込・検証・transaction完了のどこで例外が起きても全対象をバックアップからrollback
+- rollback失敗時は対象ファイル名を含めて明示し、部分反映を黙って残さない
+- 反映後検証失敗も同じrollback経路へ統合
+
+v0.10.5:
+- 駅前の更新履歴看板 / おたより箱の配置・trigger差分を data/station-plaza.js に一本化
+- town-update-sign.js / town-feedback-box.js をTown Editor差分の反映先から除外
+- おばけNPCだけは専用 town-ghost-npc.js を正本として維持
+- 古い専用JS向け差分はfail-closedで拒否
+
+v0.10.4:
+- Town Editor差分の正本を現在の構造へ合わせ、data/town-runtime-fixes.js を反映先から除外
+- 町パーツの配置正本は station_plaza → data/station-plaza.js、それ以外 → data/town-maps.js に統一
+- 旧 no_entry_sign / standing_signboard / yakitori_yumado_shop / common_temporary_storefront のruntime直接書換え互換を撤去
+- 古い差分が runtime-fixes.js をsourceに指定した場合はfail-closedで拒否
 
 v0.10.3:
 - Files / Pythonista 経由で __file__ から Working Copy を辿れない場合、保存済みの旧 project_root を「探索ヒント」としてのみ利用
@@ -1323,12 +1356,14 @@ def _validate_scene_export(root, current_text, scene_id, scene_data):
 
 
 EDITOR_DIFF_FORMAT = "yumaniwa-editor-diff-v1"
+
+# Town placement canonical sources:
+# - station_plaza -> data/station-plaza.js
+# - other town scenes -> data/town-maps.js
+# Runtime compatibility code is intentionally not a diff destination.
 EDITOR_DIFF_ALLOWED_SOURCES = {
     "data/station-plaza.js",
     "data/town-maps.js",
-    "data/town-runtime-fixes.js",
-    "town-update-sign.js",
-    "town-feedback-box.js",
     "town-ghost-npc.js",
 }
 
@@ -1841,6 +1876,42 @@ def _read_array_object_value(text, open_index, close_index, object_id):
     return _parse_safe_js_literal(text[start:end])
 
 
+def _read_var_object_value(text, var_name):
+    m = re.search(r"\bvar\s+" + re.escape(var_name) + r"\s*=\s*(\{)", text)
+    if not m:
+        raise ValueError("正本にオブジェクトがありません: " + var_name)
+    open_index = m.start(1)
+    close_index = find_matching(text, open_index, "{", "}")
+    if close_index < 0:
+        raise ValueError("正本のオブジェクト終端を読めません: " + var_name)
+    return _parse_safe_js_literal(text[open_index:close_index + 1])
+
+
+def _normalize_diff_prop_for_persistence(value):
+    """Editor runtimeでだけ補完されるprop項目を正本照合・保存から除外する。"""
+    if not isinstance(value, dict):
+        return value
+
+    result = dict(value)
+
+    # triggerArea is mirrored from linked trigger.area for editor/runtime use.
+    # The trigger object remains the persisted owner.
+    result.pop("triggerArea", None)
+
+    object_id = str(result.get("objectId") or "").lower()
+    object_name = str(result.get("id") or "").lower()
+    if (
+        result.get("catalogKey") == "worldObjectShop"
+        and (
+            "_shop_" in object_id
+            or object_name.endswith("_shop")
+        )
+    ):
+        result.pop("catalogKey", None)
+
+    return result
+
+
 def _read_current_diff_object(source, text, scene_id, kind, object_id):
     if kind not in ("props", "triggers"):
         raise ValueError("正本照合の種類が不正です: " + kind)
@@ -1855,8 +1926,18 @@ def _read_current_diff_object(source, text, scene_id, kind, object_id):
         arr_open, arr_close = _find_named_array_span(text, kind, scene_open, scene_close)
         return _read_array_object_value(text, arr_open, arr_close, object_id)
 
-    # 専用スクリプトや runtime-fixes は式を含むものがあるため、
-    # 既存の専用パッチ検証 + ファイルSHA検証に任せる。
+    if source == "town-ghost-npc.js":
+        var_name = "prop" if kind == "props" else "trigger"
+        current = _read_var_object_value(text, var_name)
+        if str(current.get("id") or "") != object_id:
+            raise ValueError(
+                "おばけNPC正本のIDが差分と一致しません: "
+                + kind + " " + object_id
+            )
+        return current
+
+    # その他の専用スクリプトは対応する安全なreaderを持たない限り
+    # before照合を省略しない設計にする。
     return None
 
 
@@ -1869,6 +1950,11 @@ def _assert_diff_before_matches(source, text, scene_id, kind, change):
     current = _read_current_diff_object(source, text, scene_id, kind, object_id)
     if current is None:
         return
+
+    if kind == "props":
+        current = _normalize_diff_prop_for_persistence(current)
+        before = _normalize_diff_prop_for_persistence(before)
+
     if current != before:
         raise ValueError(
             "正本が開発モード開始時の内容と一致しません: {0} {1}。"
@@ -1889,6 +1975,55 @@ def _read_current_array_value(source, text, scene_id, key):
     return _parse_safe_js_literal(text[open_index:close_index + 1])
 
 
+def _collision_int(value, label):
+    try:
+        number = float(value)
+    except Exception:
+        raise ValueError("collision の " + label + " が数値ではありません。")
+    if not math.isfinite(number) or int(number) != number:
+        raise ValueError("collision の " + label + " は整数である必要があります。")
+    return int(number)
+
+
+def _collision_cell_state(data):
+    """collision配列をruntimeと同じ優先順でセル状態へ正規化する。"""
+    if not isinstance(data, dict):
+        raise ValueError("collision.before がオブジェクトではありません。")
+
+    cells = {}
+
+    def apply_rects(items, state, label):
+        if not isinstance(items, list):
+            raise ValueError("collision." + label + " が配列ではありません。")
+        for index, rect in enumerate(items):
+            if not isinstance(rect, dict):
+                raise ValueError("collision." + label + " の要素がオブジェクトではありません。")
+            x = _collision_int(rect.get("x"), label + "[" + str(index) + "].x")
+            y = _collision_int(rect.get("y"), label + "[" + str(index) + "].y")
+            w = _collision_int(rect.get("w"), label + "[" + str(index) + "].w")
+            h = _collision_int(rect.get("h"), label + "[" + str(index) + "].h")
+            if w < 1 or h < 1:
+                raise ValueError("collision." + label + " の w/h は1以上である必要があります。")
+            for cy in range(y, y + h):
+                for cx in range(x, x + w):
+                    cells[(cx, cy)] = state
+
+    apply_rects(data.get("passableRects") or [], 1, "passableRects")
+    apply_rects(data.get("blockedRects") or [], 2, "blockedRects")
+
+    points = data.get("blockedPoints") or []
+    if not isinstance(points, list):
+        raise ValueError("collision.blockedPoints が配列ではありません。")
+    for index, point in enumerate(points):
+        if not isinstance(point, dict):
+            raise ValueError("collision.blockedPoints の要素がオブジェクトではありません。")
+        x = _collision_int(point.get("x"), "blockedPoints[" + str(index) + "].x")
+        y = _collision_int(point.get("y"), "blockedPoints[" + str(index) + "].y")
+        cells[(x, y)] = 2
+
+    return cells
+
+
 def _assert_collection_before_matches(source, text, scene_id, change, keys=None):
     if not change:
         return
@@ -1901,6 +2036,22 @@ def _assert_collection_before_matches(source, text, scene_id, change, keys=None)
 
     if not isinstance(before, dict):
         raise ValueError("collision.before がオブジェクトではありません。")
+
+    if tuple(keys) == ("passableRects", "blockedRects", "blockedPoints"):
+        current_collision = {}
+        for key in keys:
+            current = _read_current_array_value(source, text, scene_id, key)
+            if current is None:
+                current = []
+            current_collision[key] = current
+
+        if _collision_cell_state(current_collision) != _collision_cell_state(before):
+            raise ValueError(
+                "collision の正本が開発モード開始時の内容と意味上で一致しません。"
+                "矩形分割ではなく通行セルを比較しています。もう一度書き出してください。"
+            )
+        return
+
     for key in keys:
         if key not in before:
             continue
@@ -1917,16 +2068,25 @@ def _changed_top_keys(before, after):
 
 
 def _patch_ghost_prop(text, before, after):
-    allowed = {"x", "y", "w", "h", "footY"}
+    allowed = {"x", "y", "w", "h", "footY", "collision"}
     unsupported = _changed_top_keys(before, after) - allowed
     if unsupported:
-        raise ValueError("おばけNPCで位置・大きさ以外の変更はDeskから安全に反映できません: " + ", ".join(sorted(unsupported)))
-    text = _replace_simple_var_number(text, "propW", after.get("w"))
-    text = _replace_simple_var_number(text, "propH", after.get("h"))
-    text = _replace_simple_var_number(text, "baseFootY", after.get("footY"))
-    text = _replace_simple_var_number(text, "baseX", after.get("x"))
-    text = _replace_simple_var_number(text, "baseY", after.get("y"))
-    return text
+        raise ValueError(
+            "おばけNPCでEditorから変更できない項目が含まれています: "
+            + ", ".join(sorted(unsupported))
+        )
+    return _replace_var_object(text, "prop", after)
+
+
+def _patch_ghost_trigger(text, before, after):
+    allowed = {"area"}
+    unsupported = _changed_top_keys(before, after) - allowed
+    if unsupported:
+        raise ValueError(
+            "おばけNPCの会話トリガーは範囲以外を変更できません: "
+            + ", ".join(sorted(unsupported))
+        )
+    return _replace_var_object(text, "trigger", after)
 
 
 def _validate_diff_change_identity(change, kind):
@@ -1992,8 +2152,8 @@ def _patch_diff_file(source, current_text, scene_id, prop_changes, trigger_chang
     for change in prop_changes:
         op = str(change.get("op") or "")
         object_id = str(change.get("id") or "")
-        after = change.get("after")
-        before = change.get("before")
+        after = _normalize_diff_prop_for_persistence(change.get("after"))
+        before = _normalize_diff_prop_for_persistence(change.get("before"))
 
         _assert_diff_before_matches(source, result, scene_id, "props", change)
 
@@ -2013,28 +2173,11 @@ def _patch_diff_file(source, current_text, scene_id, prop_changes, trigger_chang
             else:
                 result = _replace_scene_array_object(result, scene_id, "props", object_id, after)
 
-        elif source in ("town-update-sign.js", "town-feedback-box.js"):
-            if op != "update":
-                raise ValueError(source + " のパーツは update 以外を安全に反映できません。")
-            result = _replace_var_object(result, "prop", after)
-
         elif source == "town-ghost-npc.js":
             if op != "update":
                 raise ValueError("おばけNPCは update 以外を安全に反映できません。")
             result = _patch_ghost_prop(result, before, after)
 
-        elif source == "data/town-runtime-fixes.js":
-            if op != "update":
-                raise ValueError("runtime-fixes.js のパーツは update 以外を安全に反映できません。")
-            if object_id in ("yakitori_yumado_shop", "common_temporary_storefront"):
-                unsupported = _changed_top_keys(before, after) - {"x", "y", "w", "h", "footY"}
-                if unsupported:
-                    raise ValueError(object_id + " で位置・大きさ以外の変更は安全に反映できません: " + ", ".join(sorted(unsupported)))
-                result = _replace_prop_assignment_block(result, object_id, after)
-            elif object_id in ("no_entry_sign", "standing_signboard"):
-                result = _replace_literal_id_object(result, object_id, after)
-            else:
-                raise ValueError("runtime-fixes.js の未対応パーツです: " + object_id)
         else:
             raise ValueError("props の未対応反映先です: " + source)
 
@@ -2061,10 +2204,11 @@ def _patch_diff_file(source, current_text, scene_id, prop_changes, trigger_chang
             else:
                 result = _replace_scene_array_object(result, scene_id, "triggers", object_id, after)
 
-        elif source in ("town-update-sign.js", "town-feedback-box.js", "town-ghost-npc.js"):
+        elif source == "town-ghost-npc.js":
             if op != "update":
-                raise ValueError(source + " のトリガーは update 以外を安全に反映できません。")
-            result = _replace_var_object(result, "trigger", after)
+                raise ValueError("おばけNPCのトリガーは update 以外を安全に反映できません。")
+            before = change.get("before")
+            result = _patch_ghost_trigger(result, before, after)
         else:
             raise ValueError("triggers の未対応反映先です: " + source)
 
@@ -2370,6 +2514,34 @@ def prune_backups(root):
 
 def last_transaction(root):
     return load_json(last_transaction_path(root), None)
+
+
+def restore_transaction_files(root, tx):
+    """transaction開始後の失敗時に、対象ファイルをバックアップ世代へ戻す。"""
+    if not tx:
+        return []
+
+    backup_abs = backup_abs_from_transaction(root, tx)
+    failures = []
+
+    for rel in tx.get("files", []):
+        source = os.path.join(backup_abs, rel)
+        target = os.path.join(root, rel)
+
+        try:
+            if not os.path.isfile(source):
+                raise FileNotFoundError("バックアップがありません")
+            folder = os.path.dirname(target)
+            if folder and not os.path.isdir(folder):
+                os.makedirs(folder)
+            try:
+                shutil.copy2(source, target)
+            except Exception:
+                shutil.copyfile(source, target)
+        except Exception as exc:
+            failures.append(rel + ": " + str(exc))
+
+    return failures
 
 
 def undo_last_transaction(root):
@@ -4150,38 +4322,57 @@ class YumaniwaDesk(ui.View):
         if not confirm("開発モードの編集を反映", message, "反映する"):
             return
 
+        tx = None
         try:
-            tx = create_transaction(self.project_root, "import-town-" + str(plan.get("scene_id") or "scene"), target_rels)
+            tx = create_transaction(
+                self.project_root,
+                "import-town-" + str(plan.get("scene_id") or "scene"),
+                target_rels
+            )
+
             for item in file_plans:
                 target_rel = item.get("target_rel", "")
                 target_abs = os.path.join(self.project_root, target_rel)
                 atomic_write(target_abs, item.get("new_text", ""))
 
-            # 全ファイルを再読込し、1つでも不一致なら全体をバックアップから戻す。
-            failure = None
+            # 全ファイルを再読込し、1つでも不一致なら例外に統一する。
+            # rollback自体は下のexceptで必ず一括実行する。
             for item in file_plans:
                 target_rel = item.get("target_rel", "")
                 target_abs = os.path.join(self.project_root, target_rel)
                 written = safe_read(target_abs)
                 ok, syntax_message = basic_js_balance(written)
                 if not ok:
-                    failure = target_rel + " の構文確認に失敗: " + syntax_message
-                    break
+                    raise ValueError(
+                        target_rel + " の構文確認に失敗: " + syntax_message
+                    )
                 if _sha256_text(written) != item.get("new_hash"):
-                    failure = target_rel + " に書き込んだ内容が予定内容と一致しません"
-                    break
-
-            if failure:
-                backup_abs = backup_abs_from_transaction(self.project_root, tx)
-                for rel in target_rels:
-                    backup_file = os.path.join(backup_abs, rel)
-                    target_abs = os.path.join(self.project_root, rel)
-                    shutil.copyfile(backup_file, target_abs)
-                raise ValueError("反映後の安全確認に失敗したため全ファイルを元へ戻しました: " + failure)
+                    raise ValueError(
+                        target_rel + " に書き込んだ内容が予定内容と一致しません"
+                    )
 
             finish_transaction(self.project_root, tx)
         except Exception as exc:
-            alert("町へ反映できませんでした", str(exc))
+            rollback_failures = restore_transaction_files(
+                self.project_root,
+                tx
+            )
+
+            if rollback_failures:
+                message = (
+                    str(exc)
+                    + "\n\nさらにrollbackに失敗しました。Working Copyで必ず確認してください:\n・"
+                    + "\n・".join(rollback_failures)
+                )
+            elif tx:
+                message = (
+                    str(exc)
+                    + "\n\n反映開始後に失敗したため、対象ファイルはすべて変更前へ戻しました。"
+                )
+            else:
+                message = str(exc)
+
+            alert("町へ反映できませんでした", message)
             return
 
         self.pending_town_import = None
