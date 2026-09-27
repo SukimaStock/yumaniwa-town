@@ -1,0 +1,42 @@
+name: Search Share v2 Release Candidate Validation
+
+on:
+  push:
+    branches:
+      - "release/search-share-v2"
+    paths:
+      - "tools/release-validator.cjs"
+      - "town-scene-validation.js"
+      - ".github/workflows/search-share-v2-candidate-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify generated production Search / Share v2
+        run: >
+          node tools/generate-work-search-pages.cjs
+          --env production
+          --published orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window
+          --check
+
+      - name: Validate release candidate
+        run: >
+          node tools/release-validator.cjs
+          --env production
+          --ids orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window
+          --published orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window
+
+      - name: Confirm publication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e en/w/coffee-factory/index.html
+          ! grep -q "coffee-factory" sitemap.xml
+          ! grep -q "coffee-factory" data/work-search-meta.js
