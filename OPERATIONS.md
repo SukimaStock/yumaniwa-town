@@ -90,6 +90,17 @@ ChatGPT が GitHub 上の staging を修正した後に YumaniwaDesk を使う�
 5. 「同期確認済み」
 6. 次の編集を開始
 
+## Search / Share v2
+
+作品の検索・共有ページは手編集しない。
+
+- `data/works.js`: 作品identity・町内runtime・launchの正本
+- `data/work-search-meta.js`: 日英文面・検索語彙・schemaTypeの正本
+- `tools/generate-work-search-pages.cjs`: 日英Searchページとsitemapのgenerator
+- `w/<id>/index.html`、`en/w/<id>/index.html`、`sitemap.xml`: 生成物
+
+production候補branchで、公開を許可した**全作品ID集合**を `--published` に明示し、`--env production --write` の後に同じ条件で `--check` を通す。metadataが存在するだけでは公開対象にならない。stagingのopen集合をそのままproduction公開集合へ使わない。
+
 ## 本番反映前の確認
 
 少なくとも以下を確認する。
