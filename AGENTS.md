@@ -136,17 +136,26 @@ Rakugaki Engine の作品座標は Codea 式。
 
 ## 8. SEO・公開ページのルール
 
-`index.html` には検索・SNS共有用の設定がある。
+ルート `index.html` に加え、各作品のSearch / Shareページは次の正本から生成する。
+
+- `data/work-search-meta.js` → 日英文面・検索語彙・schemaType
+- `tools/generate-work-search-pages.cjs` → `w/<id>/`、`en/w/<id>/`、`sitemap.xml` のgenerator
+- `data/works.js` → 作品identity・町内runtime・launch
+
+`w/<id>/index.html`、`en/w/<id>/index.html`、`sitemap.xml` は生成物なので直接編集しない。
+production候補では `--env production` と、公開してよい**全作品ID集合**を `--published` に明示して生成・検査する。stagingのopen集合を自動採用しない。
 
 特に以下を不用意に削除・変更しない。
 
 - `<title>`
 - `meta name="description"`
 - `rel="canonical"`
+- `hreflang="ja" / "en" / "x-default"`
+- JSON-LD
 - OGP (`og:*`)
 - Twitter/X Card (`twitter:*`)
 
-canonical は湯間庭町の公開URLを指す状態を維持する。
+canonical は湯間庭町の公開URLを指す状態を維持する。作品Searchページは日本語・英語それぞれ自己canonicalとし、相互hreflangを保つ。
 
 `README.md`、ページタイトル、description、OGP説明などの一般公開テキストに、内部の更新手順、デバッグ方法、パッチ手順などを混ぜない。
 

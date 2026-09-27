@@ -19,6 +19,16 @@
 
 本番だけに修正を残したまま、次の staging 作業を進めない。
 
+## Search / Share v2
+
+作品Search / Shareの正本は `data/work-search-meta.js`、生成器は `tools/generate-work-search-pages.cjs` とする。
+日本語は `/w/<id>/`、英語は `/en/w/<id>/`。両方を自己canonicalとし、`ja / en / x-default` のhreflangで相互接続する。
+
+`w/<id>/index.html`、`en/w/<id>/index.html`、`sitemap.xml` は生成物として直接編集しない。
+production反映時は、公開してよい全作品IDを `--published` に明示し、`--env production` で生成後に `--check` を通す。stagingのopen集合をproductionへ自動採用しない。
+
+検索流入のために作品にないジャンル・評価語・意味を足さない。固有作品名をSEO都合で勝手に英訳・改名せず、必要な別名はmetadataの `alternateNames` で管理する。 `terms` はmeta keywordsには出力しない。
+
 ## 本番反映前の確認
 
 本番へ反映する前に、少なくとも以下を確認する。
