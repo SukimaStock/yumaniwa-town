@@ -26,6 +26,9 @@ jobs:
           curl --fail --location --retry 3 \
             "https://raw.githubusercontent.com/SukimaStock/yumaniwa-town-staging/236b1308ea4693d368a05f547f0efce289236ef3/tools/release-validator.cjs" \
             -o tools/.orbit-release-validator.cjs
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/SukimaStock/yumaniwa-town-staging/236b1308ea4693d368a05f547f0efce289236ef3/town-scene-validation.js" \
+            -o town-scene-validation.js
 
       - name: Validate production candidate
         shell: bash
