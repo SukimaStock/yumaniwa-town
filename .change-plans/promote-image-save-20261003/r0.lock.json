@@ -1,0 +1,147 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "c6c927e67e3568be4e64f4ea9403f29484876ebff1d28663a7df59192dae7b96",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-image-save-20261003",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote owner-confirmed result image saving and Masala single save control",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "WORK"
+    ],
+    "authority": [
+      "Owner Decision",
+      "HQ Review",
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "eb34a064b216aa0f9f1c845615bbc4cd36ee3707",
+    "canonicalSources": [
+      "staging/main@a1305b3f6d4b46b7ac9b3629015611ea18eb00de",
+      "production/main@eb34a064b216aa0f9f1c845615bbc4cd36ee3707",
+      "share-bridge.js",
+      "works/junkissa-dive/sketch.js",
+      "works/rojiura-masala/sketch.js"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-image-save-20261003/r0.lock.json",
+      "share-bridge.js",
+      "index.html",
+      "works/junkissa-dive/sketch.js",
+      "works/junkissa-dive/index.html",
+      "works/rojiura-masala/sketch.js",
+      "works/rojiura-masala/index.html",
+      "tests/test-result-image-save.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "style.css",
+      "engine/**",
+      "works/midnight-cola/**",
+      "works/yakitori-wars/**",
+      "works/pumpoko/**",
+      "works/kotsu-koro/**",
+      "works/coffee-factory/**",
+      "data/**",
+      "assets/**",
+      "tools/**",
+      ".github/**",
+      "w/**",
+      "en/**",
+      "sitemap.xml"
+    ],
+    "expectedChanges": [
+      "Retain image panel after a download attempt; dismiss image via panel X, game-return button, backdrop or Escape without exiting the game",
+      "Use visible image long-press on iPhone/iPad including desktop-UA iPad; keep native Share and desktop download available",
+      "Route Junkissa Save and Masala Save through the existing bridge when hosted in town; preserve standalone and itch fallback",
+      "Preserve image composition, filenames, work identity, save keys, analytics event names and message protocol",
+      "Update only cache versions for the changed root bridge and two work sketches",
+      "Town Masala displays one centered Save button and removes the duplicate Share hit area; standalone retains distinct Save and Share"
+    ],
+    "ownerDecisions": [
+      "User confirmed deployed image saving now works, approved result-action cleanup, and explicitly confirmed production promotion on 2026-10-03",
+      "Coffee factory and PUMPOKO remain excluded"
+    ],
+    "hqDecisions": [
+      "Reuse existing share-result v1 messages and top-level panel; no new save API, runtime state owner or main.js patch",
+      "Modal image dismissal owns only panel state; town player exit remains separate and is covered by regression",
+      "Native share cancellation retains preview; desktop download is an attempt, iOS long-press completion cannot be observed by JavaScript",
+      "Promote exact approved staging implementations; production root HTML changes only the bridge cache version"
+    ],
+    "rulesApplied": [
+      "Production branch -> PR -> Production Safety Checks -> merge",
+      "No whole-repository copy",
+      "Keep public work set exactly the existing nine IDs",
+      "Plan Lock before implementation; Scope -> Risk -> Impact checks"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "production-safety-checks",
+      "existing-game-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants"
+    ],
+    "manualChecks": [
+      "Owner confirmed staging image saving works",
+      "Owner confirmed staging result-action cleanup; no device details supplied",
+      "After merge verify public runtime files match the production commit"
+    ],
+    "impactChecks": [
+      "risk.high-risk-review",
+      "runtime.regression",
+      "surface.shared",
+      "work.runtime",
+      "work.regression"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert the implementation commit through a new production PR and redeploy Pages.",
+    "outOfScope": [
+      "Coffee factory and PUMPOKO",
+      "WORLD OBJECT basis, guide, metadata, search, Engine, workflows and developer tools",
+      "Gameplay, result image composition and original content changes"
+    ],
+    "promotion": "User explicitly authorized production promotion after staging verification; merge after scope, regressions and Production Safety Checks pass, then verify Pages delivery.",
+    "unverified": [
+      "Device-specific iPhone/iPad native share-sheet coverage is not reported",
+      "Automated post-deployment gameplay is unavailable; owner verification applies to identical staging source"
+    ],
+    "problem": "Production still has the image-save panel dismissal bug and duplicate Masala result actions already repaired and owner-confirmed in staging.",
+    "currentContract": "share-result v1 accepts File/Blob or dataURL and displays one town-owned image panel; games own result rendering.",
+    "whyExistingIsInsufficient": "Production has not received staging PRs 130 and 131.",
+    "design": "Keep image preview as a modal until explicitly dismissed, add modal X and Escape, enable native image long-press, route existing game save controls to the existing bridge. Apply the approved staging Masala single town Save control and preserve standalone controls.",
+    "migration": "Transfer five changed runtime files and regression test from exact staging/main; patch only bridge cache key in production root HTML.",
+    "compatibility": "No changes to URL, ID, save keys, result image capture, analytics names, Engine or town navigation.",
+    "alternativesRejected": [
+      "Changing town close-work behavior globally",
+      "Adding a new common save runtime or new image-save features"
+    ],
+    "boundaryCases": [
+      "Native share cancel and rejection",
+      "Share completes after panel dismissal or replacement",
+      "iPad desktop user agent",
+      "Unavailable bridge standalone fallback",
+      "Repeated save and reopen",
+      "Game close while image panel pending"
+    ],
+    "testPlan": [
+      "node-syntax",
+      "production-safety-checks",
+      "existing-game-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants",
+      "Owner confirmed staging image saving works",
+      "Owner confirmed staging result-action cleanup; no device details supplied",
+      "After merge verify public runtime files match the production commit"
+    ],
+    "promotionRisk": "Shared image panel affects existing consumers. Preserve protocol, town state, standalone paths and production invariants; compare inherited Release Validator failure with unchanged baseline."
+  }
+}
