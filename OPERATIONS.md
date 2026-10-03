@@ -157,7 +157,7 @@ production 固有の次の条件を守る。
 
 - `index.html` に `noindex` を入れない
 - `main.js` の既定値は `DEV_MODE_ENABLED = false`
-- 本番の開発機能は `?dev=1` の明示時だけ有効
+- 本番では `?dev=1` を含め開発機能を起動しない。開発ボタンは初期HTMLへ置かず、stagingでのみ利用する
 - `developer-access.js` は `main.js` より後に読み込む
 
 ## 緊急で production を直接修正した場合

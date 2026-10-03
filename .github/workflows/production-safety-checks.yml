@@ -28,6 +28,9 @@ jobs:
       - name: Check YumaniwaDesk syntax
         run: python -m py_compile tools/YumaniwaDesk.py
 
+      - name: Check production developer entry and staging compatibility
+        run: node --test tests/test-production-developer-access.cjs tests/test-editor-session.cjs tests/test-editor-history.cjs
+
       - name: Check production invariants and manifests
         shell: bash
         run: |
@@ -57,9 +60,6 @@ jobs:
 
               if 'var DEV_MODE_ENABLED = false;' not in main:
                   errors.append('main.js default DEV_MODE_ENABLED must remain false')
-
-              if 'params.get("dev") === "1"' not in gate and "params.get('dev') === '1'" not in gate:
-                  errors.append('developer-access.js no longer contains the explicit ?dev=1 gate')
 
               main_pos = index.find('main.js')
               gate_pos = index.find('developer-access.js')
