@@ -1,0 +1,143 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "5285f8ceb8e5bde8b33bb97356c965eefe44f98f2ca1c7061aed574df66f239c",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-install-icons-20261003",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote accepted Diorama Calendar home-screen icon package",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "ASSET"
+    ],
+    "authority": [
+      "Owner Decision",
+      "HQ Review",
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "6c566c0ec72907b88d40232bb1feca5bae31e2f5",
+    "canonicalSources": [
+      "staging/main@a1305b3f6d4b46b7ac9b3629015611ea18eb00de",
+      "production/main@6c566c0ec72907b88d40232bb1feca5bae31e2f5",
+      "staging commit 15f472e0c8470004a30e56106ff0c3bd8ae53037",
+      "assets/works/diorama-calendar/icon.png",
+      "work-install-meta.js",
+      "w/diorama-calendar/manifest.webmanifest"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-install-icons-20261003/r0.lock.json",
+      "assets/works/diorama-calendar/icon.png",
+      "work-install-meta.js",
+      "w/diorama-calendar/manifest.webmanifest",
+      "index.html"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "style.css",
+      "engine/**",
+      "data/**",
+      "tools/**",
+      ".github/**",
+      "en/**",
+      "sitemap.xml",
+      "works/**",
+      "assets/works/steamclock/**",
+      "w/coffee-factory/**",
+      "assets/works/coffee-factory/**"
+    ],
+    "expectedChanges": [
+      "Copy exact staging Diorama icon and town-entry manifest; enable its existing apple-touch-icon link",
+      "Use exact staging metadata loader retaining CoffeeFactory iconless exception, without registering or shipping either excluded work",
+      "Only update root install-loader cache query; preserve all production SEO, analytics and runtime configuration"
+    ],
+    "ownerDecisions": [
+      "User requested staged staging-to-production promotion and approved proceeding to the next stage",
+      "Coffee factory and PUMPOKO remain excluded; existing staging-adopted artwork only"
+    ],
+    "hqDecisions": [
+      "Independent accepted install package, without WORLD OBJECT or guide dependencies",
+      "Preserve all existing PWA identities, URLs, scope and town launch; enable existing asset via established install contract",
+      "SteamClock artwork change deferred because staging PNG is 512 square while manifest declares 1024; do not propagate this inconsistency"
+    ],
+    "rulesApplied": [
+      "Production branch -> PR -> Production Safety Checks -> merge",
+      "No whole-repository copy",
+      "Keep public work set exactly the existing nine IDs",
+      "Plan Lock before implementation; Scope -> Risk -> Impact checks"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "production-safety-checks",
+      "existing-install-meta-regressions",
+      "release-validator",
+      "search-generator-check",
+      "staging-package-byte-match",
+      "exclusion-invariants"
+    ],
+    "manualChecks": [
+      "Inspect adopted PNG dimensions and visual",
+      "Observe deployed staging Diorama direct route and head install links",
+      "After merge verify exact public bytes, Diorama render and live install links"
+    ],
+    "impactChecks": [
+      "surface.shared",
+      "runtime.regression",
+      "risk.high-risk-review",
+      "asset.file",
+      "asset.rendering",
+      "asset.cache"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert this implementation commit via a new production PR, restoring old iconless exception, manifest and root cache query.",
+    "outOfScope": [
+      "Coffee factory and PUMPOKO",
+      "SteamClock icon and work-local PWA",
+      "Town foundation/guide, engine, gameplay, source articles and new artwork",
+      "Physical device installation certification"
+    ],
+    "promotion": "Proceed under original staged migration authorization after exact-head gates and Production Safety Checks; verify merge Pages and public runtime.",
+    "unverified": [
+      "Physical iOS/Android add-to-home-screen behavior is not newly observed; HTML/manifest/browser evidence does not certify OS installation"
+    ],
+    "problem": "Production Diorama town-entry route suppresses its touch icon and its manifest lacks icons despite an adopted staging icon package.",
+    "currentContract": "Shared install loader resolves ?work=id to apple-touch-icon and w/id/manifest; production currently excludes Diorama from icon injection.",
+    "whyExistingIsInsufficient": "The adopted staging Diorama icon and manifest cannot be discovered on the production direct route.",
+    "design": "Transfer exact accepted staging icon, manifest and install loader, updating only root loader query for delivery.",
+    "migration": "One PNG added; two install metadata files copied; one script cache query changed. No world/scene dependencies.",
+    "compatibility": "Keep nine published works, all SEO URLs/text, IDs/start_url/scope and work-local standalone manifests unchanged.",
+    "alternativesRejected": [
+      "Whole repository copy",
+      "Partial new WORLD OBJECT promotion",
+      "Copying inconsistent SteamClock icon package",
+      "Generating or redesigning artwork"
+    ],
+    "boundaryCases": [
+      "Diorama route injects icon and manifest",
+      "Existing public work links remain identical",
+      "Empty or malformed work query rejected",
+      "Coffee iconless exception preserved without public registration",
+      "PNG dimensions match manifest",
+      "Root difference only install cache query"
+    ],
+    "testPlan": [
+      "node-syntax",
+      "production-safety-checks",
+      "existing-install-meta-regressions",
+      "release-validator",
+      "search-generator-check",
+      "staging-package-byte-match",
+      "exclusion-invariants",
+      "Inspect adopted PNG dimensions and visual",
+      "Observe deployed staging Diorama direct route and head install links",
+      "After merge verify exact public bytes, Diorama render and live install links"
+    ],
+    "promotionRisk": "Shared metadata loader affects all direct routes; compare old and candidate link outputs for all existing nine IDs. Root SEO must remain byte-identical outside the cache query."
+  }
+}
