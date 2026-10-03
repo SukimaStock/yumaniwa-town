@@ -1,6 +1,6 @@
 // SteamClock PWA service worker
 // Bump CACHE_VERSION when shipping a new release that should replace cached files.
-const CACHE_VERSION = "steamclock-v10";
+const CACHE_VERSION = "steamclock-v11";
 
 // Keep installation light. Decorative images are cached by the fetch handler
 // when they are requested after the first screen has appeared.
@@ -9,8 +9,8 @@ const PRECACHE_URLS = [
   "./index.html",
   "./manifest.webmanifest",
   "./codea-lite.js",
-  "./sukimastock-engine.js",
-  "./sketch.js",
+  "../../engine/sukimastock-engine.v0.2.0.js",
+  "./sketch.js?v=20261003-assets-v2",
 
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
@@ -36,7 +36,10 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(
         keys
-          .filter((key) => key !== CACHE_VERSION)
+          .filter((key) =>
+            key.startsWith("steamclock-v") &&
+            key !== CACHE_VERSION
+          )
           .map((key) => caches.delete(key))
       ))
       .then(() => self.clients.claim())
