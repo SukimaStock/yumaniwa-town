@@ -3,43 +3,7 @@
 // 町全体で使える共通パーツと、パーツに意味を持たせる編集UIを追加する。
 // ==========================================
 (function () {
-    if (typeof TOWN_PART_CATALOG === 'undefined') return;
     if (typeof DEV_MODE_ENABLED !== 'undefined' && !DEV_MODE_ENABLED) return;
-
-    function addCatalogEntry(entry) {
-        for (var i = 0; i < TOWN_PART_CATALOG.length; i++) {
-            if (TOWN_PART_CATALOG[i] && TOWN_PART_CATALOG[i].key === entry.key) return;
-        }
-        TOWN_PART_CATALOG.push(entry);
-    }
-
-    addCatalogEntry({
-        key: 'standingSignboard',
-        label: '立て看板（共通）',
-        file: '../common/standing-signboard.png',
-        w: 2.4,
-        h: 3.2,
-        collision: { enabled: true, x: 0.18, y: 0.72, w: 0.64, h: 0.28 }
-    });
-
-    if (typeof createTownPartFromCatalog === 'function') {
-        var baseCreateTownPartFromCatalog = createTownPartFromCatalog;
-        createTownPartFromCatalog = function (key, worldX, worldY) {
-            var part = baseCreateTownPartFromCatalog(key, worldX, worldY);
-            if (part && key === 'standingSignboard') {
-                part.id = makeUniquePartId('town_standing_signboard');
-                part.interaction = {
-                    enabled: false,
-                    triggerId: '',
-                    x: 0.05,
-                    y: 0.20,
-                    w: 0.90,
-                    h: 0.80
-                };
-            }
-            return part;
-        };
-    }
 
     function escapeEditorHtml(value) {
         return String(value == null ? '' : value)
@@ -52,9 +16,6 @@
     function getTriggerForPart(part) {
         if (!part || !part.interaction || !part.interaction.triggerId) return null;
         var id = String(part.interaction.triggerId);
-        if (typeof townPartTriggerTemplates !== 'undefined' && townPartTriggerTemplates[id]) {
-            return townPartTriggerTemplates[id];
-        }
         if (typeof triggers !== 'undefined' && Array.isArray(triggers)) {
             for (var i = 0; i < triggers.length; i++) {
                 if (triggers[i] && triggers[i].id === id) return triggers[i];
@@ -186,9 +147,10 @@
         var workInput = document.getElementById('part-action-work');
         var placeInput = document.getElementById('part-action-place');
         var disabled = !part;
+        var dedicatedGhost = part && String(part.id || '') === 'station_ghost_npc';
         var inputs = [kindInput, labelInput, buttonInput, textInput, workInput, placeInput];
         for (var i = 0; i < inputs.length; i++) {
-            if (inputs[i]) inputs[i].disabled = disabled;
+            if (inputs[i]) inputs[i].disabled = disabled || dedicatedGhost;
         }
 
         if (kindInput) kindInput.value = kind;
@@ -211,7 +173,13 @@
         if (typeof getSelectedTownPart !== 'function') return;
         var part = getSelectedTownPart();
         if (!part) return;
-        if (typeof ensureTownPartMetadata === 'function') ensureTownPartMetadata(part);
+        if (String(part.id || '') === 'station_ghost_npc') {
+            if (typeof updateEditorStatus === 'function') {
+                updateEditorStatus('おばけNPCの役割は専用機能のため変更できません');
+            }
+            updateTownPartActionUi();
+            return;
+        }
 
         var kind = String((document.getElementById('part-action-kind') || {}).value || 'none');
         var label = String((document.getElementById('part-action-label') || {}).value || '').trim();
@@ -220,10 +188,12 @@
         var workId = String((document.getElementById('part-action-work') || {}).value || '').trim();
         var placeId = String((document.getElementById('part-action-place') || {}).value || '').trim();
 
-        if (typeof pushTownPartHistory === 'function') pushTownPartHistory();
+        recordTownEditorHistory();
 
+        if (!part.interaction) part.interaction = getDefaultTownPartInteraction(part);
         if (kind === 'none') {
             part.interaction.enabled = false;
+            removeUnlinkedTownPartTrigger(part.interaction.triggerId);
             if (typeof refreshTownPartDerivedData === 'function') refreshTownPartDerivedData();
             updateTownPartActionVisibility(kind);
             if (typeof updatePartEditorSelectionUi === 'function') updatePartEditorSelectionUi();
@@ -238,14 +208,26 @@
         part.interaction.enabled = true;
         part.interaction.triggerId = triggerId;
 
-        var template = {
-            id: triggerId,
-            label: label || (part.id || '立て看板'),
-            actionLabel: actionLabel || defaultButtonLabel(kind),
-            type: 'inspect',
-            text: text || '小さな案内が置かれている。',
-            tapPadding: 1
-        };
+        var existingTrigger = getTriggerForPart(part);
+        var template = existingTrigger && typeof cloneTrigger === 'function'
+            ? cloneTrigger(existingTrigger)
+            : {};
+
+        template.id = triggerId;
+        template.label = label || (part.id || '立て看板');
+        template.actionLabel = actionLabel || defaultButtonLabel(kind);
+        template.type = 'inspect';
+        template.text = text || '小さな案内が置かれている。';
+
+        if (template.tapPadding == null) {
+            template.tapPadding = 1;
+        }
+
+        // Known mutually-exclusive action fields follow the selected role.
+        // Unknown fields are intentionally preserved.
+        delete template.workId;
+        delete template.target;
+
         if (kind === 'work') {
             template.type = 'work';
             template.workId = workId;
@@ -256,9 +238,8 @@
             template.text = text || ((label || 'この先') + 'へ向かいます。');
         }
 
-        if (typeof townPartTriggerTemplates !== 'undefined') {
-            townPartTriggerTemplates[triggerId] = template;
-        }
+        if (!template.area) template.area = getTownPartTriggerArea(part);
+        putTownPartTrigger(template);
 
         var triggerIdInput = document.getElementById('part-trigger-id');
         var triggerEnabledInput = document.getElementById('part-trigger-enabled');
@@ -271,36 +252,9 @@
         if (typeof updateEditorStatus === 'function') updateEditorStatus('パーツの役割を更新しました');
     }
 
-    if (typeof ensurePartEditorFields === 'function') {
-        var baseEnsurePartEditorFields = ensurePartEditorFields;
-        ensurePartEditorFields = function () {
-            baseEnsurePartEditorFields();
-            ensureTownPartActionFields();
-        };
-    }
+    window.YUMANIWA_EDITOR_ACTION_UI = {
+        ensureFields: ensureTownPartActionFields,
+        updateSelection: updateTownPartActionUi
+    };
 
-    if (typeof updatePartEditorSelectionUi === 'function') {
-        var baseUpdatePartEditorSelectionUi = updatePartEditorSelectionUi;
-        updatePartEditorSelectionUi = function () {
-            baseUpdatePartEditorSelectionUi();
-            updateTownPartActionUi();
-        };
-    }
-
-    if (typeof duplicateSelectedPart === 'function') {
-        var baseDuplicateSelectedPart = duplicateSelectedPart;
-        duplicateSelectedPart = function () {
-            var source = typeof getSelectedTownPart === 'function' ? getSelectedTownPart() : null;
-            var sourceTrigger = getTriggerForPart(source);
-            var sourceCopy = sourceTrigger && typeof cloneTrigger === 'function' ? cloneTrigger(sourceTrigger) : null;
-            baseDuplicateSelectedPart();
-            var copy = typeof getSelectedTownPart === 'function' ? getSelectedTownPart() : null;
-            if (copy && sourceCopy && copy.interaction && copy.interaction.triggerId) {
-                sourceCopy.id = copy.interaction.triggerId;
-                townPartTriggerTemplates[sourceCopy.id] = sourceCopy;
-                if (typeof refreshTownPartDerivedData === 'function') refreshTownPartDerivedData();
-                updateTownPartActionUi();
-            }
-        };
-    }
 })();

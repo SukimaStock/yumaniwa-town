@@ -8,9 +8,33 @@
 // 2. 状態管理・初期化
 // ==========================================
 var canvas, ctx;
-var bgImage = new Image();
+var bgImage = null;
 var bgLoaded = false;
 var bgError = false;
+
+function townLoadTraceMark(name, meta, once) {
+    var trace = window.YUMANIWA_LOAD_TRACE;
+    if (!trace || !trace.enabled) return;
+    if (once && typeof trace.markOnce === 'function') {
+        trace.markOnce(name, meta);
+        return;
+    }
+    if (typeof trace.mark === 'function') trace.mark(name, meta);
+}
+
+function townLoadTraceImageStart(kind, src) {
+    var trace = window.YUMANIWA_LOAD_TRACE;
+    if (trace && trace.enabled && typeof trace.imageStart === 'function') {
+        trace.imageStart(kind, src);
+    }
+}
+
+function townLoadTraceImageDone(kind, src, status) {
+    var trace = window.YUMANIWA_LOAD_TRACE;
+    if (trace && trace.enabled && typeof trace.imageDone === 'function') {
+        trace.imageDone(kind, src, status);
+    }
+}
 
 // スプライト番号: 1=下, 2=左, 3=上, 4=右
 // 当たり判定は従来どおり player の 16×16 のまま使う。
@@ -43,9 +67,12 @@ var PLAYER_SPRITE_DRAW = { height: 32 };
 var PLAYER_WALK_STEP_PX = 24;
 
 
+var currentScene = 'station_plaza';
+
+// Player coordinates are inert until a validated canonical scene is applied.
 var player = {
-    x: PLAYER_START.x * TILE_SIZE,
-    y: PLAYER_START.y * TILE_SIZE,
+    x: 0,
+    y: 0,
     w: 16,
     h: 16,
     speed: 2,
@@ -55,7 +82,6 @@ var player = {
     walkFrame: 0,
     walkWasMoving: false
 };
-var currentScene = 'station_plaza';
 var isMessageOpen = false;
 var pendingWarp = null;
 
@@ -71,11 +97,16 @@ var editStep = 0;
 var editStartX = 0;
 var editStartY = 0;
 var currentHoverTile = null;
-var editHistory = [];
 var editingTriggerIndex = -1;
 
 // 開発モード / 保存状態・アコーディオン
-var editorHasUnsavedChanges = false;
+// editorHasUnsavedChanges = 現在のページ上に、正本へ未反映の変更がある。
+// editorHasUncopiedChanges = その未反映変更のうち、最新状態をまだコピーしていない。
+// コピーは正本反映ではないため、前者はコピー成功では解除しない。
+Object.defineProperty(window, 'editorHasUnsavedChanges', {
+    get: function () { return window.YUMANIWA_EDITOR_SESSION.isDirty(); }
+});
+var editorHasUncopiedChanges = false;
 var editorPanelCollapsed = false;
 
 // 開発モード / マップパーツ編集
@@ -87,15 +118,11 @@ var partEditorRatioLock = true;
 // パーツ由来の当たり判定と、マップ固定の当たり判定を分離する。
 // baseCollisionGrid は固定地形だけ、collisionGrid はパーツ分を重ねた実際の判定。
 var baseCollisionGrid = [];
-var townPartTriggerTemplates = {};
-var townPartManagedTriggerIds = {};
 
 var collisionGrid = [];
 var currentAreaId = null;
 var areaTitleTimer = null;
 
-var tapMovePath = [];
-var tapMoveTargetTile = null;
 var tapMarkerTimer = 0;
 var tapMarkerPos = null;
 
@@ -162,8 +189,133 @@ function updateCurrentGameViewSizeFromScreen() {
     currentGameViewH = nextH;
 }
 
-// 現在のモバイル表示に近い見え方を維持するため、カメラ倍率は固定。
-var GAME_CAMERA_ZOOM = 2.5;
+// 現在の見え方の基準倍率。
+// Pixel Snap 有効時は、最終的な物理画面上のドット境界を安定させるため、
+// この値の近傍だけ微調整することがある。
+var TOWN_DEFAULT_CAMERA_ZOOM = 2.5;
+var TOWN_PHONE_CAMERA_ZOOM = 2.25;
+var GAME_CAMERA_ZOOM = TOWN_DEFAULT_CAMERA_ZOOM;
+
+function updateTownCameraZoomForViewport() {
+    GAME_CAMERA_ZOOM = isTownMobileFluidViewport()
+        ? TOWN_PHONE_CAMERA_ZOOM
+        : TOWN_DEFAULT_CAMERA_ZOOM;
+}
+
+// Yumaniwa Pixel Snap v0.1
+// Cleaner の「1 logical px = 1 world px」を、Town Engine の最終表示まで守る。
+// 1) 可能なら 1 world px が整数個の物理画面pixelになるよう zoom を微調整。
+// 2) camera origin を最終物理pixel gridへsnapし、歩行中のドット揺れを抑える。
+// 比較用: URL に ?pixelSnap=0 を付けると無効化できる。
+var YUMANIWA_PIXEL_SNAP_ENABLED = true;
+var YUMANIWA_PIXEL_SNAP_MAX_ZOOM_CORRECTION = 0.08;
+
+try {
+    var yumaniwaPixelSnapParam = new URLSearchParams(window.location.search).get('pixelSnap');
+    if (
+        yumaniwaPixelSnapParam === '0' ||
+        yumaniwaPixelSnapParam === 'off' ||
+        yumaniwaPixelSnapParam === 'false'
+    ) {
+        YUMANIWA_PIXEL_SNAP_ENABLED = false;
+    }
+} catch (e) {
+    // URLSearchParams が使えない環境でも通常描画は継続する。
+}
+
+function getTownPixelSnapSettings(baseZoom) {
+    var settings = {
+        enabled: false,
+        integerScaleApplied: false,
+        baseZoom: baseZoom,
+        zoom: baseZoom,
+        dpr: 1,
+        displayPhysicalWidth: 0,
+        physicalPixelsPerCanvasPx: 1,
+        physicalPixelsPerWorld: baseZoom,
+        zoomCorrection: 0
+    };
+
+    if (
+        !YUMANIWA_PIXEL_SNAP_ENABLED ||
+        !canvas ||
+        !canvas.width ||
+        !isFinite(baseZoom) ||
+        baseZoom <= 0
+    ) {
+        return settings;
+    }
+
+    var rect = canvas.getBoundingClientRect();
+
+    if (!rect || !rect.width) {
+        return settings;
+    }
+
+    var dpr = window.devicePixelRatio || 1;
+    if (!isFinite(dpr) || dpr <= 0) dpr = 1;
+
+    // CSS px -> physical px の最終表示倍率。
+    // width*dpr は実画面pixel数に寄せて整数化し、ブラウザの小数CSS幅で値が揺れにくくする。
+    var displayPhysicalWidth = Math.max(1, Math.round(rect.width * dpr));
+    var physicalPixelsPerCanvasPx = displayPhysicalWidth / canvas.width;
+    var rawPhysicalPixelsPerWorld = baseZoom * physicalPixelsPerCanvasPx;
+
+    settings.enabled = true;
+    settings.dpr = dpr;
+    settings.displayPhysicalWidth = displayPhysicalWidth;
+    settings.physicalPixelsPerCanvasPx = physicalPixelsPerCanvasPx;
+    settings.physicalPixelsPerWorld = rawPhysicalPixelsPerWorld;
+
+    if (!isFinite(rawPhysicalPixelsPerWorld) || rawPhysicalPixelsPerWorld <= 0) {
+        return settings;
+    }
+
+    // 現在の見た目から大きく変えない範囲だけ、整数 physical px / world px に寄せる。
+    var targetPhysicalPixelsPerWorld = Math.max(1, Math.round(rawPhysicalPixelsPerWorld));
+    var snappedZoom = targetPhysicalPixelsPerWorld / physicalPixelsPerCanvasPx;
+    var zoomCorrection = Math.abs((snappedZoom / baseZoom) - 1);
+
+    settings.zoomCorrection = zoomCorrection;
+
+    if (
+        isFinite(snappedZoom) &&
+        snappedZoom > 0 &&
+        zoomCorrection <= YUMANIWA_PIXEL_SNAP_MAX_ZOOM_CORRECTION
+    ) {
+        settings.zoom = snappedZoom;
+        settings.physicalPixelsPerWorld = targetPhysicalPixelsPerWorld;
+        settings.integerScaleApplied = true;
+    }
+
+    return settings;
+}
+
+function snapTownCameraCoordToPhysicalPixel(value, physicalPixelsPerWorld, minValue, maxValue) {
+    if (
+        !YUMANIWA_PIXEL_SNAP_ENABLED ||
+        !isFinite(value) ||
+        !isFinite(physicalPixelsPerWorld) ||
+        physicalPixelsPerWorld <= 0
+    ) {
+        return value;
+    }
+
+    var snapped = Math.round(value * physicalPixelsPerWorld) / physicalPixelsPerWorld;
+
+    if (isFinite(minValue) && snapped < minValue) {
+        snapped = Math.ceil(minValue * physicalPixelsPerWorld) / physicalPixelsPerWorld;
+    }
+
+    if (isFinite(maxValue) && snapped > maxValue) {
+        snapped = Math.floor(maxValue * physicalPixelsPerWorld) / physicalPixelsPerWorld;
+    }
+
+    if (isFinite(minValue) && snapped < minValue) snapped = minValue;
+    if (isFinite(maxValue) && snapped > maxValue) snapped = maxValue;
+
+    return snapped;
+}
 
 //
 // PCではゲーム画面が大きくなりすぎないように最大表示倍率を制限する。
@@ -351,8 +503,6 @@ function getPointerTile(e) {
 }
 
 
-var tapMoveTargetTrigger = null;
-var tapFocusedTrigger = null;
 
 
 // ★ 新規追加: RPGメニュー用状態変数
@@ -419,11 +569,13 @@ function restoreTownWindowReturnPoint(fallbackSceneId) {
     townWindowReturnPoint = null;
 
     if (!point || !isTownScene(point.sceneId)) {
-        changeScene(fallbackSceneId || "station_plaza");
+        changeTownScene(fallbackSceneId || "station_plaza");
         return;
     }
 
-    changeScene(point.sceneId);
+    if (!changeTownScene(point.sceneId)) {
+        return;
+    }
 
     player.x = point.x;
     player.y = point.y;
@@ -433,7 +585,7 @@ function restoreTownWindowReturnPoint(fallbackSceneId) {
     player.walkFrame = 0;
     player.walkWasMoving = false;
 
-    cancelTapMove();
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
     updateInteractionHint();
     updateCurrentArea();
 }
@@ -459,6 +611,15 @@ function getWorkPlayerSource(work) {
 }
 
 function getWorkPlayerReturnLabel(work) {
+    if (
+        workPlayerReturnDestinationId &&
+        DESTINATIONS &&
+        DESTINATIONS[workPlayerReturnDestinationId] &&
+        DESTINATIONS[workPlayerReturnDestinationId].title
+    ) {
+        return DESTINATIONS[workPlayerReturnDestinationId].title;
+    }
+
     if (work && work.returnLabel) {
         return work.returnLabel;
     }
@@ -482,7 +643,7 @@ function getWorkPlayerFrameTitle(work) {
     return (work && work.title) || "湯間庭町";
 }
 
-var STATION_GUIDE_MAP_IMAGE = "assets/station-guide-map.png?rev=20260710-final";
+var STATION_GUIDE_MAP_IMAGE = "assets/station-guide-map.jpg?v=20261001-jpeg01";
 var isStationGuideMapOpen = false;
 var stationGuideMapStylesReady = false;
 var stationGuideMapEventsReady = false;
@@ -491,6 +652,7 @@ var stationGuideMapImageReady = false;
 var stationGuideMapImageError = false;
 var stationGuideMapRevealTimer = null;
 
+var TOWN_ARRIVAL_TEXT = "まもなく、湯間庭町です。";
 var townArrivalLoadingStartedAt = 0;
 var townArrivalLoadingMinMs = 720;
 var townArrivalLoadingHideTimer = null;
@@ -499,6 +661,287 @@ var activeTownSceneDef = null;
 
 function cloneTownData(data) {
     return JSON.parse(JSON.stringify(data || []));
+}
+
+var TOWN_SCENE_REQUIRED_ARRAY_FIELDS = [
+    'edgeWarps',
+    'passableRects',
+    'blockedRects',
+    'blockedPoints',
+    'areaZones',
+    'triggers',
+    'props',
+    'groundRects',
+    'decor'
+];
+
+var TOWN_SCENE_VALID_DIRECTIONS = {
+    up: true,
+    down: true,
+    left: true,
+    right: true
+};
+
+var TOWN_SCENE_VALID_WARP_SIDES = {
+    up: true,
+    down: true,
+    left: true,
+    right: true
+};
+
+var lastTownSceneValidationErrors = [];
+
+function isFiniteTownNumber(value) {
+    return typeof value === 'number' && isFinite(value);
+}
+
+function validateTownRect(rect, path, errors, mapWidth, mapHeight, requireBounds) {
+    if (!rect || typeof rect !== 'object') {
+        errors.push(path + ' must be an object');
+        return;
+    }
+
+    var keys = ['x', 'y', 'w', 'h'];
+    for (var i = 0; i < keys.length; i++) {
+        if (!isFiniteTownNumber(rect[keys[i]])) {
+            errors.push(path + '.' + keys[i] + ' must be a finite number');
+        }
+    }
+
+    if (isFiniteTownNumber(rect.w) && rect.w <= 0) {
+        errors.push(path + '.w must be > 0');
+    }
+    if (isFiniteTownNumber(rect.h) && rect.h <= 0) {
+        errors.push(path + '.h must be > 0');
+    }
+
+    if (
+        requireBounds &&
+        isFiniteTownNumber(rect.x) &&
+        isFiniteTownNumber(rect.y) &&
+        isFiniteTownNumber(rect.w) &&
+        isFiniteTownNumber(rect.h)
+    ) {
+        if (
+            rect.x < 0 ||
+            rect.y < 0 ||
+            rect.x + rect.w > mapWidth ||
+            rect.y + rect.h > mapHeight
+        ) {
+            errors.push(path + ' must stay inside the map bounds');
+        }
+    }
+}
+
+function validateTownSpawnPoint(spawn, path, errors, mapWidth, mapHeight) {
+    if (!spawn || typeof spawn !== 'object') {
+        errors.push(path + ' must be an object');
+        return;
+    }
+
+    if (!isFiniteTownNumber(spawn.x) || !isFiniteTownNumber(spawn.y)) {
+        errors.push(path + ' must have finite x/y');
+        return;
+    }
+
+    if (
+        spawn.x < 0 ||
+        spawn.y < 0 ||
+        spawn.x >= mapWidth ||
+        spawn.y >= mapHeight
+    ) {
+        errors.push(path + ' must stay inside the map bounds');
+    }
+
+    if (!TOWN_SCENE_VALID_DIRECTIONS[String(spawn.dir || '')]) {
+        errors.push(path + '.dir must be up/down/left/right');
+    }
+}
+
+function validateTownSceneDefinition(sceneId, def, registry) {
+    var errors = [];
+    var id = String(sceneId || '');
+
+    if (!def || typeof def !== 'object') {
+        return { ok: false, errors: [id + ': scene definition is missing'] };
+    }
+
+    if (String(def.id || '') !== id) {
+        errors.push(id + '.id must exactly match the registry key');
+    }
+
+    if (!String(def.title || '').trim()) {
+        errors.push(id + '.title is required');
+    }
+
+    // Persisted-data validation is shared with Desk; runtime checks below
+    // retain ownership of presentation, spawn and scene routing.
+    errors = errors.concat(window.YUMANIWA_SCENE_VALIDATION.validateSceneData(
+        def, window.YUMANIWA_WORLD_OBJECTS && window.YUMANIWA_WORLD_OBJECTS.objects
+    ).errors);
+
+    var mapWidth = isFiniteTownNumber(def.mapWidth) ? def.mapWidth : 0;
+    var mapHeight = isFiniteTownNumber(def.mapHeight) ? def.mapHeight : 0;
+
+    if (!String(def.backgroundStyle || '').trim()) {
+        errors.push(id + '.backgroundStyle is required');
+    }
+
+    if (!String(def.backgroundImagePath || '').trim()) {
+        errors.push(id + '.backgroundImagePath is required');
+    }
+
+    for (var f = 0; f < TOWN_SCENE_REQUIRED_ARRAY_FIELDS.length; f++) {
+        var field = TOWN_SCENE_REQUIRED_ARRAY_FIELDS[f];
+        if (['props', 'triggers', 'passableRects', 'blockedRects', 'blockedPoints', 'areaZones'].indexOf(field) !== -1) continue;
+        if (!Array.isArray(def[field])) {
+            errors.push(id + '.' + field + ' must be an array');
+        }
+    }
+
+    if (!def.spawnPoints || typeof def.spawnPoints !== 'object' || Array.isArray(def.spawnPoints)) {
+        errors.push(id + '.spawnPoints must be an object');
+    } else {
+        if (!Object.prototype.hasOwnProperty.call(def.spawnPoints, 'default')) {
+            errors.push(id + '.spawnPoints.default is required');
+        }
+
+        for (var spawnKey in def.spawnPoints) {
+            if (!Object.prototype.hasOwnProperty.call(def.spawnPoints, spawnKey)) continue;
+            validateTownSpawnPoint(
+                def.spawnPoints[spawnKey],
+                id + '.spawnPoints.' + spawnKey,
+                errors,
+                mapWidth,
+                mapHeight
+            );
+        }
+    }
+
+    var grounds = Array.isArray(def.groundRects) ? def.groundRects : [];
+    for (var g = 0; g < grounds.length; g++) {
+        validateTownRect(grounds[g], id + '.groundRects[' + g + ']', errors,
+            mapWidth, mapHeight, true);
+    }
+
+    var warps = Array.isArray(def.edgeWarps) ? def.edgeWarps : [];
+    for (var w = 0; w < warps.length; w++) {
+        var warp = warps[w];
+        var warpPath = id + '.edgeWarps[' + w + ']';
+
+        if (!warp || typeof warp !== 'object') {
+            errors.push(warpPath + ' must be an object');
+            continue;
+        }
+
+        if (!TOWN_SCENE_VALID_WARP_SIDES[String(warp.side || '')]) {
+            errors.push(warpPath + '.side must be up/down/left/right');
+        }
+
+        if (
+            !isFiniteTownNumber(warp.min) ||
+            !isFiniteTownNumber(warp.max) ||
+            warp.max < warp.min
+        ) {
+            errors.push(warpPath + ' must have finite min/max with max >= min');
+        }
+
+        var targetId = String(warp.target || '').trim();
+        if (!targetId) {
+            errors.push(warpPath + '.target is required');
+            continue;
+        }
+
+        if (registry && !registry[targetId]) {
+            errors.push(warpPath + '.target does not exist: ' + targetId);
+            continue;
+        }
+
+        var targetSpawn = String(warp.targetSpawn || '').trim();
+        if (targetSpawn && registry && registry[targetId]) {
+            var targetSpawns = registry[targetId].spawnPoints;
+            if (!targetSpawns || !targetSpawns[targetSpawn]) {
+                errors.push(
+                    warpPath + '.targetSpawn does not exist on ' +
+                    targetId + ': ' + targetSpawn
+                );
+            }
+        }
+    }
+
+    return {
+        ok: errors.length === 0,
+        errors: errors
+    };
+}
+
+function validateTownSceneRegistry() {
+    var registry = window.TOWN_SCENE_MAPS;
+    var errors = [];
+
+    if (!registry || typeof registry !== 'object') {
+        return {
+            ok: false,
+            errors: ['TOWN_SCENE_MAPS registry is missing']
+        };
+    }
+
+    var count = 0;
+    for (var sceneId in registry) {
+        if (!Object.prototype.hasOwnProperty.call(registry, sceneId)) continue;
+        count++;
+
+        var result = validateTownSceneDefinition(
+            sceneId,
+            registry[sceneId],
+            registry
+        );
+
+        if (!result.ok) {
+            errors = errors.concat(result.errors);
+        }
+    }
+
+    if (!count) {
+        errors.push('TOWN_SCENE_MAPS registry is empty');
+    }
+
+    lastTownSceneValidationErrors = errors.slice();
+
+    return {
+        ok: errors.length === 0,
+        errors: errors
+    };
+}
+
+function validateTownSceneRequest(sceneId, spawnKey) {
+    var registryResult = validateTownSceneRegistry();
+    if (!registryResult.ok) return registryResult;
+
+    var def = getTownSceneDefinition(sceneId);
+    if (!def) {
+        return {
+            ok: false,
+            errors: [String(sceneId || 'unknown') + ': scene definition is missing']
+        };
+    }
+
+    var key = String(spawnKey || 'default');
+    if (!def.spawnPoints[key]) {
+        return {
+            ok: false,
+            errors: [
+                String(sceneId) + '.spawnPoints.' + key + ' does not exist'
+            ]
+        };
+    }
+
+    return {
+        ok: true,
+        errors: [],
+        def: def,
+        spawnKey: key
+    };
 }
 
 function isTownScene(sceneId) {
@@ -511,6 +954,12 @@ function getTownSceneDefinition(sceneId) {
 }
 
 var townSceneBackgroundCache = {};
+var townDeferredBackgroundQueue = [];
+var townDeferredBackgroundScheduled = false;
+var townDeferredBackgroundRunning = false;
+
+// 初回到着が完了したことを、背景/PROPの遅延preloadへ共有する。
+window.YUMANIWA_ARRIVAL_READY = false;
 
 function flushTownSceneBackgroundCallbacks(entry) {
     if (!entry || !entry.callbacks) return;
@@ -525,7 +974,23 @@ function flushTownSceneBackgroundCallbacks(entry) {
     }
 }
 
-function preloadTownSceneBackgroundAsset(path, callback) {
+function getTownBackgroundRetryDelay(entry) {
+    var retryCount = Math.max(0, Number(entry && entry.retryCount) || 0);
+    return Math.min(30000, 2000 * Math.pow(2, Math.max(0, retryCount - 1)));
+}
+
+function shouldRetryTownBackground(entry, options) {
+    if (!entry || !entry.error) return false;
+
+    var opts = options || {};
+    if (!opts.retryOnError) return false;
+    if (opts.forceRetry) return true;
+
+    var errorAt = Math.max(0, Number(entry.errorAt) || 0);
+    return Date.now() - errorAt >= getTownBackgroundRetryDelay(entry);
+}
+
+function preloadTownSceneBackgroundAsset(path, callback, options) {
     if (!path) {
         if (typeof callback === "function") {
             window.setTimeout(function() {
@@ -535,7 +1000,14 @@ function preloadTownSceneBackgroundAsset(path, callback) {
         return null;
     }
 
+    var opts = options || {};
     var entry = townSceneBackgroundCache[path];
+    var retryCount = 0;
+
+    if (entry && shouldRetryTownBackground(entry, opts)) {
+        retryCount = Math.max(0, Number(entry.retryCount) || 0) + 1;
+        entry = null;
+    }
 
     if (entry) {
         if (typeof callback === "function") {
@@ -552,13 +1024,26 @@ function preloadTownSceneBackgroundAsset(path, callback) {
     }
 
     var image = new Image();
+    var priority = opts.priority || "auto";
+
+    try {
+        image.decoding = "async";
+        if (priority && priority !== "auto") {
+            image.fetchPriority = priority;
+        }
+    } catch (error) {
+        // 未対応ブラウザでは通常のImage読込へフォールバックする。
+    }
 
     entry = {
         path: path,
         image: image,
         loaded: false,
         error: false,
-        callbacks: []
+        errorAt: 0,
+        retryCount: retryCount,
+        callbacks: [],
+        priority: priority
     };
 
     if (typeof callback === "function") {
@@ -566,16 +1051,21 @@ function preloadTownSceneBackgroundAsset(path, callback) {
     }
 
     townSceneBackgroundCache[path] = entry;
+    townLoadTraceImageStart('background', path);
 
     image.onload = function() {
         entry.loaded = true;
         entry.error = false;
+        entry.errorAt = 0;
+        townLoadTraceImageDone('background', path, 'loaded');
         flushTownSceneBackgroundCallbacks(entry);
     };
 
     image.onerror = function() {
         entry.loaded = false;
         entry.error = true;
+        entry.errorAt = Date.now();
+        townLoadTraceImageDone('background', path, 'error');
         flushTownSceneBackgroundCallbacks(entry);
     };
 
@@ -584,70 +1074,182 @@ function preloadTownSceneBackgroundAsset(path, callback) {
     return entry;
 }
 
-function preloadTownSceneBackgrounds() {
-    if (!window.TOWN_SCENE_MAPS) return;
+function collectDeferredTownSceneBackgrounds(currentPath) {
+    var queue = [];
+    var seen = {};
+
+    if (!window.TOWN_SCENE_MAPS) return queue;
 
     for (var sceneId in window.TOWN_SCENE_MAPS) {
         if (!Object.prototype.hasOwnProperty.call(window.TOWN_SCENE_MAPS, sceneId)) continue;
 
         var def = window.TOWN_SCENE_MAPS[sceneId];
-        if (def && def.backgroundImagePath) {
-            preloadTownSceneBackgroundAsset(def.backgroundImagePath);
-        }
+        var path = def && def.backgroundImagePath ? def.backgroundImagePath : "";
+
+        if (!path || path === currentPath || seen[path]) continue;
+        seen[path] = true;
+        queue.push(path);
+    }
+
+    return queue;
+}
+
+// 起動時は「今いる場所」の背景だけを最優先で開始する。
+// 他シーン背景は初回到着後、1枚ずつ低優先度で読む。
+function preloadTownSceneBackgrounds() {
+    if (!window.TOWN_SCENE_MAPS) return;
+
+    var currentDef = getTownSceneDefinition(currentScene);
+    var currentPath = currentDef && currentDef.backgroundImagePath
+        ? currentDef.backgroundImagePath
+        : "";
+
+    townDeferredBackgroundQueue = collectDeferredTownSceneBackgrounds(currentPath);
+
+    townLoadTraceMark('background_preload_current_start', {
+        scene: currentScene || '',
+        path: currentPath || ''
+    }, true);
+
+    townLoadTraceMark('background_deferred_queued', {
+        count: townDeferredBackgroundQueue.length
+    }, true);
+
+    if (currentPath) {
+        preloadTownSceneBackgroundAsset(currentPath, null, { priority: "high" });
     }
 }
 
+function scheduleTownBackgroundIdle(callback, delayMs) {
+    window.setTimeout(function() {
+        if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(function() {
+                callback();
+            }, { timeout: 2200 });
+        } else {
+            callback();
+        }
+    }, Math.max(0, Number(delayMs) || 0));
+}
+
+function scheduleDeferredTownSceneBackgrounds() {
+    if (townDeferredBackgroundScheduled) return;
+    townDeferredBackgroundScheduled = true;
+
+    if (!townDeferredBackgroundQueue.length) {
+        var currentDef = getTownSceneDefinition(currentScene);
+        var currentPath = currentDef && currentDef.backgroundImagePath
+            ? currentDef.backgroundImagePath
+            : "";
+        townDeferredBackgroundQueue = collectDeferredTownSceneBackgrounds(currentPath);
+    }
+
+    var total = townDeferredBackgroundQueue.length;
+    var completed = 0;
+
+    townLoadTraceMark('background_deferred_start', {
+        count: total
+    }, true);
+
+    function finishAll() {
+        townDeferredBackgroundRunning = false;
+        townLoadTraceMark('background_deferred_ready', {
+            count: completed
+        }, true);
+    }
+
+    function loadNext() {
+        if (townDeferredBackgroundRunning) return;
+
+        if (!townDeferredBackgroundQueue.length) {
+            finishAll();
+            return;
+        }
+
+        var path = townDeferredBackgroundQueue.shift();
+        var existing = townSceneBackgroundCache[path];
+
+        if (existing && existing.loaded) {
+            completed += 1;
+            scheduleTownBackgroundIdle(loadNext, 160);
+            return;
+        }
+
+        townDeferredBackgroundRunning = true;
+        townLoadTraceMark('background_deferred_item_start', {
+            path: path,
+            index: completed + 1,
+            total: total
+        });
+
+        preloadTownSceneBackgroundAsset(path, function(entry) {
+            completed += 1;
+            townDeferredBackgroundRunning = false;
+
+            townLoadTraceMark('background_deferred_item_done', {
+                path: path,
+                status: entry && entry.error ? 'error' : 'loaded',
+                completed: completed,
+                total: total
+            });
+
+            scheduleTownBackgroundIdle(loadNext, 160);
+        }, {
+            priority: "low",
+            retryOnError: true,
+            forceRetry: true
+        });
+    }
+
+    // 現在地が描画された直後の操作・レイアウトを邪魔しないよう、少し間を置く。
+    scheduleTownBackgroundIdle(loadNext, 700);
+}
+
+function announceTownArrivalReady() {
+    if (window.YUMANIWA_ARRIVAL_READY) return;
+
+    window.YUMANIWA_ARRIVAL_READY = true;
+    townLoadTraceMark('arrival_ready', null, true);
+
+    scheduleDeferredTownSceneBackgrounds();
+
+    try {
+        window.dispatchEvent(new Event('yumaniwa:arrival-ready'));
+    } catch (error) {
+        var event = document.createEvent('Event');
+        event.initEvent('yumaniwa:arrival-ready', false, false);
+        window.dispatchEvent(event);
+    }
+}
+
+// The transition owns the timeout. This subscription only reports readiness;
+// disposal makes an already queued image callback inert without cancelling the cache load.
 function waitForTownSceneBackground(sceneId, done) {
     var finished = false;
-
     function finish() {
         if (finished) return;
         finished = true;
-
-        if (timeoutId) {
-            window.clearTimeout(timeoutId);
-        }
-
-        if (typeof done === "function") {
-            done();
-        }
+        done();
     }
-
     var def = getTownSceneDefinition(sceneId);
-    var path = def && def.backgroundImagePath ? def.backgroundImagePath : "";
-
-    if (!path) {
-        finish();
-        return;
+    var path = def && def.backgroundImagePath;
+    if (!path) finish();
+    else {
+        var entry = preloadTownSceneBackgroundAsset(path, finish, {
+            priority: "high", retryOnError: true, forceRetry: true
+        });
+        if (!entry || entry.loaded || entry.error) finish();
     }
-
-    var entry = preloadTownSceneBackgroundAsset(path, function() {
-        finish();
-    });
-
-    if (!entry || entry.loaded || entry.error) {
-        finish();
-        return;
-    }
-
-    // 通信やキャッシュの都合で読み込みが詰まった場合でも、暗転したまま固まらないようにする。
-    var timeoutId = window.setTimeout(function() {
-        finish();
-    }, 2200);
+    return function() { finished = true; };
 }
 
 
 function loadTownSceneBackground(def) {
-    activeTownSceneDef = def || null;
+    activeTownSceneDef = def;
     bgLoaded = false;
     bgError = false;
 
-    var bgPath = def && def.backgroundImagePath ? def.backgroundImagePath : "";
-
-    if (!bgPath) {
-        finishTownArrivalLoading();
-        return;
-    }
+    var bgPath = def.backgroundImagePath;
 
     var entry = preloadTownSceneBackgroundAsset(bgPath, function(doneEntry) {
         var currentPath = activeTownSceneDef && activeTownSceneDef.backgroundImagePath
@@ -658,12 +1260,20 @@ function loadTownSceneBackground(def) {
 
         bgLoaded = !!doneEntry.loaded;
         bgError = !!doneEntry.error;
+        townLoadTraceMark('current_background_ready', {
+            path: bgPath,
+            status: doneEntry.error ? 'error' : 'loaded'
+        }, true);
 
         if (doneEntry.image) {
             bgImage = doneEntry.image;
         }
 
         finishTownArrivalLoading();
+    }, {
+        priority: "high",
+        retryOnError: true,
+        forceRetry: true
     });
 
     if (entry && entry.image) {
@@ -673,6 +1283,10 @@ function loadTownSceneBackground(def) {
     if (entry && entry.loaded) {
         bgLoaded = true;
         bgError = false;
+        townLoadTraceMark('current_background_ready', {
+            path: bgPath,
+            status: 'cached'
+        }, true);
         finishTownArrivalLoading();
         return;
     }
@@ -680,56 +1294,76 @@ function loadTownSceneBackground(def) {
     if (entry && entry.error) {
         bgLoaded = false;
         bgError = true;
+        townLoadTraceMark('current_background_ready', {
+            path: bgPath,
+            status: 'error'
+        }, true);
         finishTownArrivalLoading();
     }
 }
 
 
 function placePlayerAtTownSpawn(def, spawnKey) {
-    if (!def) return;
-
-    var spawns = def.spawnPoints || {};
-    var spawn = spawns[spawnKey] || spawns.default || { x: 12, y: 12, dir: 'down' };
+    var spawn = def.spawnPoints[spawnKey];
 
     player.x = spawn.x * TILE_SIZE;
     player.y = spawn.y * TILE_SIZE;
-    player.dir = spawn.dir || 'down';
+    player.dir = spawn.dir;
     player.isMoving = false;
     player.walkDistance = 0;
     player.walkFrame = 0;
     player.walkWasMoving = false;
 }
 
-function applyTownSceneDefinition(sceneId, spawnKey) {
-    var def = getTownSceneDefinition(sceneId);
-    if (!def) return false;
+function applyTownSceneDefinition(sceneId, spawnKey, transitionToken) {
+    if (!window.YUMANIWA_TOWN_TRANSITION.acceptSceneChange(transitionToken)) return false;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    var validation = validateTownSceneRequest(sceneId, spawnKey);
+    if (!validation.ok) {
+        lastTownSceneValidationErrors = validation.errors.slice();
+        return false;
+    }
+
+    if (!canLeaveTownEditorSession(sceneId)) return false;
+    finishPartEditorDrag();
+    var session = window.YUMANIWA_EDITOR_SESSION.current();
+    if (session && session.sceneId !== sceneId) {
+        closeTownEditor();
+        window.YUMANIWA_EDITOR_SESSION.end();
+        resetTownEditorTransientState();
+        session = null;
+    }
+    window.YUMANIWA_EDITOR_SESSION.freeze(validation.def);
+    var def = session ? session.draft : cloneTownData(validation.def);
+    var resolvedSpawnKey = validation.spawnKey;
 
     activeTownSceneDef = def;
-    MAP_WIDTH = Number(def.mapWidth) || 24;
-    MAP_HEIGHT = Number(def.mapHeight) || 24;
-    passableRects = cloneTownData(def.passableRects);
-    blockedRects = cloneTownData(def.blockedRects);
-    blockedPoints = cloneTownData(def.blockedPoints);
-    triggers = cloneTownData(def.triggers);
-    areaZones = cloneTownData(def.areaZones);
+    MAP_WIDTH = def.mapWidth;
+    MAP_HEIGHT = def.mapHeight;
+    passableRects = session ? [] : def.passableRects;
+    blockedRects = session ? [] : def.blockedRects;
+    blockedPoints = session ? [] : def.blockedPoints;
+    triggers = def.triggers;
+    areaZones = def.areaZones;
 
-    // 旧 station-plaza-props.js が足した固定座標の判定は除外し、
-    // ここからはパーツ自身の collision 定義で追従させる。
-    removeLegacyTownPartCollisionEntries();
-    captureTownPartTriggerTemplates(def);
-    ensureAllTownPartMetadata();
-    syncTownPartTriggers();
+    var propApi = window.YUMANIWA_STATION_PLAZA_PROPS;
+    if (propApi && typeof propApi.preloadSceneProps === 'function') {
+        propApi.preloadSceneProps(def, {
+            priority: 'high',
+            retryOnError: true,
+            forceRetry: true
+        });
+    }
 
     currentAreaId = null;
-    tapFocusedTrigger = null;
     pendingWarp = null;
     editingPartIndex = -1;
     partDragState = null;
-    cancelTapMove();
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
     initGrid();
-    carveTownEdgeWarpTiles(def);
     loadTownSceneBackground(def);
-    placePlayerAtTownSpawn(def, spawnKey || 'default');
+    placePlayerAtTownSpawn(def, resolvedSpawnKey);
     updateUI();
     updateInteractionHint();
     setTimeout(function() { updateCurrentArea(); }, 10);
@@ -745,7 +1379,11 @@ function drawTownSceneBackground(cam) {
     var def = activeTownSceneDef;
 
     if (def && def.backgroundImagePath) {
-        var entry = preloadTownSceneBackgroundAsset(def.backgroundImagePath);
+        var entry = preloadTownSceneBackgroundAsset(
+            def.backgroundImagePath,
+            null,
+            { retryOnError: true }
+        );
 
         if (entry && entry.loaded && entry.image) {
             ctx.drawImage(entry.image, 0, 0, cam.mapPixelW, cam.mapPixelH);
@@ -763,7 +1401,7 @@ function drawTownSceneBackground(cam) {
         // 読み込み失敗時だけ、下の仮描画へフォールバックする。
     }
 
-    if (bgLoaded) {
+    if (bgLoaded && bgImage) {
         ctx.drawImage(bgImage, 0, 0, cam.mapPixelW, cam.mapPixelH);
         return;
     }
@@ -876,9 +1514,6 @@ function carveTownEdgeWarpTiles(def) {
 
                 if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
                     collisionGrid[y][x] = 1;
-                    if (baseCollisionGrid[y]) {
-                        baseCollisionGrid[y][x] = 1;
-                    }
                 }
             }
         }
@@ -904,9 +1539,8 @@ function tryTownEdgeWarp(requestedSide) {
 
         if (hit) {
             clearDpadInput();
-            cancelTapMove();
-            changeSceneWithTownFade(warp.target, warp.targetSpawn || 'default');
-            return true;
+            window.YUMANIWA_TOWN_INTERACTION.cancel();
+            return changeSceneWithTownFade(warp.target, warp.targetSpawn || 'default');
         }
     }
 
@@ -917,53 +1551,65 @@ function tryTownEdgeWarp(requestedSide) {
 var STATION_GUIDE_MAP_HOTSPOTS = [
     {
         id: "shinpo",
-        label: "湯間庭新報",
+        label: "掲示板",
+        subLabel: "読みもの",
         kind: "place",
         target: "shinpo_board",
-        rect: { left: 22.8, top: 20.6, width: 16.0, height: 11.2 }
+        rect: { left: 24.0, top: 18.0, width: 16.0, height: 20.0 },
+        badge: { left: 27.0, top: 31.0 }
     },
     {
         id: "tomogushi",
         label: "灯串横丁",
+        subLabel: "ゲーム",
         kind: "place",
         target: "tomogushi_alley_map",
-        rect: { left: 0.0, top: 0.0, width: 24.0, height: 70.0 }
+        rect: { left: 3.0, top: 38.0, width: 28.0, height: 34.0 },
+        badge: { left: 14.0, top: 57.0 }
     },
     {
         id: "yumado",
-        label: "湯窓通り",
+        label: "大通り",
+        subLabel: "通り",
         kind: "place",
         target: "yumado_street_map",
-        rect: { left: 63.0, top: 0.0, width: 37.0, height: 56.0 }
+        rect: { left: 62.0, top: 18.0, width: 32.0, height: 38.0 },
+        badge: { left: 82.0, top: 42.0 }
     },
     {
         id: "leisure_center",
-        label: "湯窓レジャーセンター",
+        label: "レジャーセンター",
+        subLabel: "展示",
         kind: "place",
         target: "leisure_center_map",
-        rect: { left: 74.5, top: 52.5, width: 25.5, height: 36.0 }
+        rect: { left: 63.0, top: 56.0, width: 28.0, height: 32.0 },
+        badge: { left: 78.0, top: 76.0 }
     },
     {
         id: "station",
         label: "湯間庭駅",
         kind: "message",
         text: "湯間庭駅。\n\nのんびりしたローカル線の小さな駅だ。\nここから、湯気と看板の町歩きが始まる。",
-        rect: { left: 38.0, top: 58.0, width: 27.0, height: 31.0 }
+        rect: { left: 30.0, top: 74.0, width: 31.0, height: 26.0 }
     },
     {
         id: "current",
         label: "現在地",
         kind: "close",
-        rect: { left: 42.0, top: 39.0, width: 16.5, height: 15.0 }
+        rect: { left: 42.0, top: 43.0, width: 16.0, height: 17.0 },
+        badge: { left: 50.0, top: 55.5 },
+        current: true
     },
     {
         id: "onsen",
-        label: "湯けむり坂 工事中",
+        label: "温泉方面",
+        subLabel: "町の奥へ",
         kind: "place",
         target: "onsen_slope_map",
-        rect: { left: 38.0, top: 0.0, width: 24.0, height: 29.0 }
+        rect: { left: 40.0, top: 0.0, width: 21.0, height: 25.0 },
+        badge: { left: 50.0, top: 11.0 }
     }
-];
+]
 
 function setupStationGuideMapEvents() {
     if (stationGuideMapEventsReady) return;
@@ -1228,10 +1874,10 @@ function ensureTownLoadingStyles() {
         "padding:24px 18px 20px;text-align:center;" +
         "}" +
         ".town-loading-mark{" +
-        "width:38px;height:38px;margin:0 auto 13px;border-radius:50%;" +
-        "background:radial-gradient(circle at 50% 45%, #fff0c8 0 20%, #b89153 21% 48%, rgba(255,240,200,.12) 49% 100%);" +
-        "box-shadow:0 0 22px rgba(255,224,160,.28);" +
-        "animation:townLoadingLamp 1.45s ease-in-out infinite;" +
+        "width:9px;height:9px;margin:0 auto 18px;border-radius:50%;" +
+        "background:#ffe9ad;" +
+        "box-shadow:0 0 0 5px rgba(207,158,84,.08),0 0 16px rgba(255,218,143,.34);" +
+        "animation:townArrivalLight 2.4s ease-in-out infinite;" +
         "}" +
         ".town-loading-label{" +
         "font-weight:850;font-size:18px;letter-spacing:.06em;line-height:1.6;" +
@@ -1243,12 +1889,12 @@ function ensureTownLoadingStyles() {
         ".town-loading-dots span:nth-child(3){animation-delay:.36s;}" +
         "#work-player.is-loading #work-player-frame{opacity:0;}" +
         "#work-player-frame{transition:opacity 360ms ease;}" +
-        "@keyframes townLoadingLamp{0%,100%{opacity:.72;transform:scale(.96);}50%{opacity:1;transform:scale(1.04);}}" +
+        "@keyframes townArrivalLight{0%,100%{opacity:.58;transform:scale(.92);}50%{opacity:1;transform:scale(1.08);}}" +
         "@keyframes townLoadingDots{0%,100%{opacity:.28;}50%{opacity:1;}}" +
         "@media (max-width:720px){" +
         ".town-loading-card{width:min(86vw,320px);padding:22px 16px 18px;}" +
         ".town-loading-label{font-size:16px;}" +
-        ".town-loading-mark{width:34px;height:34px;}" +
+        ".town-loading-mark{width:9px;height:9px;}" +
         "}";
 
     document.head.appendChild(style);
@@ -1267,7 +1913,7 @@ function getOrCreateTownLoadingLayer() {
     layer.innerHTML =
         '<div class="town-loading-card" role="status" aria-live="polite">' +
         '<div class="town-loading-mark" aria-hidden="true"></div>' +
-        '<div id="town-loading-label" class="town-loading-label">湯間庭町に到着しています…</div>' +
+        '<div id="town-loading-label" class="town-loading-label">' + TOWN_ARRIVAL_TEXT + '</div>' +
         '<div class="town-loading-dots" aria-hidden="true"><span>・</span><span>・</span><span>・</span></div>' +
         '</div>';
 
@@ -1280,7 +1926,7 @@ function showTownLoading(label) {
     var labelEl = document.getElementById("town-loading-label");
 
     if (labelEl) {
-        labelEl.textContent = label || "湯間庭町に到着しています…";
+        labelEl.textContent = label || TOWN_ARRIVAL_TEXT;
     }
 
     if (townArrivalLoadingHideTimer) {
@@ -1313,79 +1959,203 @@ function hideTownLoading() {
 }
 
 function showTownArrivalLoading() {
-    showTownLoading("湯間庭町に到着しています…");
+    townLoadTraceMark('arrival_loading_shown', null, true);
+    showTownLoading(TOWN_ARRIVAL_TEXT);
 }
 
 function finishTownArrivalLoading() {
+    townLoadTraceMark('arrival_loading_hidden', {
+        backgroundLoaded: !!bgLoaded,
+        backgroundError: !!bgError
+    }, true);
     hideTownLoading();
+    announceTownArrivalReady();
+}
+
+function normalizeTownSceneErrors(errors) {
+    return Array.isArray(errors) ? errors.filter(Boolean) : [];
+}
+
+function failTownSceneBoot(sceneId, errors) {
+    var id = String(sceneId || "unknown");
+    var details = normalizeTownSceneErrors(errors);
+
+    townLoadTraceMark('town_scene_boot_failed', {
+        scene: id,
+        reason: 'invalid_scene_registry',
+        errors: details
+    }, true);
+
+    if (window.console && typeof window.console.error === 'function') {
+        window.console.error(
+            '[Yumaniwa] Canonical town scene validation failed:',
+            id,
+            details
+        );
+    }
+
+    // Do not hide the arrival layer or announce ready.
+    // Invalid canonical scene data must never be repaired by runtime defaults.
+    showTownLoading("町のデータを読み込めませんでした");
+}
+
+function reportTownSceneTransitionFailure(sceneId, errors) {
+    var id = String(sceneId || "unknown");
+    var details = normalizeTownSceneErrors(errors);
+
+    townLoadTraceMark('town_scene_transition_failed', {
+        scene: id,
+        reason: 'invalid_scene_registry',
+        errors: details
+    });
+
+    if (window.console && typeof window.console.error === 'function') {
+        window.console.error(
+            '[Yumaniwa] Refused transition to invalid town scene:',
+            id,
+            details
+        );
+    }
+
+    if (typeof showMessage === 'function') {
+        showMessage("この道は、いま町のデータにつながっていないようです。");
+    }
+}
+
+// One lifecycle for town and guide fades. Movement remains owned by interaction.
+window.YUMANIWA_TOWN_TRANSITION = (function() {
+    var generation = 0;
+    var active = null;
+
+    function current(token) { return !!active && active.generation === token; }
+    function cancel() {
+        var previous = active;
+        active = null;
+        generation += 1;
+        if (previous) {
+            previous.timers.forEach(function(id) { window.clearTimeout(id); });
+            previous.frames.forEach(function(id) { window.cancelAnimationFrame(id); });
+            if (previous.stopWaiting) previous.stopWaiting();
+            if (previous.fadeElement.parentNode) previous.fadeElement.remove();
+        }
+        updateControlVisibility();
+    }
+    function schedule(state, callback, delay) {
+        var id = window.setTimeout(function() {
+            if (!current(state.generation)) return;
+            state.timers = state.timers.filter(function(item) { return item !== id; });
+            callback();
+        }, delay);
+        state.timers.push(id);
+        return id;
+    }
+    function frame(state, callback) {
+        var id = window.requestAnimationFrame(function() {
+            if (!current(state.generation)) return;
+            state.frames = state.frames.filter(function(item) { return item !== id; });
+            callback();
+        });
+        state.frames.push(id);
+    }
+    function request(commit, timing, waitForReady) {
+        if (active) return false;
+        var fade = document.createElement("div");
+        var state = active = {
+            generation: ++generation, phase: "fadeOut", fadeElement: fade,
+            timers: [], frames: [], stopWaiting: null
+        };
+        window.YUMANIWA_TOWN_INTERACTION.cancel();
+        clearDpadInput();
+        player.isMoving = false;
+        updateControlVisibility();
+        fade.id = "town-rpg-fade-transition";
+        Object.assign(fade.style, {
+            position: "fixed", left: "0", top: "0", right: "0", bottom: "0",
+            zIndex: "12000", background: "#050403", opacity: "0",
+            pointerEvents: "auto", willChange: "opacity",
+            transition: "opacity " + timing.out + "ms cubic-bezier(.22,.8,.28,1)"
+        });
+        document.body.appendChild(fade);
+        frame(state, function() { frame(state, function() { fade.style.opacity = "1"; }); });
+
+        function reveal() {
+            if (!current(state.generation) || state.phase !== "waiting") return;
+            state.phase = "hold";
+            if (state.stopWaiting) state.stopWaiting();
+            schedule(state, function() {
+                state.phase = "fadeIn";
+                fade.style.transition = "opacity " + timing.in + "ms cubic-bezier(.22,.8,.28,1)";
+                fade.style.opacity = "0";
+                schedule(state, cancel, timing.in + 80);
+            }, 70);
+        }
+        schedule(state, function() {
+            state.phase = "commit";
+            try {
+                if (commit(state.generation) === false) {
+                    if (current(state.generation)) cancel();
+                    return;
+                }
+                if (!current(state.generation)) return;
+                state.phase = "waiting";
+                if (waitForReady) {
+                    var timeout = schedule(state, reveal, 2200);
+                    state.stopWaiting = waitForReady(function() {
+                        if (!current(state.generation)) return;
+                        window.clearTimeout(timeout);
+                        reveal();
+                    });
+                    // Readiness may be synchronous or may itself cause cancellation.
+                    if ((!current(state.generation) || state.phase !== "waiting") && state.stopWaiting) {
+                        state.stopWaiting();
+                    }
+                } else reveal();
+            } catch (error) {
+                if (current(state.generation)) cancel();
+                throw error;
+            }
+        }, timing.out + 40);
+        return true;
+    }
+    return {
+        request: request, cancel: cancel,
+        isActive: function() { return active !== null; },
+        // Omitted token means a direct change, which takes precedence even if rejected later.
+        acceptSceneChange: function(token) {
+            if (token === undefined) { cancel(); return true; }
+            return current(token) && active.phase === "commit";
+        }
+    };
+})();
+
+function canControlTownPlayer() {
+    return isTownScene(currentScene) && !isEditMode && !isMessageOpen &&
+        !isWorkPlayerOpen && !isStationGuideMapOpen &&
+        !window.YUMANIWA_TOWN_TRANSITION.isActive();
 }
 
 function playTownRpgFadeTransition(callback, waitForReady) {
-    var oldFade = document.getElementById("town-rpg-fade-transition");
-    if (oldFade && oldFade.parentNode) {
-        oldFade.parentNode.removeChild(oldFade);
-    }
-
-    var fadeOutMs = 400;
-    var holdMs = 70;
-    var fadeInMs = 460;
-
-    var fade = document.createElement("div");
-    fade.id = "town-rpg-fade-transition";
-    fade.style.position = "fixed";
-    fade.style.left = "0";
-    fade.style.top = "0";
-    fade.style.right = "0";
-    fade.style.bottom = "0";
-    fade.style.zIndex = "12000";
-    fade.style.background = "#050403";
-    fade.style.opacity = "0";
-    fade.style.pointerEvents = "auto";
-    fade.style.transition = "opacity " + fadeOutMs + "ms cubic-bezier(.22,.8,.28,1)";
-    fade.style.willChange = "opacity";
-
-    document.body.appendChild(fade);
-
-    window.requestAnimationFrame(function() {
-        window.requestAnimationFrame(function() {
-            fade.style.opacity = "1";
-        });
-    });
-
-    function startFadeIn() {
-        window.setTimeout(function() {
-            fade.style.transition = "opacity " + fadeInMs + "ms cubic-bezier(.22,.8,.28,1)";
-            fade.style.opacity = "0";
-
-            window.setTimeout(function() {
-                if (fade && fade.parentNode) {
-                    fade.parentNode.removeChild(fade);
-                }
-            }, fadeInMs + 80);
-        }, holdMs);
-    }
-
-    window.setTimeout(function() {
-        if (typeof callback === "function") {
-            callback();
-        }
-
-        if (typeof waitForReady === "function") {
-            waitForReady(startFadeIn);
-        } else {
-            startFadeIn();
-        }
-    }, fadeOutMs + 40);
+    return window.YUMANIWA_TOWN_TRANSITION.request(callback, {out:400, in:460}, waitForReady);
 }
 
 
 function changeSceneWithTownFade(sceneId, spawnKey) {
-    playTownRpgFadeTransition(
-        function() {
-            changeScene(sceneId, spawnKey);
+    if (window.YUMANIWA_TOWN_TRANSITION.isActive()) return false;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    if (!canLeaveTownEditorSession(sceneId)) return false;
+    var validation = validateTownSceneRequest(sceneId, spawnKey);
+    if (!validation.ok) {
+        reportTownSceneTransitionFailure(sceneId, validation.errors);
+        return false;
+    }
+
+    return playTownRpgFadeTransition(
+        function(token) {
+            return changeTownScene(sceneId, spawnKey, token);
         },
         function(reveal) {
-            waitForTownSceneBackground(sceneId, reveal);
+            return waitForTownSceneBackground(sceneId, reveal);
         }
     );
 }
@@ -1419,6 +2189,48 @@ function getWorkOpeningLabel(work) {
 
 
 
+function appendStationGuideMapLabels(layer) {
+    if (!layer) return;
+
+    var root = layer.querySelector(".station-guide-map-labels");
+    if (!root) return;
+
+    root.innerHTML = "";
+
+    for (var i = 0; i < STATION_GUIDE_MAP_HOTSPOTS.length; i++) {
+        var spot = STATION_GUIDE_MAP_HOTSPOTS[i];
+        if (!spot || !spot.badge) continue;
+
+        if (spot.current) {
+            var marker = document.createElement("div");
+            marker.className = "station-guide-current-marker";
+            marker.style.left = spot.badge.left + "%";
+            marker.style.top = spot.badge.top + "%";
+            root.appendChild(marker);
+            continue;
+        }
+
+        var badge = document.createElement("div");
+        badge.className = "station-guide-map-label";
+        badge.style.left = spot.badge.left + "%";
+        badge.style.top = spot.badge.top + "%";
+
+        var mainLabel = document.createElement("span");
+        mainLabel.className = "station-guide-map-label-main";
+        mainLabel.textContent = spot.label || "";
+        badge.appendChild(mainLabel);
+
+        if (spot.subLabel) {
+            var subLabel = document.createElement("span");
+            subLabel.className = "station-guide-map-label-sub";
+            subLabel.textContent = spot.subLabel;
+            badge.appendChild(subLabel);
+        }
+
+        root.appendChild(badge);
+    }
+}
+
 function getOrCreateStationGuideMapLayer() {
     var existing = document.getElementById("station-guide-map-layer");
     if (existing) return existing;
@@ -1433,11 +2245,14 @@ function getOrCreateStationGuideMapLayer() {
     layer.innerHTML =
         '<div class="station-guide-map-backdrop" aria-hidden="true"></div>' +
         '<div class="station-guide-map-window" role="dialog" aria-modal="true" aria-label="駅前案内図">' +
+        '<div class="station-guide-map-toolbar">' +
+        '<div class="station-guide-map-hint">行き先をタップ</div>' +
+        '<button class="station-guide-map-close" type="button" aria-label="地図を閉じる">閉じる</button>' +
+        '</div>' +
         '<div class="station-guide-map-image-wrap">' +
         '<img class="station-guide-map-image" src="' + STATION_GUIDE_MAP_IMAGE + '" alt="湯間庭町 駅前案内図">' +
         '<div class="station-guide-map-hotspots" aria-label="行き先"></div>' +
-        '<button class="station-guide-map-close" type="button" aria-label="地図を閉じる">閉じる</button>' +
-        '<div class="station-guide-map-hint">行き先をタップ</div>' +
+        '<div class="station-guide-map-labels" aria-hidden="true"></div>' +
         '</div>' +
         '</div>';
 
@@ -1491,15 +2306,14 @@ function getOrCreateStationGuideMapLayer() {
         }
     }
 
+    appendStationGuideMapLabels(layer);
     return layer;
 }
 
 function openStationGuideMap() {
     setupStationGuideMapEvents();
 
-    if (typeof cancelTapMove === "function") {
-        cancelTapMove();
-    }
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
 
     var layer = getOrCreateStationGuideMapLayer();
     if (!layer) return;
@@ -1770,61 +2584,13 @@ function hideStationGuideMapConfirm() {
 }
 
 function playStationGuideMapDarkTransition(callback) {
-    var oldFade = document.getElementById("town-rpg-fade-transition");
-    if (oldFade && oldFade.parentNode) {
-        oldFade.parentNode.removeChild(oldFade);
-    }
-
-    var fadeOutMs = 380;
-    var holdMs = 70;
-    var fadeInMs = 430;
-
-    var fade = document.createElement("div");
-    fade.id = "town-rpg-fade-transition";
-    fade.style.position = "fixed";
-    fade.style.left = "0";
-    fade.style.top = "0";
-    fade.style.right = "0";
-    fade.style.bottom = "0";
-    fade.style.zIndex = "12000";
-    fade.style.background = "#050403";
-    fade.style.opacity = "0";
-    fade.style.pointerEvents = "auto";
-    fade.style.transition = "opacity " + fadeOutMs + "ms cubic-bezier(.22,.8,.28,1)";
-    fade.style.willChange = "opacity";
-
-    document.body.appendChild(fade);
-
-    // 1. まず、RPGの場面転換のようにゆっくり暗くする。
-    window.requestAnimationFrame(function() {
-        window.requestAnimationFrame(function() {
-            fade.style.opacity = "1";
-        });
-    });
-
-    window.setTimeout(function() {
-        // 2. 真っ黒になってから、地図を閉じて移動先へ切り替える。
-        if (typeof callback === "function") {
-            callback();
-        }
-
-        // 3. 少しだけ黒を保持してから、ゆっくり明るく戻す。
-        window.setTimeout(function() {
-            fade.style.transition = "opacity " + fadeInMs + "ms cubic-bezier(.22,.8,.28,1)";
-            fade.style.opacity = "0";
-
-            window.setTimeout(function() {
-                if (fade && fade.parentNode) {
-                    fade.parentNode.removeChild(fade);
-                }
-            }, fadeInMs + 80);
-        }, holdMs);
-    }, fadeOutMs + 40);
+    return window.YUMANIWA_TOWN_TRANSITION.request(callback, {out:380, in:430});
 }
 
 
 
 function confirmStationGuideMapMove() {
+    if (window.YUMANIWA_TOWN_TRANSITION.isActive()) return false;
     var spot = window.pendingStationGuideMapSpot;
     if (!spot) return;
 
@@ -1840,21 +2606,27 @@ function confirmStationGuideMapMove() {
     }
 
     if (spot.kind === "place" && spot.target) {
-        if (!DESTINATIONS[spot.target]) {
+        var targetIsTownScene = isTownScene(spot.target);
+
+        if (!targetIsTownScene && !DESTINATIONS[spot.target]) {
             closeStationGuideMap();
             showMessage("この場所は、まだ地図に描かれているだけのようです。");
             return;
         }
 
-        playStationGuideMapDarkTransition(function() {
+        playStationGuideMapDarkTransition(function(token) {
             closeStationGuideMap();
 
-            changeScene(spot.target);
+            if (targetIsTownScene) {
+                return changeTownScene(spot.target, undefined, token);
+            }
 
-            // 地図から来た時は、施設説明よりも行き先一覧をすぐ見せる。
-            // 湯間庭新報だけは既存仕様の新聞ラックをそのまま開く。
+            if (!changeScene(spot.target, undefined, token)) return false;
+
+            // 専用画面へ移る場合だけ、施設説明より行き先一覧を先に見せる。
+            // 湯間庭新報は既存仕様の新聞ラックをそのまま開く。
             if (spot.target !== "shinpo_board") {
-                destinationViewMode = "menu";
+                destinationViewMode = getDestinationListViewMode(spot.target);
                 renderDestination();
             }
         });
@@ -1905,16 +2677,19 @@ function openTownPlaceFromRoute(placeId) {
     if (!placeId) return false;
 
     if (placeId === "station_plaza") {
-        changeScene("station_plaza");
-        return true;
+        return changeTownScene("station_plaza");
     }
 
     if (!DESTINATIONS[placeId] && !isTownScene(placeId)) return false;
 
-    changeScene(placeId);
+    if (isTownScene(placeId)) {
+        if (!changeTownScene(placeId)) return false;
+    } else {
+        changeScene(placeId);
+    }
 
     if (!isTownScene(placeId) && placeId !== "shinpo_board") {
-        destinationViewMode = "menu";
+        destinationViewMode = getDestinationListViewMode(placeId);
         renderDestination();
     }
 
@@ -1938,7 +2713,7 @@ function openTownWorkFromRoute(workId) {
         changeScene(destinationId);
 
         if (!isTownScene(destinationId)) {
-            destinationViewMode = "menu";
+            destinationViewMode = getDestinationListViewMode(destinationId);
             renderDestination();
         }
     }
@@ -2031,14 +2806,7 @@ function updateControlVisibility() {
     var controls = document.getElementById("mobile-controls");
     if (!controls) return;
 
-    if (
-        isMessageOpen ||
-        isEditMode ||
-        debugMode ||
-        isWorkPlayerOpen ||
-        isStationGuideMapOpen ||
-        !isTownScene(currentScene)
-    ) {
+    if (!canControlTownPlayer() || debugMode) {
         controls.classList.add("disabled");
     } else {
         controls.classList.remove("disabled");
@@ -2107,13 +2875,13 @@ function setupTouchSelectionGuards() {
 
 
 window.onload = function() {
+    townLoadTraceMark('town_onload_start', null, true);
     showTownArrivalLoading();
 
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
     applyDeveloperModeVisibility();
     setupTouchSelectionGuards();
-    preloadTownSceneBackgrounds();
     if (typeof refreshTownContent === 'function') refreshTownContent();
     window.addEventListener('resize', resizeCanvas);
 
@@ -2124,24 +2892,20 @@ window.onload = function() {
 
     resizeCanvas();
 
-    bgImage.onload = function() {
-        bgLoaded = true;
-        finishTownArrivalLoading();
-    };
-    bgImage.onerror = function() {
-        bgError = true;
-        finishTownArrivalLoading();
-    };
-
-    if (!applyTownSceneDefinition(currentScene, 'default')) {
-        initGrid();
-        if (typeof BG_IMAGE_PATH !== 'undefined' && BG_IMAGE_PATH) {
-            bgImage.src = BG_IMAGE_PATH;
-        } else {
-            finishTownArrivalLoading();
-        }
+    var registryValidation = validateTownSceneRegistry();
+    if (!registryValidation.ok) {
+        failTownSceneBoot(currentScene, registryValidation.errors);
+        return;
     }
 
+    window.YUMANIWA_EDITOR_SESSION.freeze(window.TOWN_SCENE_MAPS);
+
+    if (!applyTownSceneDefinition(currentScene, 'default')) {
+        failTownSceneBoot(currentScene, lastTownSceneValidationErrors);
+        return;
+    }
+
+    preloadTownSceneBackgrounds();
     loadPlayerSprites();
 
     setupEvents();
@@ -2162,10 +2926,13 @@ window.onload = function() {
         updateCurrentArea();
         updateInteractionHint();
     }, 500);
+
+    townLoadTraceMark('town_onload_end', null, true);
 };
 
 function resizeCanvas() {
     applyTownPageFrameStyle();
+    updateTownCameraZoomForViewport();
 
     updateCurrentGameViewSizeFromScreen();
 
@@ -2285,49 +3052,17 @@ function cloneCollisionGrid(source) {
 }
 
 function initGrid() {
-    baseCollisionGrid = [];
-
-    for (var y = 0; y < MAP_HEIGHT; y++) {
-        var row = [];
-        for (var x = 0; x < MAP_WIDTH; x++) row.push(0);
-        baseCollisionGrid.push(row);
-    }
-
-    for (var i = 0; i < passableRects.length; i++) {
-        var r = passableRects[i];
-        for (var cy = r.y; cy < r.y + r.h; cy++) {
-            for (var cx = r.x; cx < r.x + r.w; cx++) {
-                if (cx >= 0 && cx < MAP_WIDTH && cy >= 0 && cy < MAP_HEIGHT) {
-                    baseCollisionGrid[cy][cx] = 1;
-                }
-            }
-        }
-    }
-
-    for (var j = 0; j < blockedRects.length; j++) {
-        var blocked = blockedRects[j];
-        for (var by = blocked.y; by < blocked.y + blocked.h; by++) {
-            for (var bx = blocked.x; bx < blocked.x + blocked.w; bx++) {
-                if (bx >= 0 && bx < MAP_WIDTH && by >= 0 && by < MAP_HEIGHT) {
-                    baseCollisionGrid[by][bx] = 2;
-                }
-            }
-        }
-    }
-
-    for (var p = 0; p < blockedPoints.length; p++) {
-        var point = blockedPoints[p];
-        if (point.x >= 0 && point.x < MAP_WIDTH && point.y >= 0 && point.y < MAP_HEIGHT) {
-            baseCollisionGrid[point.y][point.x] = 2;
-        }
-    }
-
+    var session = window.YUMANIWA_EDITOR_SESSION.current();
+    baseCollisionGrid = session && activeTownSceneDef === session.draft
+        ? session.draft.fixedCollisionGrid
+        : window.YUMANIWA_EDITOR_SESSION.gridFromScene(activeTownSceneDef);
     rebuildCollisionGridFromBase();
 }
 
 function rebuildCollisionGridFromBase() {
     collisionGrid = cloneCollisionGrid(baseCollisionGrid);
     applyTownPartCollisionToGrid(collisionGrid);
+    carveTownEdgeWarpTiles(activeTownSceneDef);
 }
 
 function getPlayerTile() {
@@ -2566,54 +3301,6 @@ function findPath(startX, startY, goalX, goalY) {
     return null;
 }
 
-function startTapMoveTo(tileX, tileY) {
-    tapMoveTargetTrigger = null;
-    tapFocusedTrigger = null;
-
-    if (!isWalkableTile(tileX, tileY)) return false;
-
-    var startTile = getPlayerTile();
-    var path = findPath(startTile.x, startTile.y, tileX, tileY);
-
-    if (path) {
-        if (path.length > 0) {
-            tapMovePath = path;
-            tapMoveTargetTile = path[0];
-        } else {
-            tapMovePath = [];
-            tapMoveTargetTile = null;
-        }
-
-        tapMarkerPos = { x: tileX, y: tileY };
-        tapMarkerTimer = 60;
-        updateInteractionHint();
-        return true;
-    }
-
-    return false;
-}
-
-
-function cancelTapMove() {
-    tapMovePath = [];
-    tapMoveTargetTile = null;
-    tapMoveTargetTrigger = null;
-    tapFocusedTrigger = null;
-    tapMoveRequestedWarpSide = null;
-}
-
-
-function cancelTapMoveForAction() {
-    // ヒントや調べるボタンを押す時用。
-    // 到着後に覚えている対象 tapFocusedTrigger は消さない。
-    tapMovePath = [];
-    tapMoveTargetTile = null;
-    tapMoveTargetTrigger = null;
-    tapMoveRequestedWarpSide = null;
-}
-
-
-
 function isTileInsideRectWithPadding(tileX, tileY, rect, padding) {
     if (!rect) return false;
 
@@ -2643,35 +3330,6 @@ function getTileDistanceToTriggerCenter(tileX, tileY, trigger) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-function getTapTriggerCandidate(tileX, tileY) {
-    var best = null;
-    var bestScore = Infinity;
-
-    for (var i = 0; i < triggers.length; i++) {
-        var t = triggers[i];
-        if (!t || !t.area) continue;
-
-        // 建物や札は、正確に1マスを押さなくても反応してほしいので少し広めに見る。
-        var padding = (typeof t.tapPadding === "number") ? t.tapPadding : 2;
-
-        if (!isTileInsideRectWithPadding(tileX, tileY, t.area, padding)) continue;
-
-        var score = getTileDistanceToTriggerCenter(tileX, tileY, t);
-
-        // 本来のトリガー範囲を直接押している場合は優先する。
-        if (isTileInsideRectWithPadding(tileX, tileY, t.area, 0)) {
-            score -= 4;
-        }
-
-        if (score < bestScore) {
-            bestScore = score;
-            best = t;
-        }
-    }
-
-    return best;
-}
-
 function findApproachTileForTrigger(trigger) {
     if (!trigger || !trigger.area) return null;
 
@@ -2688,7 +3346,7 @@ function findApproachTileForTrigger(trigger) {
 
         for (var y = minY; y <= maxY; y++) {
             for (var x = minX; x <= maxX; x++) {
-                if (!isWalkableTile(x, y)) continue;
+                if (!isWalkableTile(x, y) || !isTileInsideRectWithPadding(x, y, trigger.area, 2)) continue;
 
                 var path = findPath(startTile.x, startTile.y, x, y);
                 if (!path) continue;
@@ -2775,96 +3433,12 @@ function isPlayerNearTrigger(trigger) {
     return isTileInsideRectWithPadding(tile.x, tile.y, trigger.area, 2);
 }
 
-function startTapMoveToTrigger(trigger) {
-    if (!trigger) return false;
-
-    var approach = findApproachTileForTrigger(trigger);
-    if (!approach) return false;
-
-    tapFocusedTrigger = null;
-    tapMoveTargetTrigger = trigger;
-    tapMarkerPos = { x: approach.tile.x, y: approach.tile.y };
-    tapMarkerTimer = 60;
-
-    if (approach.path.length === 0) {
-        faceTrigger(trigger);
-        tapMoveTargetTrigger = null;
-        tapFocusedTrigger = trigger;
-        updateInteractionHint();
-        updateCurrentArea();
-        return true;
-    }
-
-    tapMovePath = approach.path;
-    tapMoveTargetTile = approach.path[0];
-    updateInteractionHint();
-    return true;
-}
-
-function startTapMoveToNearbyTrigger(tileX, tileY) {
-    var trigger = getTapTriggerCandidate(tileX, tileY);
-    if (!trigger) return false;
-
-    return startTapMoveToTrigger(trigger);
-}
-
-
-
-function updateTapMove() {
-    if (!tapMoveTargetTile) return false;
-
-    var targetPixelX = tapMoveTargetTile.x * TILE_SIZE + TILE_SIZE / 2;
-    var targetPixelY = tapMoveTargetTile.y * TILE_SIZE + TILE_SIZE / 2;
-
-    var hitbox = getPlayerHitbox(player.x, player.y);
-    var cx = hitbox.x + hitbox.w / 2;
-    var cy = hitbox.y + hitbox.h / 2;
-
-    var dx = targetPixelX - cx;
-    var dy = targetPixelY - cy;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < player.speed) {
-        player.x += dx;
-        player.y += dy;
-        tapMovePath.shift();
-        if (tapMovePath.length > 0) {
-            tapMoveTargetTile = tapMovePath[0];
-        } else {
-            tapMoveTargetTile = null;
-
-            if (tapMoveTargetTrigger) {
-                faceTrigger(tapMoveTargetTrigger);
-                tapFocusedTrigger = tapMoveTargetTrigger;
-                tapMoveTargetTrigger = null;
-            }
-
-            updateInteractionHint();
-            updateCurrentArea();
-        }
-        return true;
-    }
-
-    var moveX = (dx / dist) * player.speed;
-    var moveY = (dy / dist) * player.speed;
-
-    if (Math.abs(moveX) > Math.abs(moveY)) {
-        player.dir = moveX > 0 ? "right" : "left";
-    } else {
-        player.dir = moveY > 0 ? "down" : "up";
-    }
-
-    if (!checkCollision(player.x + moveX, player.y)) player.x += moveX;
-    if (!checkCollision(player.x, player.y + moveY)) player.y += moveY;
-    
-    return true;
-}
-
 // ==========================================
 // 3. カメラ計算
 // ==========================================
 function getCamera() {
-    var zoom = GAME_CAMERA_ZOOM;
+    var pixelSnap = getTownPixelSnapSettings(GAME_CAMERA_ZOOM);
+    var zoom = pixelSnap.zoom;
     var viewW = GAME_VIEW_W / zoom;
     var viewH = getCurrentGameViewH() / zoom;
     var mapPixelW = MAP_WIDTH * TILE_SIZE;
@@ -2887,6 +3461,54 @@ function getCamera() {
         if (cameraY > mapPixelH - viewH) cameraY = mapPixelH - viewH;
     }
 
+    // 最終物理pixel上で camera origin を整数位置へ固定する。
+    // これにより、歩行・斜め移動時に同じWORLD OBJECTの1px線が
+    // 2px/3pxなどへフレームごとに揺れる現象を抑える。
+    if (pixelSnap.enabled) {
+        if (viewW > mapPixelW) {
+            cameraX = snapTownCameraCoordToPhysicalPixel(
+                cameraX,
+                pixelSnap.physicalPixelsPerWorld
+            );
+        } else {
+            cameraX = snapTownCameraCoordToPhysicalPixel(
+                cameraX,
+                pixelSnap.physicalPixelsPerWorld,
+                0,
+                mapPixelW - viewW
+            );
+        }
+
+        if (viewH > mapPixelH) {
+            cameraY = snapTownCameraCoordToPhysicalPixel(
+                cameraY,
+                pixelSnap.physicalPixelsPerWorld
+            );
+        } else {
+            cameraY = snapTownCameraCoordToPhysicalPixel(
+                cameraY,
+                pixelSnap.physicalPixelsPerWorld,
+                0,
+                mapPixelH - viewH
+            );
+        }
+    }
+
+    // 開発時に Console から現在の最終pixel倍率を確認できる。
+    window.YUMANIWA_PIXEL_SNAP_STATE = {
+        enabled: pixelSnap.enabled,
+        integerScaleApplied: pixelSnap.integerScaleApplied,
+        baseZoom: pixelSnap.baseZoom,
+        zoom: zoom,
+        dpr: pixelSnap.dpr,
+        displayPhysicalWidth: pixelSnap.displayPhysicalWidth,
+        physicalPixelsPerCanvasPx: pixelSnap.physicalPixelsPerCanvasPx,
+        physicalPixelsPerWorld: pixelSnap.physicalPixelsPerWorld,
+        zoomCorrection: pixelSnap.zoomCorrection,
+        cameraX: cameraX,
+        cameraY: cameraY
+    };
+
     return {
         zoom: zoom,
         viewW: viewW,
@@ -2894,7 +3516,8 @@ function getCamera() {
         cameraX: cameraX,
         cameraY: cameraY,
         mapPixelW: mapPixelW,
-        mapPixelH: mapPixelH
+        mapPixelH: mapPixelH,
+        pixelSnap: pixelSnap
     };
 }
 
@@ -2995,6 +3618,16 @@ function handleRpgMenuKeyboard(e) {
     if (!isDestinationSceneOpen() || isEditMode || debugMode) return false;
 
     var key = e.key;
+
+    if (
+        currentDestinationId === "leisure_catalog" &&
+        destinationViewMode === "work_guide" &&
+        window.YUMANIWA_WORK_GUIDE &&
+        typeof window.YUMANIWA_WORK_GUIDE.handleKeyboard === "function" &&
+        window.YUMANIWA_WORK_GUIDE.handleKeyboard(e)
+    ) {
+        return true;
+    }
 
     // 湯間庭新報も、開いた直前の場所へ戻す
     if (destinationViewMode === 'note_rack') {
@@ -3106,11 +3739,8 @@ function setupInteractionHintButton() {
         }
         lastActionTime = now;
 
-        if (typeof cancelTapMoveForAction === "function") {
-            cancelTapMoveForAction();
-        }
 
-        handleActionTrigger();
+        window.YUMANIWA_TOWN_INTERACTION.handleAction();
     }
 
     function beginPress(e) {
@@ -3235,6 +3865,9 @@ function setupEvents() {
         }
 
         keys[e.key] = true;
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','W','a','A','s','S','d','D'].indexOf(e.key) !== -1) {
+            window.YUMANIWA_TOWN_INTERACTION.cancel();
+        }
 
         if (
             DEV_MODE_ENABLED &&
@@ -3267,7 +3900,7 @@ function setupEvents() {
             e.key === 'Enter' ||
             e.key === ' '
         ) {
-            handleActionTrigger();
+            window.YUMANIWA_TOWN_INTERACTION.handleAction();
         }
     });
 
@@ -3313,7 +3946,7 @@ function setupEvents() {
                 return;
             }
 
-            cancelTapMove();
+            window.YUMANIWA_TOWN_INTERACTION.cancel();
             dpad[dir] = true;
             el.classList.add("pressed");
 
@@ -3398,13 +4031,8 @@ function setupEvents() {
 
             lastActionButtonTime = now;
 
-            // 移動途中で押した場合は移動だけ止め、
-            // 到着済みの対象情報は残して調べられるようにする。
-            if (typeof cancelTapMoveForAction === "function") {
-                cancelTapMoveForAction();
-            }
 
-            handleActionTrigger();
+            window.YUMANIWA_TOWN_INTERACTION.handleAction();
         }
 
         actionButton.addEventListener(
@@ -3557,16 +4185,7 @@ function setupEvents() {
                 return;
             }
 
-            if (
-                startTapMoveToNearbyTrigger(
-                    tileX,
-                    tileY
-                )
-            ) {
-                return;
-            }
-
-            startTapMoveTo(tileX, tileY);
+            window.YUMANIWA_TOWN_INTERACTION.requestTap(tileX, tileY);
         }
     );
 
@@ -3626,15 +4245,7 @@ function setupMessageLayerEvents() {
         e.preventDefault();
         e.stopPropagation();
 
-        if (pendingWarp) {
-            var target = pendingWarp;
-            pendingWarp = null;
-            closeMessage();
-            changeSceneWithTownFade(target);
-            return;
-        }
-
-        closeMessage();
+        window.YUMANIWA_TOWN_INTERACTION.handleAction();
     }
 
     if (msgWin) {
@@ -3647,26 +4258,73 @@ function setupMessageLayerEvents() {
 }
 
 
-function handleActionTrigger() {
-    if (isEditMode) return;
-
-    if (isMessageOpen) {
-        if (pendingWarp) {
-            var target = pendingWarp;
-            pendingWarp = null;
-            closeMessage();
-            changeSceneWithTownFade(target);
-            return;
-        }
-        closeMessage();
-        return;
-    }
-
-    if (isTownScene(currentScene)) {
-        handleAction();
-    }
+function resetTownEditorTransientState() {
+    editingPartIndex = -1;
+    editingTriggerIndex = -1;
+    editStep = 0;
+    currentHoverTile = null;
+    partDragState = null;
+    editorHasUncopiedChanges = false;
+    if (window.YUMANIWA_SPATIAL_EDITOR) window.YUMANIWA_SPATIAL_EDITOR.onTargetChanged();
 }
 
+function bindTownEditorDraft() {
+    var session = window.YUMANIWA_EDITOR_SESSION.current();
+    activeTownSceneDef = session.draft;
+    triggers = session.draft.triggers;
+    areaZones = session.draft.areaZones;
+    baseCollisionGrid = session.draft.fixedCollisionGrid;
+    // Rectangles are export representations, never a second editable owner.
+    passableRects = []; blockedRects = []; blockedPoints = [];
+    refreshTownPartDerivedData();
+    currentAreaId = null;
+}
+
+function closeTownEditor() {
+    finishPartEditorDrag();
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    document.getElementById('editor-panel').style.display = 'none';
+    document.getElementById('btn-debug-toggle').style.display = DEV_MODE_ENABLED ? 'block' : 'none';
+    isEditMode = false; debugMode = false;
+    document.getElementById('debug-info').style.display = 'none';
+    editStep = 0; currentHoverTile = null;
+    editingPartIndex = -1;
+    partDragState = null;
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateInteractionHint();
+    updateControlVisibility();
+}
+
+function openTownEditorSession() {
+    var existing = window.YUMANIWA_EDITOR_SESSION.current();
+    window.YUMANIWA_EDITOR_SESSION.open(currentScene);
+    if (!existing) resetTownEditorTransientState();
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    bindTownEditorDraft();
+}
+
+function discardTownEditorChanges() {
+    if (!window.YUMANIWA_EDITOR_SESSION.current()) return;
+    window.YUMANIWA_EDITOR_SESSION.discard();
+    resetTownEditorTransientState();
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    bindTownEditorDraft();
+    updatePartEditorSelectionUi();
+    updateEditorStatus('変更を破棄し、正本基準に戻しました');
+}
+
+function canLeaveTownEditorSession(sceneId) {
+    if (window.YUMANIWA_EDITOR_SESSION.canLeave(sceneId)) return true;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    updateEditorStatus('未反映の変更があります。別の町へ移動する前に変更を破棄してください');
+    window.alert('この町に未反映の編集があります。Editorで変更を書き出し、必要ならDeskへ反映して再読込してください。移動するには「変更を破棄」を選んでください。');
+    return false;
+}
 
 function toggleDebugMode() {
     if (!DEV_MODE_ENABLED) return;
@@ -3674,6 +4332,7 @@ function toggleDebugMode() {
     var panel = document.getElementById('editor-panel');
     var btn = document.getElementById('btn-debug-toggle');
     if (panel.style.display === 'none') {
+        openTownEditorSession();
         panel.style.display = 'flex'; btn.style.display = 'none';
         setEditorPanelCollapsed(false);
         debugMode = true; isEditMode = true;
@@ -3687,6 +4346,40 @@ function toggleDebugMode() {
         clearDpadInput();
         updateControlVisibility();
     }
+}
+
+function setupDeveloperToggleButton() {
+    var button = document.getElementById('btn-debug-toggle');
+    if (!button || button.dataset.yumaniwaDevBound === '1') return;
+
+    button.dataset.yumaniwaDevBound = '1';
+    button.style.touchAction = 'manipulation';
+
+    var lastActivation = 0;
+
+    function activate(e) {
+        var now = Date.now();
+
+        if (now - lastActivation < 800) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+
+        lastActivation = now;
+
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        toggleDebugMode();
+    }
+
+    button.addEventListener('touchstart', activate, { passive: false });
+    button.addEventListener('click', activate);
 }
 
 
@@ -3751,6 +4444,13 @@ function ensureEditorSafetyUI() {
         setEditorPanelCollapsed(!editorPanelCollapsed);
     });
 
+    var discard = document.createElement('button');
+    discard.id = 'btn-editor-discard';
+    discard.textContent = '変更を破棄';
+    discard.addEventListener('click', function () {
+        if (window.confirm('この町の未反映の編集を破棄しますか？')) discardTownEditorChanges();
+    });
+    header.appendChild(discard);
     updateEditorSaveStateUI();
     setEditorPanelCollapsed(false);
 }
@@ -3788,26 +4488,37 @@ function updateEditorSaveStateUI() {
     var status = document.getElementById("editor-save-state");
     if (!status) return;
 
-    if (editorHasUnsavedChanges) {
-        status.innerText = "● 未保存";
-        status.style.background = "rgba(165, 64, 48, .92)";
-        status.style.color = "#fff7ed";
-        status.title = "まだ完全版コードをコピーしていない変更があります";
-    } else {
-        status.innerText = "✓ コピー済み";
+    if (!editorHasUnsavedChanges) {
+        status.innerText = "✓ 正本基準";
         status.style.background = "rgba(51, 111, 73, .92)";
         status.style.color = "#f3fff6";
-        status.title = "現在の編集内容は完全版コードとしてコピー済みです";
+        status.title = "このページでは、正本読込後の未反映変更はありません";
+        return;
     }
+
+    if (editorHasUncopiedChanges) {
+        status.innerText = "● 未コピー";
+        status.style.background = "rgba(165, 64, 48, .92)";
+        status.style.color = "#fff7ed";
+        status.title = "正本へ未反映の変更があり、最新差分もまだコピーしていません";
+        return;
+    }
+
+    status.innerText = "◐ コピー済み / 未反映";
+    status.style.background = "rgba(151, 112, 42, .94)";
+    status.style.color = "#fff9e8";
+    status.title = "差分はコピー済みですが、正本へ反映されたとは判定していません。Desk反映後はページを再読込してください";
 }
 
 function markEditorDirty() {
-    editorHasUnsavedChanges = true;
+    editorHasUncopiedChanges = true;
     updateEditorSaveStateUI();
 }
 
 function markEditorExportCopied() {
-    editorHasUnsavedChanges = false;
+    // Clipboard copy is not a persistence event.
+    // Keep the canonical baseline and unapplied-change flag untouched.
+    editorHasUncopiedChanges = false;
     updateEditorSaveStateUI();
 }
 
@@ -3816,6 +4527,9 @@ function setupEditorUnsavedGuard() {
     window.__yumaniwaEditorUnsavedGuardReady = true;
 
     window.addEventListener("beforeunload", function(e) {
+        // Copying a diff does not prove that YumaniwaDesk applied it.
+        // Keep warning while this page contains changes relative to its
+        // canonical baseline. Reload after Desk application to clear it.
         if (!editorHasUnsavedChanges) return;
 
         e.preventDefault();
@@ -3825,26 +4539,23 @@ function setupEditorUnsavedGuard() {
 }
 
 function setupEditorEvents() {
+    setupDeveloperToggleButton();
     ensureEditorSafetyUI();
     setupEditorUnsavedGuard();
     ensureTriggerEditorExtraFields();
     ensurePartEditorFields();
 
-    document.getElementById('btn-close-editor').addEventListener('click', function() {
-        document.getElementById('editor-panel').style.display = 'none';
-        document.getElementById('btn-debug-toggle').style.display = DEV_MODE_ENABLED ? 'block' : 'none';
-        isEditMode = false; debugMode = false;
-        document.getElementById('debug-info').style.display = 'none';
-        editStep = 0; currentHoverTile = null;
-        editingPartIndex = -1;
-        partDragState = null;
-        refreshTownPartDerivedData();
-        updatePartEditorSelectionUi();
-        updateInteractionHint();
-        updateControlVisibility();
-    });
+    if (
+        window.YUMANIWA_SPATIAL_EDITOR &&
+        typeof window.YUMANIWA_SPATIAL_EDITOR.ensure === 'function'
+    ) {
+        window.YUMANIWA_SPATIAL_EDITOR.ensure();
+    }
+
+    document.getElementById('btn-close-editor').addEventListener('click', closeTownEditor);
 
     document.getElementById('edit-target').addEventListener('change', function(e) {
+        finishPartEditorDrag();
         editTarget = e.target.value;
         editStep = 0;
         currentHoverTile = null;
@@ -3863,32 +4574,40 @@ function setupEditorEvents() {
             editingPartIndex = -1;
             updateEditorStatus(editTarget + " を編集します");
         }
+
+        if (
+            window.YUMANIWA_SPATIAL_EDITOR &&
+            typeof window.YUMANIWA_SPATIAL_EDITOR.onTargetChanged === 'function'
+        ) {
+            window.YUMANIWA_SPATIAL_EDITOR.onTargetChanged(editTarget);
+        }
     });
 
     document.getElementById('btn-editor-undo').addEventListener('click', function() {
-        if (editHistory.length === 0) { updateEditorStatus("Undoする履歴がありません"); return; }
-        var last = editHistory.pop();
-        if (last.type === 'grid') {
-            baseCollisionGrid = cloneCollisionGrid(last.prev || []);
-            rebuildCollisionGridFromBase();
+        finishPartEditorDrag();
+        if (!window.YUMANIWA_EDITOR_SESSION.undo()) {
+            updateEditorStatus("Undoする履歴がありません"); return;
         }
-        else if (last.type === 'triggers') {
-            if (last.prev) restoreTriggers(last.prev);
-            else triggers.pop();
-            editingTriggerIndex = -1;
-        }
-        else if (last.type === 'props') {
-            restoreTownParts(last.prev || []);
-            editingPartIndex = -1;
-            partDragState = null;
-            updatePartEditorSelectionUi();
-        }
+        // Restore only the session draft; these globals are its derived views.
+        partDragState = null;
+        editingTriggerIndex = -1;
+        editingPartIndex = -1;
+        editStep = 0; currentHoverTile = null;
+        bindTownEditorDraft();
+        updatePartEditorSelectionUi();
+        if (window.YUMANIWA_SPATIAL_EDITOR) window.YUMANIWA_SPATIAL_EDITOR.onUndo();
+        updateInteractionHint();
         markEditorDirty();
         updateEditorStatus("直前の編集を取り消しました");
-        editStep = 0; currentHoverTile = null;
     });
 
-    document.getElementById('btn-editor-export').addEventListener('click', showExportModal);
+    document.getElementById('btn-editor-export').addEventListener('click', function() {
+        if (typeof window.showExportModal === 'function') {
+            window.showExportModal();
+            return;
+        }
+        updateEditorStatus("変更差分の書き出しモジュールを読み込めません");
+    });
     document.getElementById('btn-close-export').addEventListener('click', function() { document.getElementById('export-modal').style.display = 'none'; });
     var btnCopy = document.getElementById('btn-copy-export');
     btnCopy.addEventListener('click', function() {
@@ -3899,14 +4618,14 @@ function setupEditorEvents() {
             markEditorExportCopied();
             btnCopy.innerText = "コピー完了!";
             setTimeout(function() {
-                btnCopy.innerText = "完全版コードをコピー";
+                btnCopy.innerText = "変更差分をコピー";
             }, 2000);
         }
 
         function failed() {
             btnCopy.innerText = "コピー失敗";
             setTimeout(function() {
-                btnCopy.innerText = "完全版コードをコピー";
+                btnCopy.innerText = "変更差分をコピー";
             }, 2000);
         }
 
@@ -4005,101 +4724,61 @@ function ensureTriggerEditorExtraFields() {
 // ==========================================
 // 5-B. マップパーツ編集
 // ==========================================
-var TOWN_PART_CATALOG = [
+// Compatibility view only; all asset defaults are owned by WORLD OBJECTS.
+var TOWN_PART_CATALOG = window.YUMANIWA_WORLD_OBJECTS.getAddableEditorDefinitions().map(function (definition) {
+    return {
+        key: definition.catalogKey,
+        label: definition.label,
+        objectId: definition.objectId,
+        idStem: definition.idStem,
+        file: '',
+        w: definition.defaults.w,
+        h: definition.defaults.h,
+        collision: definition.defaults.collision
+    };
+}).concat([
+    // Non-asset fallbacks for existing placements. These are not addable assets.
     {
-        key: 'noticeBoard',
-        label: '横長掲示板',
-        file: 'station-notice-board.png',
-        w: 5.5,
-        h: 3.6,
-        collision: { enabled: true, x: 0.06, y: 0.76, w: 0.88, h: 0.22 }
+        key: 'worldObjectFacility',
+        label: '施設 WORLD OBJECT',
+        file: '',
+        w: 1,
+        h: 1,
+        addable: false,
+        collision: { enabled: false, x: 0, y: 0, w: 0.001, h: 0.001 }
     },
     {
-        key: 'touristMap',
-        label: '観光案内図',
-        file: 'station-tourist-map.png',
-        w: 3.4,
-        h: 3.6,
-        collision: { enabled: true, x: 0.22, y: 0.90, w: 0.56, h: 0.12 }
+        key: 'worldObjectExhibit',
+        label: '展示 WORLD OBJECT',
+        file: '',
+        w: 1,
+        h: 1,
+        addable: false,
+        collision: { enabled: false, x: 0, y: 0, w: 0.001, h: 0.001 }
     },
     {
-        key: 'bench',
-        label: '木製ベンチ',
-        file: 'station-bench.png',
-        w: 3.0,
-        h: 2.0,
-        collision: { enabled: true, x: 0.14, y: 0.72, w: 0.72, h: 0.30 }
-    },
-    {
-        key: 'streetLamp',
-        label: 'レトロな街灯',
-        file: 'station-street-lamp.png',
-        w: 1.02,
-        h: 3.4,
-        collision: { enabled: true, x: 0.28, y: 0.92, w: 0.44, h: 0.22 }
-    },
-    {
-        key: 'planter',
-        label: '植木鉢',
-        file: 'station-planter.png',
-        w: 1.1,
-        h: 1.8,
-        collision: { enabled: true, x: 0.14, y: 0.58, w: 0.72, h: 0.42 }
-    },
-    {
-        key: 'directionSign',
-        label: '方向案内札',
-        file: 'station-direction-sign.png',
-        w: 1.4,
-        h: 2.4,
-        collision: { enabled: true, x: 0.34, y: 0.84, w: 0.32, h: 0.20 }
-    },
-    {
-        key: 'stationBuilding',
-        label: '湯間庭駅舎',
-        file: 'station-building.png',
-        w: 8.6,
-        h: 8.5,
-        collision: { enabled: true, x: 0.06, y: 0.78, w: 0.88, h: 0.22 }
+        // Existing WORLD OBJECT shops are selectable/movable, but are not added
+        // from the legacy station-plaza asset picker.
+        key: 'worldObjectShop',
+        label: '店舗 WORLD OBJECT',
+        file: '',
+        w: 1,
+        h: 1,
+        addable: false,
+        collision: { enabled: false, x: 0, y: 0, w: 0.001, h: 0.001 }
     }
-];
-
-var TOWN_PART_ASSET_BASE = 'assets/maps/props/station-plaza/';
+]);
 
 function getActiveTownParts() {
     if (!activeTownSceneDef) return [];
 
-    if (!Array.isArray(activeTownSceneDef.props)) {
-        activeTownSceneDef.props = [];
-    }
+    if (!Array.isArray(activeTownSceneDef.props)) throw new Error('Active scene props are missing');
 
     return activeTownSceneDef.props;
 }
 
 function cloneTownPart(part) {
     return JSON.parse(JSON.stringify(part || {}));
-}
-
-function cloneTownParts() {
-    var parts = getActiveTownParts();
-    var copied = [];
-
-    for (var i = 0; i < parts.length; i++) {
-        copied.push(cloneTownPart(parts[i]));
-    }
-
-    return copied;
-}
-
-function restoreTownParts(prev) {
-    var parts = getActiveTownParts();
-    parts.length = 0;
-
-    for (var i = 0; i < prev.length; i++) {
-        parts.push(cloneTownPart(prev[i]));
-    }
-
-    refreshTownPartDerivedData();
 }
 
 function syncTownPartPublicReference(parts) {
@@ -4122,18 +4801,22 @@ function getPartCatalogEntry(key) {
 }
 
 function inferTownPartCatalogKey(part) {
-    var src = String((part && part.src) || '');
     var id = String((part && part.id) || '').toLowerCase();
+    var objectId = String((part && part.objectId) || '').toLowerCase();
 
-    if (src.indexOf('station-notice-board') !== -1 || id.indexOf('notice') !== -1) return 'noticeBoard';
-    if (src.indexOf('station-tourist-map') !== -1 || id.indexOf('tourist') !== -1) return 'touristMap';
-    if (src.indexOf('station-bench') !== -1 || id.indexOf('bench') !== -1) return 'bench';
-    if (src.indexOf('station-street-lamp') !== -1 || id.indexOf('lamp') !== -1) return 'streetLamp';
-    if (src.indexOf('station-planter') !== -1 || id.indexOf('planter') !== -1) return 'planter';
-    if (src.indexOf('station-direction-sign') !== -1 || id.indexOf('direction') !== -1) return 'directionSign';
-    if (src.indexOf('station-building') !== -1 || id.indexOf('station_building') !== -1 || id.indexOf('stationbuilding') !== -1) return 'stationBuilding';
+    var definition = window.YUMANIWA_WORLD_OBJECTS.getEditorDefinition(objectId);
+    // Preserve historical inference: the five former upgrade additions did not
+    // infer a catalogKey for existing placements that omitted one.
+    if (definition && definition.inferFromObjectId) return definition.catalogKey;
 
-    return 'bench';
+    if (objectId.indexOf('_shop_') !== -1 || id.slice(-5) === '_shop') {
+        return 'worldObjectShop';
+    }
+    if (objectId.indexOf('leisure_exhibit_') === 0) {
+        return 'worldObjectExhibit';
+    }
+
+    return objectId ? 'worldObjectFacility' : 'bench';
 }
 
 function cloneRelativePartRect(rect) {
@@ -4182,42 +4865,15 @@ function getDefaultTownPartInteraction(part, catalogKey) {
     };
 }
 
-function ensureTownPartMetadata(part) {
+function getTownPartMetadataView(part) {
     if (!part) return part;
-
-    var catalogKey = part.catalogKey || inferTownPartCatalogKey(part);
-    var catalog = getPartCatalogEntry(catalogKey);
-    part.catalogKey = catalogKey;
-
-    if (!part.collision || typeof part.collision !== 'object') {
-        part.collision = cloneRelativePartRect(catalog.collision);
-    } else {
-        part.collision = cloneRelativePartRect(part.collision);
-    }
-
-    if (!part.interaction || typeof part.interaction !== 'object') {
-        part.interaction = getDefaultTownPartInteraction(part, catalogKey);
-    } else {
-        part.interaction = {
-            enabled: part.interaction.enabled !== false,
-            triggerId: String(part.interaction.triggerId || ''),
-            x: Number(part.interaction.x) || 0,
-            y: Number(part.interaction.y) || 0,
-            w: Math.max(0.001, Number(part.interaction.w) || 0.001),
-            h: Math.max(0.001, Number(part.interaction.h) || 0.001)
-        };
-    }
-
-    updatePartFootY(part);
-    return part;
-}
-
-function ensureAllTownPartMetadata() {
-    var parts = getActiveTownParts();
-
-    for (var i = 0; i < parts.length; i++) {
-        ensureTownPartMetadata(parts[i]);
-    }
+    // Derived view only: metadata defaults must not flow back into a draft.
+    var view = cloneTownPart(part);
+    var key = part.catalogKey || inferTownPartCatalogKey(part);
+    if (!view.collision) view.collision = cloneRelativePartRect(getPartCatalogEntry(key).collision);
+    if (!view.interaction) view.interaction = getDefaultTownPartInteraction(part, key);
+    if (!isFinite(Number(view.footY))) view.footY = getTownPartBottomY(part);
+    return view;
 }
 
 function getPartRelativeRectPixels(part, spec) {
@@ -4238,8 +4894,12 @@ function getTownPartCollisionRectPixels(part) {
 }
 
 function getTownPartInteractionRectPixels(part) {
-    if (!part || !part.interaction || part.interaction.enabled === false) return null;
-    if (!part.interaction.triggerId) return null;
+    if (!part || !part.interaction || part.interaction.enabled === false || !part.interaction.triggerId) return null;
+    var trigger = findTownPartTrigger(part.interaction.triggerId);
+    if (trigger && trigger.area) {
+        var area = trigger.area;
+        return { x: area.x * TILE_SIZE, y: area.y * TILE_SIZE, w: area.w * TILE_SIZE, h: area.h * TILE_SIZE };
+    }
     return getPartRelativeRectPixels(part, part.interaction);
 }
 
@@ -4287,7 +4947,7 @@ function applyTownPartCollisionToGrid(targetGrid) {
     var parts = getActiveTownParts();
 
     for (var i = 0; i < parts.length; i++) {
-        var part = ensureTownPartMetadata(parts[i]);
+        var part = getTownPartMetadataView(parts[i]);
         if (!part || part.enabled === false || !part.collision || part.collision.enabled === false) continue;
 
         var tiles = getTilesCoveredByPixelRect(getTownPartCollisionRectPixels(part));
@@ -4301,53 +4961,23 @@ function applyTownPartCollisionToGrid(targetGrid) {
     }
 }
 
-function rectMatchesTownPartLegacy(rect, target) {
-    return !!rect && rect.x === target.x && rect.y === target.y && rect.w === target.w && rect.h === target.h;
+function findTownPartTrigger(id) {
+    for (var i = 0; i < triggers.length; i++) if (triggers[i] && triggers[i].id === id) return triggers[i];
+    return null;
 }
 
-function pointMatchesTownPartLegacy(point, target) {
-    return !!point && point.x === target.x && point.y === target.y;
+function putTownPartTrigger(trigger) {
+    var index = triggers.findIndex(function (item) { return item.id === trigger.id; });
+    if (index < 0) triggers.push(trigger);
+    else triggers[index] = trigger;
 }
 
-function removeLegacyTownPartCollisionEntries() {
-    if (currentScene !== 'station_plaza') return;
-
-    var legacyRects = [
-        { x: 7, y: 8, w: 2, h: 1 },
-        { x: 15, y: 13, w: 2, h: 1 },
-        { x: 11, y: 9, w: 2, h: 1 }
-    ];
-    var legacyPoints = [
-        { x: 6, y: 10 },
-        { x: 18, y: 10 }
-    ];
-
-    blockedRects = blockedRects.filter(function(rect) {
-        for (var i = 0; i < legacyRects.length; i++) {
-            if (rectMatchesTownPartLegacy(rect, legacyRects[i])) return false;
-        }
-        return true;
-    });
-
-    blockedPoints = blockedPoints.filter(function(point) {
-        for (var i = 0; i < legacyPoints.length; i++) {
-            if (pointMatchesTownPartLegacy(point, legacyPoints[i])) return false;
-        }
-        return true;
-    });
-}
-
-function captureTownPartTriggerTemplates(def) {
-    townPartTriggerTemplates = {};
-    townPartManagedTriggerIds = {};
-
-    var source = (def && def.triggers) || [];
-    for (var i = 0; i < source.length; i++) {
-        var trigger = source[i];
-        if (trigger && trigger.id) {
-            townPartTriggerTemplates[trigger.id] = cloneTrigger(trigger);
-        }
-    }
+function removeUnlinkedTownPartTrigger(id) {
+    if (!id || getActiveTownParts().some(function (part) {
+        return part.interaction && part.interaction.enabled !== false && part.interaction.triggerId === id;
+    })) return;
+    var index = triggers.findIndex(function (item) { return item.id === id; });
+    if (index >= 0) triggers.splice(index, 1);
 }
 
 function makeUniqueTownPartTriggerId(base) {
@@ -4356,7 +4986,6 @@ function makeUniqueTownPartTriggerId(base) {
     var suffix = 2;
 
     function exists(id) {
-        if (townPartTriggerTemplates[id]) return true;
         for (var i = 0; i < triggers.length; i++) {
             if (triggers[i] && triggers[i].id === id) return true;
         }
@@ -4371,7 +5000,27 @@ function makeUniqueTownPartTriggerId(base) {
     return candidate;
 }
 
+function normalizeTownPartTriggerArea(area) {
+    if (!area) return null;
+
+    var x = Math.max(0, Math.floor(Number(area.x) || 0));
+    var y = Math.max(0, Math.floor(Number(area.y) || 0));
+    var w = Math.max(1, Math.floor(Number(area.w) || 1));
+    var h = Math.max(1, Math.floor(Number(area.h) || 1));
+
+    if (x >= MAP_WIDTH || y >= MAP_HEIGHT) return null;
+
+    w = Math.max(1, Math.min(w, MAP_WIDTH - x));
+    h = Math.max(1, Math.min(h, MAP_HEIGHT - y));
+
+    return { x: x, y: y, w: w, h: h };
+}
+
 function getTownPartTriggerArea(part) {
+    var link = part && part.interaction;
+    var trigger = link && link.triggerId ? findTownPartTrigger(link.triggerId) : null;
+    if (trigger && trigger.area) return cloneTownData(trigger.area);
+
     var rect = getTownPartInteractionRectPixels(part);
     if (!rect) return null;
 
@@ -4380,76 +5029,17 @@ function getTownPartTriggerArea(part) {
     var right = Math.min(MAP_WIDTH, Math.ceil((rect.x + rect.w) / TILE_SIZE - 0.0001));
     var bottom = Math.min(MAP_HEIGHT, Math.ceil((rect.y + rect.h) / TILE_SIZE - 0.0001));
 
-    return {
+    return normalizeTownPartTriggerArea({
         x: x,
         y: y,
         w: Math.max(1, right - x),
         h: Math.max(1, bottom - y)
-    };
-}
-
-function syncTownPartTriggers() {
-    var parts = getActiveTownParts();
-    var desired = {};
-
-    for (var i = 0; i < parts.length; i++) {
-        var part = ensureTownPartMetadata(parts[i]);
-        var interaction = part && part.interaction;
-        if (!part || part.enabled === false || !interaction || interaction.enabled === false || !interaction.triggerId) continue;
-
-        var triggerId = String(interaction.triggerId);
-        var area = getTownPartTriggerArea(part);
-        if (!area) continue;
-
-        desired[triggerId] = {
-            part: part,
-            area: area
-        };
-        townPartManagedTriggerIds[triggerId] = true;
-    }
-
-    // 管理対象なのに対応パーツがなくなったトリガーは、透明な操作範囲を残さない。
-    triggers = triggers.filter(function(trigger) {
-        return !trigger || !townPartManagedTriggerIds[trigger.id] || !!desired[trigger.id];
     });
-
-    for (var triggerId in desired) {
-        if (!Object.prototype.hasOwnProperty.call(desired, triggerId)) continue;
-
-        var index = -1;
-        for (var t = 0; t < triggers.length; t++) {
-            if (triggers[t] && triggers[t].id === triggerId) {
-                index = t;
-                break;
-            }
-        }
-
-        var template = townPartTriggerTemplates[triggerId]
-            ? cloneTrigger(townPartTriggerTemplates[triggerId])
-            : {
-                id: triggerId,
-                label: desired[triggerId].part.id || 'パーツ',
-                actionLabel: '調べる',
-                type: 'inspect',
-                text: '町に置かれたパーツです。',
-                tapPadding: 1
-            };
-
-        template.area = desired[triggerId].area;
-
-        if (index >= 0) {
-            triggers[index] = template;
-        } else {
-            triggers.push(template);
-        }
-    }
 }
 
 function refreshTownPartDerivedData() {
     var parts = getActiveTownParts();
-    ensureAllTownPartMetadata();
     syncTownPartPublicReference(parts);
-    syncTownPartTriggers();
     rebuildCollisionGridFromBase();
 }
 
@@ -4492,7 +5082,7 @@ function getPartIndexAtWorldPoint(worldX, worldY) {
         ) {
             candidates.push({
                 index: i,
-                footY: (typeof part.footY === 'number' ? part.footY : Number(part.y || 0) + Number(part.h || 0)) * TILE_SIZE
+                footY: getTownPartFootY(part) * TILE_SIZE
             });
         }
     }
@@ -4507,18 +5097,49 @@ function getPartIndexAtWorldPoint(worldX, worldY) {
     return candidates[candidates.length - 1].index;
 }
 
-function clampPartToMap(part) {
+function getTownPartBottomY(part) {
+    if (!part) return 0;
+    return Number(part.y || 0) + Number(part.h || 0);
+}
+
+function getTownPartFootY(part) {
+    if (!part) return 0;
+
+    var value = Number(part.footY);
+    return isFinite(value) ? value : getTownPartBottomY(part);
+}
+
+function getTownPartFootOffset(part) {
+    if (!part) return 0;
+    return getTownPartFootY(part) - getTownPartBottomY(part);
+}
+
+function ensureTownPartFootY(part) {
+    if (!part) return;
+    var value = Number(part.footY);
+    if (!isFinite(value)) {
+        part.footY = getTownPartBottomY(part);
+    }
+}
+
+function syncTownPartFootY(part, footOffset) {
+    if (!part) return;
+    var offset = Number(footOffset);
+    part.footY = getTownPartBottomY(part) + (isFinite(offset) ? offset : 0);
+}
+
+function clampPartToMap(part, footOffset) {
     var maxX = Math.max(0, MAP_WIDTH - Number(part.w || 0));
     var maxY = Math.max(0, MAP_HEIGHT - Number(part.h || 0));
 
     part.x = Math.max(0, Math.min(maxX, Number(part.x || 0)));
     part.y = Math.max(0, Math.min(maxY, Number(part.y || 0)));
-    updatePartFootY(part);
-}
 
-function updatePartFootY(part) {
-    if (!part) return;
-    part.footY = Number(part.y || 0) + Number(part.h || 0);
+    if (arguments.length >= 2) {
+        syncTownPartFootY(part, footOffset);
+    } else {
+        ensureTownPartFootY(part);
+    }
 }
 
 function makeUniquePartId(base) {
@@ -4544,14 +5165,20 @@ function makeUniquePartId(base) {
 
 function createTownPartFromCatalog(key, worldX, worldY) {
     var catalog = getPartCatalogEntry(key);
+    var objectId = String(catalog.objectId || '');
+
+    if (!objectId) {
+        updateEditorStatus("WORLD OBJECT未登録のパーツは追加できません");
+        return null;
+    }
+
     var part = {
-        id: makeUniquePartId('station_' + catalog.key),
-        src: TOWN_PART_ASSET_BASE + catalog.file + '?rev=editor',
+        id: makeUniquePartId(catalog.idStem || ('station_' + catalog.key)),
+        objectId: objectId,
         x: (worldX / TILE_SIZE) - catalog.w / 2,
         y: (worldY / TILE_SIZE) - catalog.h,
         w: catalog.w,
         h: catalog.h,
-        footY: 0,
         enabled: true,
         catalogKey: catalog.key,
         collision: cloneRelativePartRect(catalog.collision),
@@ -4559,7 +5186,6 @@ function createTownPartFromCatalog(key, worldX, worldY) {
     };
 
     clampPartToMap(part);
-    ensureTownPartMetadata(part);
     return part;
 }
 
@@ -4621,7 +5247,10 @@ function ensurePartEditorFields() {
         targetSelect.appendChild(option);
     }
 
-    if (document.getElementById('part-form')) return;
+    if (document.getElementById('part-form')) {
+        if (window.YUMANIWA_EDITOR_ACTION_UI) window.YUMANIWA_EDITOR_ACTION_UI.ensureFields();
+        return;
+    }
 
     var editorContent = document.querySelector('#editor-panel .editor-content');
     if (!editorContent) return;
@@ -4632,9 +5261,14 @@ function ensurePartEditorFields() {
 
     var catalogOptions = '';
     for (var i = 0; i < TOWN_PART_CATALOG.length; i++) {
+        if (TOWN_PART_CATALOG[i].addable === false) continue;
+        var catalogLabel = TOWN_PART_CATALOG[i].label;
+        if (TOWN_PART_CATALOG[i].legacy === true) {
+            catalogLabel += '（LEGACY）';
+        }
         catalogOptions +=
             '<option value="' + TOWN_PART_CATALOG[i].key + '">' +
-            TOWN_PART_CATALOG[i].label +
+            catalogLabel +
             '</option>';
     }
 
@@ -4655,6 +5289,7 @@ function ensurePartEditorFields() {
         '<div class="part-editor-row">' +
         '<label>幅 <input id="part-w-input" class="part-editor-number" type="number" min="1" step="1"></label>' +
         '<label>高さ <input id="part-h-input" class="part-editor-number" type="number" min="1" step="1"></label>' +
+        '<label>足元Y <input id="part-foot-y-input" class="part-editor-number" type="number" step="1"></label>' +
         '</div>' +
         '<div class="part-editor-row">' +
         '<label><input id="part-ratio-lock" type="checkbox" checked> 縦横比固定</label>' +
@@ -4679,7 +5314,7 @@ function ensurePartEditorFields() {
         '</div>' +
         '<div class="part-editor-section">調べる範囲</div>' +
         '<div class="part-editor-row">' +
-        '<label><input id="part-trigger-enabled" type="checkbox"> パーツと一緒に移動</label>' +
+        '<label><input id="part-trigger-enabled" type="checkbox"> 調べる範囲を使う</label>' +
         '</div>' +
         '<div class="part-editor-row">' +
         '<label class="part-editor-grow">トリガーID <input id="part-trigger-id" type="text" style="width:100%;box-sizing:border-box"></label>' +
@@ -4688,7 +5323,7 @@ function ensurePartEditorFields() {
         '<button id="btn-part-smaller" type="button">縮小</button>' +
         '<button id="btn-part-larger" type="button">拡大</button>' +
         '<button id="btn-part-duplicate" type="button">複製</button>' +
-        '<button id="btn-part-delete" class="part-editor-danger" type="button">削除</button>' +
+        '<button id="btn-part-delete" class="part-editor-danger" type="button" style="flex:1 1 100%">選択中パーツを削除</button>' +
         '</div>' +
         '<div class="part-editor-note">ドラッグ・数値変更・拡大縮小に、当たり判定と調べる範囲が追従します。赤が当たり判定、黄が調べる範囲です。</div>';
 
@@ -4744,6 +5379,8 @@ function ensurePartEditorFields() {
         applyPartNumberInputs('h');
     });
 
+    document.getElementById('part-foot-y-input').addEventListener('change', applyPartFootYInput);
+
     var collisionInputIds = [
         'part-collision-enabled',
         'part-collision-x',
@@ -4758,8 +5395,17 @@ function ensurePartEditorFields() {
     document.getElementById('part-trigger-enabled').addEventListener('change', applyPartInteractionInputs);
     document.getElementById('part-trigger-id').addEventListener('change', applyPartInteractionInputs);
 
+    if (window.YUMANIWA_EDITOR_ACTION_UI) window.YUMANIWA_EDITOR_ACTION_UI.ensureFields();
     setPartEditorMode('select');
     updatePartEditorSelectionUi();
+}
+
+function isDedicatedGhostTownPart(part) {
+    return !!part && String(part.id || '') === 'station_ghost_npc';
+}
+
+function isDedicatedGhostTrigger(trigger) {
+    return !!trigger && String(trigger.id || '') === 'station_ghost_npc_trigger';
 }
 
 function getSelectedTownPart() {
@@ -4773,6 +5419,7 @@ function getSelectedTownPart() {
 }
 
 function selectTownPart(index) {
+    finishPartEditorDrag();
     var parts = getActiveTownParts();
 
     if (index < 0 || index >= parts.length) {
@@ -4785,12 +5432,14 @@ function selectTownPart(index) {
 }
 
 function updatePartEditorSelectionUi() {
+    if (window.YUMANIWA_EDITOR_ACTION_UI) window.YUMANIWA_EDITOR_ACTION_UI.updateSelection();
     var part = getSelectedTownPart();
     var label = document.getElementById('part-selected-label');
     var xInput = document.getElementById('part-x-input');
     var yInput = document.getElementById('part-y-input');
     var wInput = document.getElementById('part-w-input');
     var hInput = document.getElementById('part-h-input');
+    var footYInput = document.getElementById('part-foot-y-input');
     var collisionEnabled = document.getElementById('part-collision-enabled');
     var collisionX = document.getElementById('part-collision-x');
     var collisionY = document.getElementById('part-collision-y');
@@ -4799,28 +5448,29 @@ function updatePartEditorSelectionUi() {
     var triggerEnabled = document.getElementById('part-trigger-enabled');
     var triggerId = document.getElementById('part-trigger-id');
 
-    if (part) ensureTownPartMetadata(part);
+    if (part) part = getTownPartMetadataView(part);
 
     if (label) {
         label.textContent = part ? (part.id || '名称なし') : 'なし';
     }
 
     var disabled = !part;
+    var ghostLocked = isDedicatedGhostTownPart(part);
     var inputs = [
-        xInput, yInput, wInput, hInput,
-        collisionEnabled, collisionX, collisionY, collisionW, collisionH,
-        triggerEnabled, triggerId
+        xInput, yInput, wInput, hInput, footYInput,
+        collisionEnabled, collisionX, collisionY, collisionW, collisionH
     ];
 
     for (var i = 0; i < inputs.length; i++) {
         if (inputs[i]) inputs[i].disabled = disabled;
     }
 
+    if (triggerEnabled) triggerEnabled.disabled = disabled || ghostLocked;
+    if (triggerId) triggerId.disabled = disabled || ghostLocked;
+
     var actionIds = [
         'btn-part-smaller',
-        'btn-part-larger',
-        'btn-part-duplicate',
-        'btn-part-delete'
+        'btn-part-larger'
     ];
 
     for (var a = 0; a < actionIds.length; a++) {
@@ -4828,11 +5478,17 @@ function updatePartEditorSelectionUi() {
         if (action) action.disabled = disabled;
     }
 
+    var duplicateButton = document.getElementById('btn-part-duplicate');
+    var deleteButton = document.getElementById('btn-part-delete');
+    if (duplicateButton) duplicateButton.disabled = disabled || ghostLocked;
+    if (deleteButton) deleteButton.disabled = disabled || ghostLocked;
+
     if (!part) {
         if (xInput) xInput.value = '';
         if (yInput) yInput.value = '';
         if (wInput) wInput.value = '';
         if (hInput) hInput.value = '';
+        if (footYInput) footYInput.value = '';
         if (collisionEnabled) collisionEnabled.checked = false;
         if (collisionX) collisionX.value = '';
         if (collisionY) collisionY.value = '';
@@ -4850,6 +5506,7 @@ function updatePartEditorSelectionUi() {
     if (yInput) yInput.value = Math.round(rect.y);
     if (wInput) wInput.value = Math.round(rect.w);
     if (hInput) hInput.value = Math.round(rect.h);
+    if (footYInput) footYInput.value = Math.round(getTownPartFootY(part) * TILE_SIZE);
 
     if (collisionEnabled) collisionEnabled.checked = collision.enabled !== false;
     if (collisionX) collisionX.value = Math.round(Number(collision.x || 0) * rect.w);
@@ -4865,7 +5522,6 @@ function applyPartCollisionInputs() {
     var part = getSelectedTownPart();
     if (!part) return;
 
-    ensureTownPartMetadata(part);
 
     var rect = getPartRectPixels(part);
     var enabled = document.getElementById('part-collision-enabled');
@@ -4884,15 +5540,15 @@ function applyPartCollisionInputs() {
         return;
     }
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
 
-    part.collision = {
+    part.collision = Object.assign({}, part.collision, {
         enabled: !!(enabled && enabled.checked),
         x: xPx / rect.w,
         y: yPx / rect.h,
         w: Math.max(1, wPx) / rect.w,
         h: Math.max(1, hPx) / rect.h
-    };
+    });
 
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
@@ -4903,28 +5559,52 @@ function applyPartInteractionInputs() {
     var part = getSelectedTownPart();
     if (!part) return;
 
-    ensureTownPartMetadata(part);
 
     var enabled = document.getElementById('part-trigger-enabled');
     var idInput = document.getElementById('part-trigger-id');
     var nextId = String((idInput && idInput.value) || '').trim();
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
 
+    var oldId = part.interaction && part.interaction.triggerId;
+    if (!part.interaction) part.interaction = getDefaultTownPartInteraction(part);
     part.interaction.enabled = !!(enabled && enabled.checked && nextId);
     part.interaction.triggerId = nextId;
+    if (part.interaction.enabled && !findTownPartTrigger(nextId)) {
+        putTownPartTrigger({ id: nextId, label: part.id, actionLabel: '調べる', type: 'inspect',
+            text: '町に置かれたパーツです。', area: getTownPartTriggerArea(part), tapPadding: 1 });
+    }
+    removeUnlinkedTownPartTrigger(oldId);
 
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
     updateEditorStatus('調べる範囲の連動を更新しました');
 }
 
-function pushTownPartHistory() {
+function recordTownEditorHistory(before) {
+    if (!before) finishPartEditorDrag();
+    window.YUMANIWA_EDITOR_SESSION.recordHistory(before);
     markEditorDirty();
-    editHistory.push({
-        type: 'props',
-        prev: cloneTownParts()
-    });
+}
+
+function applyPartFootYInput() {
+    var part = getSelectedTownPart();
+    if (!part) return;
+
+    var input = document.getElementById('part-foot-y-input');
+    var footYPx = Number(input && input.value);
+
+    if (!isFinite(footYPx)) {
+        updatePartEditorSelectionUi();
+        return;
+    }
+
+    recordTownEditorHistory();
+    part.footY = footYPx / TILE_SIZE;
+
+    refreshTownPartDerivedData();
+    updatePartEditorSelectionUi();
+    updateEditorStatus("足元位置を更新しました");
 }
 
 function applyPartNumberInputs(changedKey) {
@@ -4946,8 +5626,9 @@ function applyPartNumberInputs(changedKey) {
         return;
     }
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
 
+    var footOffset = getTownPartFootOffset(part);
     var oldWPx = Math.max(1, part.w * TILE_SIZE);
     var oldHPx = Math.max(1, part.h * TILE_SIZE);
     var ratio = oldWPx / oldHPx;
@@ -4966,7 +5647,7 @@ function applyPartNumberInputs(changedKey) {
         part.h = Math.max(1, hPx) / TILE_SIZE;
     }
 
-    clampPartToMap(part);
+    clampPartToMap(part, footOffset);
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
     updateEditorStatus("パーツの数値を更新しました");
@@ -4979,10 +5660,11 @@ function nudgeSelectedPart(dxPx, dyPx) {
         return;
     }
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
+    var footOffset = getTownPartFootOffset(part);
     part.x += dxPx / TILE_SIZE;
     part.y += dyPx / TILE_SIZE;
-    clampPartToMap(part);
+    clampPartToMap(part, footOffset);
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
     updateEditorStatus("1px移動しました");
@@ -5002,18 +5684,20 @@ function resizeSelectedPart(deltaPx) {
         ? Math.max(1, Math.round(oldHPx * (newWPx / oldWPx)))
         : Math.max(1, oldHPx + deltaPx);
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
 
-    // 足元中央をなるべく維持して拡大縮小する。
+    var footOffset = getTownPartFootOffset(part);
+
+    // 画像下端を維持しつつ、カスタム足元位置の下端オフセットも保つ。
     var centerXPx = (part.x + part.w / 2) * TILE_SIZE;
-    var footYPx = (part.y + part.h) * TILE_SIZE;
+    var bottomYPx = getTownPartBottomY(part) * TILE_SIZE;
 
     part.w = newWPx / TILE_SIZE;
     part.h = newHPx / TILE_SIZE;
     part.x = centerXPx / TILE_SIZE - part.w / 2;
-    part.y = footYPx / TILE_SIZE - part.h;
+    part.y = bottomYPx / TILE_SIZE - part.h;
 
-    clampPartToMap(part);
+    clampPartToMap(part, footOffset);
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
     updateEditorStatus(deltaPx > 0 ? "パーツを拡大しました" : "パーツを縮小しました");
@@ -5026,18 +5710,30 @@ function duplicateSelectedPart() {
         return;
     }
 
-    pushTownPartHistory();
+    if (isDedicatedGhostTownPart(part)) {
+        updateEditorStatus("おばけNPCは専用機能のため複製できません");
+        return;
+    }
+
+    recordTownEditorHistory();
 
     var copy = cloneTownPart(part);
+    var copyFootOffset = getTownPartFootOffset(copy);
     copy.id = makeUniquePartId((part.id || 'part') + '_copy');
     copy.x += 8 / TILE_SIZE;
     copy.y += 8 / TILE_SIZE;
 
     if (copy.interaction && copy.interaction.enabled && copy.interaction.triggerId) {
+        var originalTrigger = findTownPartTrigger(copy.interaction.triggerId);
         copy.interaction.triggerId = makeUniqueTownPartTriggerId(copy.id + '_trigger');
+        if (originalTrigger) {
+            var copiedTrigger = cloneTrigger(originalTrigger);
+            copiedTrigger.id = copy.interaction.triggerId;
+            putTownPartTrigger(copiedTrigger);
+        }
     }
 
-    clampPartToMap(copy);
+    clampPartToMap(copy, copyFootOffset);
 
     var parts = getActiveTownParts();
     parts.push(copy);
@@ -5054,13 +5750,19 @@ function deleteSelectedPart() {
         return;
     }
 
+    if (isDedicatedGhostTownPart(part)) {
+        updateEditorStatus("おばけNPCは専用機能のため削除できません");
+        return;
+    }
+
     var confirmed = window.confirm("「" + (part.id || "選択中のパーツ") + "」を削除しますか？");
     if (!confirmed) return;
 
-    pushTownPartHistory();
+    recordTownEditorHistory();
 
     var parts = getActiveTownParts();
     parts.splice(editingPartIndex, 1);
+    removeUnlinkedTownPartTrigger(part.interaction && part.interaction.triggerId);
     editingPartIndex = -1;
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
@@ -5074,11 +5776,12 @@ function handlePartEditorPointerDown(e) {
     if (partEditorMode === 'add') {
         var select = document.getElementById('part-asset-select');
         var key = select ? select.value : TOWN_PART_CATALOG[0].key;
+        var added = createTownPartFromCatalog(key, world.x, world.y);
+        if (!added) return;
 
-        pushTownPartHistory();
+        recordTownEditorHistory();
 
         var parts = getActiveTownParts();
-        var added = createTownPartFromCatalog(key, world.x, world.y);
         parts.push(added);
         editingPartIndex = parts.length - 1;
         refreshTownPartDerivedData();
@@ -5105,7 +5808,8 @@ function handlePartEditorPointerDown(e) {
         pointerId: e.pointerId,
         offsetX: world.x - rect.x,
         offsetY: world.y - rect.y,
-        prev: cloneTownParts(),
+        footOffset: getTownPartFootOffset(part),
+        prev: window.YUMANIWA_EDITOR_SESSION.captureHistory(),
         moved: false
     };
 
@@ -5144,7 +5848,7 @@ function handlePartEditorPointerMove(e) {
 
     part.x = nextX;
     part.y = nextY;
-    clampPartToMap(part);
+    clampPartToMap(part, partDragState.footOffset);
     refreshTownPartDerivedData();
     updatePartEditorSelectionUi();
 }
@@ -5167,11 +5871,7 @@ function finishPartEditorDrag(e) {
     partDragState = null;
 
     if (moved) {
-        markEditorDirty();
-    editHistory.push({
-            type: 'props',
-            prev: prev
-        });
+        recordTownEditorHistory(prev);
         updateEditorStatus("パーツを移動しました");
     }
 
@@ -5272,7 +5972,7 @@ function drawTownPartEditorOverlay() {
         );
 
         if (selected) {
-            var footY = (typeof part.footY === 'number' ? part.footY : part.y + part.h) * TILE_SIZE;
+            var footY = getTownPartFootY(part) * TILE_SIZE;
             var footX = (part.x + part.w / 2) * TILE_SIZE;
 
             ctx.fillStyle = '#00ffff';
@@ -5324,39 +6024,7 @@ function drawTownPartEditorOverlay() {
     ctx.restore();
 }
 
-function cloneTrigger(trigger) {
-    var copied = {};
-    for (var key in trigger) {
-        if (!Object.prototype.hasOwnProperty.call(trigger, key)) continue;
-
-        if (key === "area" && trigger.area) {
-            copied.area = {
-                x: trigger.area.x,
-                y: trigger.area.y,
-                w: trigger.area.w,
-                h: trigger.area.h
-            };
-        } else {
-            copied[key] = trigger[key];
-        }
-    }
-    return copied;
-}
-
-function cloneTriggers() {
-    var copied = [];
-    for (var i = 0; i < triggers.length; i++) {
-        copied.push(cloneTrigger(triggers[i]));
-    }
-    return copied;
-}
-
-function restoreTriggers(prev) {
-    triggers = [];
-    for (var i = 0; i < prev.length; i++) {
-        triggers.push(cloneTrigger(prev[i]));
-    }
-}
+function cloneTrigger(trigger) { return cloneTownData(trigger); }
 
 function getTriggerIndexAtTile(tx, ty) {
     for (var i = triggers.length - 1; i >= 0; i--) {
@@ -5407,26 +6075,65 @@ function setTriggerFormValues(trigger) {
     var targetInput = document.getElementById("trigger-target");
     var textInput = document.getElementById("trigger-text");
 
-    if (idInput) idInput.value = trigger.id || "";
-    if (labelInput) labelInput.value = trigger.label || "";
-    if (actionInput) actionInput.value = trigger.actionLabel || "";
-    if (typeInput) typeInput.value = trigger.type || "inspect";
-    if (targetInput) targetInput.value = trigger.target || "";
-    if (textInput) textInput.value = trigger.text || "";
+    var dedicatedGhost = isDedicatedGhostTrigger(trigger);
+
+    if (idInput) {
+        idInput.value = trigger.id || "";
+        idInput.disabled = dedicatedGhost;
+    }
+    if (labelInput) {
+        labelInput.value = trigger.label || "";
+        labelInput.disabled = dedicatedGhost;
+    }
+    if (actionInput) {
+        actionInput.value = trigger.actionLabel || "";
+        actionInput.disabled = dedicatedGhost;
+    }
+    if (typeInput) {
+        typeInput.value = trigger.type || "inspect";
+        typeInput.disabled = dedicatedGhost;
+    }
+    if (targetInput) {
+        targetInput.value = trigger.target || "";
+        targetInput.disabled = dedicatedGhost;
+    }
+    if (textInput) {
+        textInput.value = trigger.text || "";
+        textInput.disabled = dedicatedGhost;
+    }
+
+    var updateButton = document.getElementById("btn-update-trigger");
+    if (updateButton) updateButton.disabled = dedicatedGhost;
+}
+
+function syncEditedTriggerToLinkedPartState(previousId, trigger) {
+    if (!trigger || !trigger.id) return;
+    getActiveTownParts().forEach(function (part) {
+        if (part.interaction && part.interaction.triggerId === previousId) part.interaction.triggerId = trigger.id;
+    });
 }
 
 function applyTriggerValues(index, values) {
     if (index < 0 || index >= triggers.length || !values) return false;
 
-    triggers[index] = {
-        id: values.id || "trigger",
-        label: values.label || "トリガー",
-        actionLabel: values.actionLabel || "調べる",
-        area: values.area || triggers[index].area,
-        type: values.type || "inspect",
-        target: values.target || "",
-        text: values.text || ""
-    };
+    var current = triggers[index] || {};
+    var previousId = String(current.id || '');
+    var next = cloneTrigger(current);
+
+    if (isDedicatedGhostTrigger(current)) {
+        next.area = Object.assign({}, current.area, values.area);
+    } else {
+        next.id = values.id || "trigger";
+        next.label = values.label || "トリガー";
+        next.actionLabel = values.actionLabel || "調べる";
+        next.area = Object.assign({}, current.area, values.area);
+        next.type = values.type || "inspect";
+        next.target = values.target || "";
+        next.text = values.text || "";
+    }
+
+    triggers[index] = next;
+    syncEditedTriggerToLinkedPartState(previousId, next);
 
     return true;
 }
@@ -5454,6 +6161,13 @@ function selectExistingTriggerForEdit(index) {
         " / 内容変更後に「選択中トリガーを更新」、または終点タップで範囲変更"
     );
 
+    if (
+        window.YUMANIWA_SPATIAL_EDITOR &&
+        typeof window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged === 'function'
+    ) {
+        window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged();
+    }
+
     return true;
 }
 
@@ -5470,8 +6184,7 @@ function updateSelectedTriggerFromForm() {
         return;
     }
 
-    markEditorDirty();
-    editHistory.push({ type: "triggers", prev: cloneTriggers() });
+    recordTownEditorHistory();
 
     applyTriggerValues(editingTriggerIndex, getTriggerFormValues({
         x: current.area.x,
@@ -5484,6 +6197,13 @@ function updateSelectedTriggerFromForm() {
     currentHoverTile = null;
     editingTriggerIndex = -1;
 
+    if (
+        window.YUMANIWA_SPATIAL_EDITOR &&
+        typeof window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged === 'function'
+    ) {
+        window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged();
+    }
+
     updateEditorStatus("既存トリガーの内容を更新しました");
 }
 
@@ -5495,6 +6215,12 @@ function deleteSelectedTrigger() {
     }
 
     var current = triggers[editingTriggerIndex];
+
+    if (isDedicatedGhostTrigger(current)) {
+        updateEditorStatus("おばけNPCの会話トリガーは専用機能のため削除できません");
+        return;
+    }
+
     var triggerName = current
         ? (current.label || current.id || "トリガー")
         : "トリガー";
@@ -5504,30 +6230,160 @@ function deleteSelectedTrigger() {
         return;
     }
 
-    markEditorDirty();
-    editHistory.push({ type: "triggers", prev: cloneTriggers() });
+    recordTownEditorHistory();
+
+    var deletedTriggerId = String((current && current.id) || '');
     triggers.splice(editingTriggerIndex, 1);
+
+    if (deletedTriggerId) {
+
+        var parts = getActiveTownParts();
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            if (
+                part &&
+                part.interaction &&
+                String(part.interaction.triggerId || '') === deletedTriggerId
+            ) {
+                part.interaction.enabled = false;
+                part.interaction.triggerId = '';
+            }
+        }
+    }
 
     editStep = 0;
     currentHoverTile = null;
     editingTriggerIndex = -1;
+
+    if (
+        window.YUMANIWA_SPATIAL_EDITOR &&
+        typeof window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged === 'function'
+    ) {
+        window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged();
+    }
 
     updateEditorStatus("トリガーを削除しました。Undoで元に戻せます");
 }
 
 
 
-function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; }
-function copyGrid() { return cloneCollisionGrid(baseCollisionGrid.length ? baseCollisionGrid : collisionGrid); }
+function updateEditorStatus(msg) { document.getElementById('editor-status').innerText = msg; updateEditorSaveStateUI(); }
+function getEditorBaseCollisionGrid() {
+    if (!Array.isArray(baseCollisionGrid) || baseCollisionGrid.length !== MAP_HEIGHT) {
+        throw new Error("Editor base collision grid is not initialized");
+    }
+
+    for (var y = 0; y < MAP_HEIGHT; y++) {
+        if (!Array.isArray(baseCollisionGrid[y]) || baseCollisionGrid[y].length !== MAP_WIDTH) {
+            throw new Error("Editor base collision grid has an invalid row");
+        }
+    }
+
+    return baseCollisionGrid;
+}
+
+
+function collisionGridToRects(targetValue, sourceGrid) {
+    var grid = sourceGrid;
+    var MAP_HEIGHT = grid.length;
+    var MAP_WIDTH = grid[0] ? grid[0].length : 0;
+    var rects = [];
+    var visited = [];
+
+    for (var y = 0; y < MAP_HEIGHT; y++) {
+        var row = [];
+        for (var x = 0; x < MAP_WIDTH; x++) row.push(false);
+        visited.push(row);
+    }
+
+    for (var gy = 0; gy < MAP_HEIGHT; gy++) {
+        for (var gx = 0; gx < MAP_WIDTH; gx++) {
+            if (!grid[gy] || grid[gy][gx] !== targetValue || visited[gy][gx]) continue;
+
+            var w = 0;
+            while (
+                gx + w < MAP_WIDTH &&
+                grid[gy][gx + w] === targetValue &&
+                !visited[gy][gx + w]
+            ) {
+                w++;
+            }
+
+            var h = 1;
+            var canExpand = true;
+
+            while (gy + h < MAP_HEIGHT && canExpand) {
+                for (var i = 0; i < w; i++) {
+                    if (
+                        !grid[gy + h] ||
+                        grid[gy + h][gx + i] !== targetValue ||
+                        visited[gy + h][gx + i]
+                    ) {
+                        canExpand = false;
+                        break;
+                    }
+                }
+                if (canExpand) h++;
+            }
+
+            for (var dy = 0; dy < h; dy++) {
+                for (var dx = 0; dx < w; dx++) {
+                    visited[gy + dy][gx + dx] = true;
+                }
+            }
+
+            rects.push({ x: gx, y: gy, w: w, h: h });
+        }
+    }
+
+    return rects;
+}
+
+function getEditorCollisionData(sourceGrid) {
+    // Fixed terrain only. Town-part collision remains owned by prop.collision.
+    var grid = sourceGrid || getEditorBaseCollisionGrid();
+
+    var passable = collisionGridToRects(1, grid);
+    var blockedAll = collisionGridToRects(2, grid);
+    var blockedRectsResult = [];
+    var blockedPointsResult = [];
+
+    for (var i = 0; i < blockedAll.length; i++) {
+        var rect = blockedAll[i];
+
+        if (rect.w === 1 && rect.h === 1) {
+            blockedPointsResult.push({ x: rect.x, y: rect.y });
+        } else {
+            blockedRectsResult.push(rect);
+        }
+    }
+
+    return {
+        passableRects: passable,
+        blockedRects: blockedRectsResult,
+        blockedPoints: blockedPointsResult
+    };
+}
 
 function handleEditorTap(tx, ty) {
     if (editTarget === 'props') {
         return;
     }
 
+    if (editTarget === 'areaZones') {
+        if (
+            window.YUMANIWA_SPATIAL_EDITOR &&
+            typeof window.YUMANIWA_SPATIAL_EDITOR.handleAreaZoneTap === 'function'
+        ) {
+            window.YUMANIWA_SPATIAL_EDITOR.handleAreaZoneTap(tx, ty);
+        } else {
+            updateEditorStatus("エリア編集モジュールを読み込めません");
+        }
+        return;
+    }
+
     if (editTarget === 'blockedPoints') {
-        markEditorDirty();
-    editHistory.push({ type: 'grid', prev: copyGrid() });
+        recordTownEditorHistory();
         if (baseCollisionGrid[ty]) baseCollisionGrid[ty][tx] = 2;
         rebuildCollisionGridFromBase();
         updateEditorStatus("Point追加: (" + tx + ", " + ty + ")");
@@ -5569,8 +6425,7 @@ function handleEditorTap(tx, ty) {
         var newRect = { x: minX, y: minY, w: w, h: h };
 
         if (editTarget === 'passableRects' || editTarget === 'blockedRects') {
-            markEditorDirty();
-    editHistory.push({ type: 'grid', prev: copyGrid() });
+            recordTownEditorHistory();
             var val = (editTarget === 'passableRects') ? 1 : 2;
 
             for (var cy = minY; cy < minY + h; cy++) {
@@ -5590,8 +6445,7 @@ function handleEditorTap(tx, ty) {
 
         if (editTarget === 'triggers') {
             ensureTriggerEditorExtraFields();
-            markEditorDirty();
-    editHistory.push({ type: 'triggers', prev: cloneTriggers() });
+            recordTownEditorHistory();
 
             if (editingTriggerIndex >= 0 && editingTriggerIndex < triggers.length) {
                 applyTriggerValues(editingTriggerIndex, getTriggerFormValues(newRect));
@@ -5613,6 +6467,13 @@ function handleEditorTap(tx, ty) {
             editStep = 0;
             currentHoverTile = null;
             editingTriggerIndex = -1;
+
+            if (
+                window.YUMANIWA_SPATIAL_EDITOR &&
+                typeof window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged === 'function'
+            ) {
+                window.YUMANIWA_SPATIAL_EDITOR.onTriggerSelectionChanged();
+            }
             return;
         }
 
@@ -5623,341 +6484,16 @@ function handleEditorTap(tx, ty) {
 }
 
 
-function gridToRects(targetValue, sourceGrid) {
-    var grid = sourceGrid || collisionGrid;
-    var rects = []; var visited = [];
-    for (var y = 0; y < MAP_HEIGHT; y++) { var row = []; for (var x = 0; x < MAP_WIDTH; x++) row.push(false); visited.push(row); }
-    for (var y = 0; y < MAP_HEIGHT; y++) {
-        for (var x = 0; x < MAP_WIDTH; x++) {
-            if (grid[y][x] === targetValue && !visited[y][x]) {
-                var w = 0; while (x + w < MAP_WIDTH && grid[y][x + w] === targetValue && !visited[y][x + w]) w++;
-                var h = 1; var canExpand = true;
-                while (y + h < MAP_HEIGHT && canExpand) {
-                    for (var i = 0; i < w; i++) if (grid[y + h][x + i] !== targetValue || visited[y + h][x + i]) { canExpand = false; break; }
-                    if (canExpand) h++;
-                }
-                for (var dy = 0; dy < h; dy++) for (var dx = 0; dx < w; dx++) visited[y + dy][x + dx] = true;
-                rects.push({ x: x, y: y, w: w, h: h });
-            }
-        }
-    }
-    return rects;
-}
-
-function getTownSceneExportInfo(sceneId) {
-    var table = {
-        station_plaza: {
-            title: "駅前広場",
-            fileName: "data/station-plaza.js",
-            mode: "station-data"
-        },
-
-        tomogushi_alley_map: {
-            title: "灯串横丁",
-            fileName: "data/town-maps.js",
-            mode: "scene-definition"
-        },
-
-        leisure_center_map: {
-            title: "湯窓レジャーセンター",
-            fileName: "data/town-maps.js",
-            mode: "scene-definition"
-        },
-
-        yumado_street_map: {
-            title: "湯窓通り",
-            fileName: "data/town-maps.js",
-            mode: "scene-definition"
-        },
-
-        onsen_slope_map: {
-            title: "温泉坂",
-            fileName: "data/town-maps.js",
-            mode: "scene-definition"
-        }
-    };
-
-    return table[sceneId] || {
-        title: (
-            activeTownSceneDef &&
-            activeTownSceneDef.title
-        ) || sceneId || "町マップ",
-
-        fileName: "data/town-maps.js",
-        mode: "scene-definition"
-    };
-}
-
-
-function buildExportCollisionData() {
-    // 固定地形だけを書き出す。
-    // パーツ由来の判定は prop.collision に保持する。
-    var exportGrid = baseCollisionGrid.length
-        ? baseCollisionGrid
-        : collisionGrid;
-
-    var passable = gridToRects(1, exportGrid);
-    var blockedAll = gridToRects(2, exportGrid);
-
-    var blockedRectsResult = [];
-    var blockedPointsResult = [];
-
-    for (var i = 0; i < blockedAll.length; i++) {
-        var rect = blockedAll[i];
-
-        if (rect.w === 1 && rect.h === 1) {
-            blockedPointsResult.push({
-                x: rect.x,
-                y: rect.y
-            });
-        } else {
-            blockedRectsResult.push(rect);
-        }
-    }
-
-    return {
-        passableRects: passable,
-        blockedRects: blockedRectsResult,
-        blockedPoints: blockedPointsResult
-    };
-}
-
-
-function buildStationPlazaExportCode(info, collisionData, exportedParts) {
-    var lines = [
-        "// ==========================================",
-        "// 湯間庭町 / " + info.title + " 編集データ",
-        "// 開発モードの「書き出す」で生成した完全版です。",
-        "// この内容で " + info.fileName + " を丸ごと置き換えてください。",
-        "// ==========================================",
-        "",
-
-        "var BG_IMAGE_PATH = " + JSON.stringify(
-            (
-                activeTownSceneDef &&
-                activeTownSceneDef.backgroundImagePath
-            ) ||
-            "assets/maps/grounds/station-plaza-ground.png"
-        ) + ";",
-
-        "var TILE_SIZE = " +
-            JSON.stringify(Number(TILE_SIZE) || 16) +
-            ";",
-
-        "var MAP_WIDTH = " +
-            JSON.stringify(Number(MAP_WIDTH) || 24) +
-            ";",
-
-        "var MAP_HEIGHT = " +
-            JSON.stringify(Number(MAP_HEIGHT) || 24) +
-            ";",
-
-        "var PLAYER_START = " + JSON.stringify({
-            x: Math.round(
-                (player && player.x ? player.x : 0) /
-                (Number(TILE_SIZE) || 16)
-            ),
-
-            y: Math.round(
-                (player && player.y ? player.y : 0) /
-                (Number(TILE_SIZE) || 16)
-            )
-        }, null, 4) + ";",
-
-        "",
-
-        "var passableRects = " +
-            JSON.stringify(
-                collisionData.passableRects,
-                null,
-                4
-            ) +
-            ";",
-
-        "",
-
-        "var blockedRects = " +
-            JSON.stringify(
-                collisionData.blockedRects,
-                null,
-                4
-            ) +
-            ";",
-
-        "",
-
-        "var blockedPoints = " +
-            JSON.stringify(
-                collisionData.blockedPoints,
-                null,
-                4
-            ) +
-            ";",
-
-        "",
-
-        "var triggers = " +
-            JSON.stringify(triggers, null, 4) +
-            ";",
-
-        "",
-
-        "var areaZones = " +
-            JSON.stringify(areaZones, null, 4) +
-            ";",
-
-        "",
-
-        "// マップパーツ。collision と interaction は画像内の相対比率（0〜1）です。",
-
-        "var stationPlazaProps = " +
-            JSON.stringify(exportedParts, null, 4) +
-            ";",
-
-        ""
-    ];
-
-    return lines.join("\n");
-}
-
-
-function buildTownSceneDefinitionExportCode(
-    info,
-    collisionData,
-    exportedParts
-) {
-    var def = activeTownSceneDef || {};
-    var sceneId = currentScene;
-
-    var exportedDefinition = {
-        id: sceneId,
-        title: def.title || info.title,
-        subtitle: def.subtitle || "",
-
-        mapWidth: Number(MAP_WIDTH) || def.mapWidth || 24,
-        mapHeight: Number(MAP_HEIGHT) || def.mapHeight || 24,
-
-        backgroundStyle: def.backgroundStyle || "",
-        backgroundImagePath: def.backgroundImagePath || "",
-
-        spawnPoints: JSON.parse(JSON.stringify(
-            def.spawnPoints || {
-                default: {
-                    x: Math.round(player.x / TILE_SIZE),
-                    y: Math.round(player.y / TILE_SIZE),
-                    dir: player.dir || "down"
-                }
-            }
-        )),
-
-        edgeWarps: JSON.parse(JSON.stringify(
-            def.edgeWarps || []
-        )),
-
-        passableRects: collisionData.passableRects,
-        blockedRects: collisionData.blockedRects,
-        blockedPoints: collisionData.blockedPoints,
-
-        areaZones: JSON.parse(JSON.stringify(
-            areaZones || []
-        )),
-
-        triggers: JSON.parse(JSON.stringify(
-            triggers || []
-        )),
-
-        groundRects: JSON.parse(JSON.stringify(
-            def.groundRects || []
-        )),
-
-        props: exportedParts,
-
-        decor: JSON.parse(JSON.stringify(
-            def.decor || []
-        ))
-    };
-
-    var json = JSON.stringify(
-        exportedDefinition,
-        null,
-        4
-    );
-
-    // JSONをJavaScriptのオブジェクト定義として貼りやすくする。
-    var lines = [
-        "// ==========================================",
-        "// 湯間庭町 / " + info.title + " 編集データ",
-        "// 開発モードの「書き出す」で生成しました。",
-        "// " + info.fileName + " 内の",
-        "// " + sceneId + ": { ... } を以下で置き換えてください。",
-        "// ==========================================",
-        "",
-        sceneId + ": " + json + ",",
-        ""
-    ];
-
-    return lines.join("\n");
-}
-
-
-function buildFullStationPlazaExportCode() {
-    var info = getTownSceneExportInfo(currentScene);
-    var collisionData = buildExportCollisionData();
-    var exportedParts = cloneTownParts();
-
-    if (info.mode === "station-data") {
-        return buildStationPlazaExportCode(
-            info,
-            collisionData,
-            exportedParts
-        );
-    }
-
-    return buildTownSceneDefinitionExportCode(
-        info,
-        collisionData,
-        exportedParts
-    );
-}
-
-
-function showExportModal() {
-    var textarea = document.getElementById("export-textarea");
-    if (!textarea) return;
-
-    var info = getTownSceneExportInfo(currentScene);
-
-    textarea.value = buildFullStationPlazaExportCode();
-
-    var modal = document.getElementById("export-modal");
-    if (modal) {
-        modal.style.display = "flex";
-    }
-
-    var copyButton = document.getElementById("btn-copy-export");
-
-    if (copyButton) {
-        copyButton.innerText =
-            info.title + "のコードをコピー";
-    }
-
-    updateEditorStatus(
-        editorHasUnsavedChanges
-            ? info.title +
-              "を書き出しています。コピーすると「コピー済み」になります"
-            : info.title +
-              "の現在の内容はコピー済みです"
-    );
-}
-
-
+// Full-file Town Editor export was retired.
+ // town-editor-safe-export.js owns the single session diff-v1 export.
+ 
 // ==========================================
 // 6. メインループと更新・判定
 // ==========================================
 function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 
 function update() {
-    if (isMessageOpen || !isTownScene(currentScene) || isEditMode) {
+    if (!canControlTownPlayer()) {
         player.isMoving = false;
         updatePlayerWalkAnimation(0);
         return;
@@ -5976,7 +6512,7 @@ function update() {
         var beforeManualX = player.x;
         var beforeManualY = player.y;
 
-        cancelTapMove();
+        window.YUMANIWA_TOWN_INTERACTION.cancel();
         
         if (dx !== 0 && dy !== 0) {
             dx *= 0.7071;
@@ -6018,10 +6554,17 @@ function update() {
         if (warpSide && tryTownEdgeWarp(warpSide)) return;
     } else {
         // 経路の最初・最後の短い一歩も含め、タップ移動中は歩行アニメを維持する。
-        var tapPathWasActive = !!tapMoveTargetTile;
+        var tapPathWasActive = window.YUMANIWA_TOWN_INTERACTION.isMoving();
+        var tapSceneId = currentScene;
         var beforeTapX = player.x;
         var beforeTapY = player.y;
-        var moved = updateTapMove();
+        var moved = window.YUMANIWA_TOWN_INTERACTION.update();
+        // Arrival may open an overlay or apply another scene/spawn.
+        if (tapSceneId !== currentScene || isMessageOpen || isWorkPlayerOpen || isStationGuideMapOpen) {
+            player.isMoving = false;
+            updatePlayerWalkAnimation(0);
+            return;
+        }
 
         var tapMovedX = player.x - beforeTapX;
         var tapMovedY = player.y - beforeTapY;
@@ -6037,13 +6580,12 @@ function update() {
         player.isMoving =
             movedThisFrame ||
             tapPathWasActive ||
-            !!tapMoveTargetTile;
+            window.YUMANIWA_TOWN_INTERACTION.isMoving();
 
         if (moved) {
             updateUI();
             updateInteractionHint();
             updateCurrentArea();
-            if (tryTownEdgeWarp()) return;
         }
     }
 
@@ -6075,14 +6617,6 @@ function checkCollision(x, y) {
 function isColliding(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
 
 function getNearbyTrigger() {
-    if (tapFocusedTrigger) {
-        if (isPlayerNearTrigger(tapFocusedTrigger)) {
-            return tapFocusedTrigger;
-        }
-
-        tapFocusedTrigger = null;
-    }
-
     var checkX = player.x;
     var checkY = player.y;
     var checkSize = TILE_SIZE;
@@ -6097,6 +6631,7 @@ function getNearbyTrigger() {
 
     for (var i = 0; i < triggers.length; i++) {
         var t = triggers[i];
+        if (!t || !t.area || t.enabled === false) continue;
         var tr = {
             x: t.area.x * TILE_SIZE,
             y: t.area.y * TILE_SIZE,
@@ -6367,38 +6902,6 @@ function showAreaTitle(zone) {
     }, 2200);
 }
 
-function handleAction() {
-    var t = getNearbyTrigger();
-    if (t) {
-        if (t.id === "tourist_map") {
-            openStationGuideMap();
-            return;
-        }
-
-        if (t.type === "work") {
-            var work = t.workId ? getWorkById(t.workId) : null;
-
-            if (work) {
-                launchWork(work);
-            } else {
-                showMessage(t.text || "この作品は、まだ準備中です。");
-            }
-
-            return;
-        }
-
-        if (t.type === "inspect") {
-            showMessage(t.text);
-        } else if (t.type === "warp" || t.type === "menu") {
-            var actionName = t.actionLabel || "調べる";
-            showMessage(t.text + "<br><span style='font-size:14px; color:#aaa;'>(もう一度「" + actionName + "」で開く)</span>");
-            pendingWarp = t.target;
-        }
-    }
-}
-
-
-
 // ==========================================
 // 7. UI・シーン・RPGメニュー管理
 // ==========================================
@@ -6418,9 +6921,8 @@ function formatText(text) {
 }
 
 function showMessage(text) {
-    if (typeof cancelTapMove === "function") {
-        cancelTapMove();
-    }
+    pendingWarp = null;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
     var msg = formatText(text);
     var msgWin = document.getElementById('message-window');
     var backdrop = document.getElementById('message-backdrop');
@@ -6439,6 +6941,7 @@ function showMessage(text) {
 
 
 function closeMessage() { 
+    pendingWarp = null;
     var msgWin = document.getElementById('message-window');
     var backdrop = document.getElementById('message-backdrop');
 
@@ -6462,6 +6965,20 @@ function resetDestinationState() {
     destinationViewMode = "intro";
     currentDestinationMessage = "";
     currentDestinationMessageTitle = "";
+}
+
+function getDestinationListViewMode(destId) {
+    if (destId === "shinpo_board") return "note_rack";
+
+    return destId === "leisure_catalog"
+        ? "work_guide"
+        : "menu";
+}
+
+function getDestinationInitialViewMode(destId) {
+    if (destId === "shinpo_board") return "note_rack";
+    if (destId === "leisure_catalog") return "work_guide";
+    return "intro";
 }
 
 function getDestinationReturnSceneId(destOrId) {
@@ -6491,37 +7008,73 @@ window.backToDestinationReturnScene = function(destId) {
 };
 
 
-// ★ RPG共通メニューの生成と遷移
-window.changeScene = function(sceneId, spawnKey) {
-    // 町内から、お店・看板などの専用画面へ移る直前に位置を保存
-    if (isTownScene(currentScene) && !isTownScene(sceneId)) {
-        rememberTownWindowReturnPoint();
-    }
-
-    currentScene = sceneId;
-
+function prepareSceneUiForChange() {
     var sceneContainer = document.getElementById('scene-container');
-    document.getElementById('area-title').classList.remove('visible');
-    document.getElementById('interaction-hint').classList.remove('visible');
+    var areaTitle = document.getElementById('area-title');
+    var interactionHint = document.getElementById('interaction-hint');
+
+    if (areaTitle) areaTitle.classList.remove('visible');
+    if (interactionHint) interactionHint.classList.remove('visible');
 
     var btnAction = document.getElementById('btn-action');
     if (btnAction) {
         btnAction.innerText = "調べる";
     }
 
-    if (isTownScene(sceneId)) {
-        resetDestinationState();
-        closeDestinationScene();
-        applyTownSceneDefinition(sceneId, spawnKey || 'default');
-        clearDpadInput();
-        updateControlVisibility();
-        return;
+    return sceneContainer;
+}
+
+function changeTownScene(sceneId, spawnKey, transitionToken) {
+    if (!window.YUMANIWA_TOWN_TRANSITION.acceptSceneChange(transitionToken)) return false;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    if (!canLeaveTownEditorSession(sceneId)) return false;
+    var validation = validateTownSceneRequest(sceneId, spawnKey);
+    if (!validation.ok) {
+        reportTownSceneTransitionFailure(sceneId, validation.errors);
+        return false;
     }
+
+    prepareSceneUiForChange();
+    currentScene = sceneId;
+    resetDestinationState();
+    closeDestinationScene();
+
+    if (!applyTownSceneDefinition(sceneId, spawnKey || 'default', transitionToken)) {
+        reportTownSceneTransitionFailure(
+            sceneId,
+            lastTownSceneValidationErrors
+        );
+        return false;
+    }
+
+    clearDpadInput();
+    updateControlVisibility();
+    return true;
+}
+
+// ★ RPG共通メニューの生成と遷移
+window.changeScene = function(sceneId, spawnKey, transitionToken) {
+    if (!window.YUMANIWA_TOWN_TRANSITION.acceptSceneChange(transitionToken)) return false;
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
+    pendingWarp = null;
+    if (isTownScene(sceneId)) {
+        return changeTownScene(sceneId, spawnKey, transitionToken);
+    }
+
+    // 町内から、お店・看板などの専用画面へ移る直前に位置を保存
+    if (isTownScene(currentScene)) {
+        rememberTownWindowReturnPoint();
+    }
+
+    prepareSceneUiForChange();
+    currentScene = sceneId;
 
     updateUI();
     openDestination(sceneId);
     clearDpadInput();
     updateControlVisibility();
+    return true;
 };
 
 
@@ -6529,9 +7082,17 @@ window.changeScene = function(sceneId, spawnKey) {
 window.openDestination = function(destId) {
     currentDestinationId = destId;
 
-    // 湯間庭新報は、タイトル一覧を一度挟まずに
-    // 記事カードが並ぶ「新聞ラック」を直接開く。
-    destinationViewMode = (destId === "shinpo_board") ? "note_rack" : "intro";
+    if (
+        destId === "leisure_catalog" &&
+        window.YUMANIWA_WORK_GUIDE &&
+        typeof window.YUMANIWA_WORK_GUIDE.enter === "function"
+    ) {
+        window.YUMANIWA_WORK_GUIDE.enter();
+    }
+
+    // 新報は新聞ラック、展示ガイドは専用端末を直接開く。
+    // どちらも不要な「つづける」画面を挟まない。
+    destinationViewMode = getDestinationInitialViewMode(destId);
     currentDestinationMessage = "";
     currentDestinationMessageTitle = "";
     renderDestination();
@@ -6550,12 +7111,26 @@ window.renderDestination = function() {
         html = renderDestinationMessage(dest, currentDestinationMessageTitle, currentDestinationMessage);
     } else if (destinationViewMode === "note_rack") {
         html = renderNoteCardRack(dest);
+    } else if (
+        destinationViewMode === "work_guide" &&
+        window.YUMANIWA_WORK_GUIDE &&
+        typeof window.YUMANIWA_WORK_GUIDE.render === "function"
+    ) {
+        html = window.YUMANIWA_WORK_GUIDE.render(dest);
     }
 
     var sceneContainer = document.getElementById('scene-container');
     sceneContainer.classList.toggle('newspaper-rack', destinationViewMode === "note_rack");
     sceneContainer.innerHTML = html;
     sceneContainer.style.display = 'block';
+
+    if (
+        destinationViewMode === "work_guide" &&
+        window.YUMANIWA_WORK_GUIDE &&
+        typeof window.YUMANIWA_WORK_GUIDE.bind === "function"
+    ) {
+        window.YUMANIWA_WORK_GUIDE.bind(sceneContainer, dest);
+    }
 
     if (destinationViewMode !== "note_rack") {
         resetRpgMenuCursor();
@@ -7214,9 +7789,7 @@ window.openNoteReader = function(article) {
 
     if (!playerLayer || !frame || !title) return;
 
-    if (typeof cancelTapMove === "function") {
-        cancelTapMove();
-    }
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
 
     currentWorkId = null;
     currentFrameSourceUrl = article.url || "";
@@ -7347,9 +7920,7 @@ window.openWorkPlayer = function(work) {
 
     if (!playerLayer || !frame || !title) return;
 
-    if (typeof cancelTapMove === "function") {
-        cancelTapMove();
-    }
+    window.YUMANIWA_TOWN_INTERACTION.cancel();
 
     // 施設メニューから別作品を選んだ時点で、
     // 前の作品についての案内表示は終了する。
@@ -7479,7 +8050,7 @@ window.closeWorkPlayer = function() {
         DESTINATIONS[workPlayerReturnDestinationId]
     ) {
         currentDestinationId = workPlayerReturnDestinationId;
-        destinationViewMode = "menu";
+        destinationViewMode = getDestinationListViewMode(workPlayerReturnDestinationId);
         currentDestinationMessage = "";
         currentDestinationMessageTitle = "";
         renderDestination();
@@ -7532,6 +8103,30 @@ window.launchWork = function(work) {
     );
 };
 
+function openDestinationExternalItem(destId, item) {
+    if (!item) return;
+
+    if (!item.url || item.url === "") {
+        showDestinationMessage(
+            item.label,
+            item.emptyText || "まだ準備中です。"
+        );
+        return;
+    }
+
+    if (item.analyticsEvent && typeof trackYumaniwaEvent === 'function') {
+        trackYumaniwaEvent(
+            item.analyticsEvent,
+            item.analyticsProps || {
+                destination_id: destId,
+                item_label: item.label || ""
+            }
+        );
+    }
+
+    window.open(item.url, '_blank');
+}
+
 window.handleDestinationMenuItem = function(destId, index) {
     var dest = DESTINATIONS[destId];
     if (!dest) return;
@@ -7551,11 +8146,7 @@ window.handleDestinationMenuItem = function(destId, index) {
     }
 
     if (item.kind === 'external') {
-        if (item.url && item.url !== "") {
-            window.open(item.url, '_blank');
-        } else {
-            showDestinationMessage(item.label, item.emptyText || "まだ準備中です。");
-        }
+        openDestinationExternalItem(destId, item);
         return;
     }
 
@@ -7582,14 +8173,7 @@ window.handleDestinationItem = function(destId, index) {
     }
 
     if (item.kind === 'external') {
-        if (item.url && item.url !== "") {
-            window.open(item.url, '_blank');
-        } else {
-            showDestinationMessage(
-                item.label,
-                item.emptyText || "まだ準備中です。"
-            );
-        }
+        openDestinationExternalItem(destId, item);
         return;
     }
 
@@ -7620,22 +8204,28 @@ function draw() {
         ctx.fill();
     }
 
+    if (isTownScene(currentScene)) {
+        var propApi = window.YUMANIWA_STATION_PLAZA_PROPS;
+        var px = player.x;
+        var py = player.y;
+
+        if (propApi && typeof propApi.drawTownActorsAndProps === 'function') {
+            propApi.drawTownActorsAndProps();
+        } else {
+            drawPlayerSprite(px, py);
+        }
+    }
+
     if (debugMode || isEditMode) {
         drawTownDevOverlay(cam);
     }
 
-    if (isTownScene(currentScene)) {
-        var px = player.x;
-        var py = player.y;
-
-        drawPlayerSprite(px, py);
-
-        if (debugMode || isEditMode) {
-            var hitbox = getPlayerHitbox(px, py);
-            ctx.strokeStyle = '#00ff66';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
-        }
+    if (isTownScene(currentScene) && (debugMode || isEditMode)) {
+        var hitbox = getPlayerHitbox(player.x, player.y);
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
     }
+
     ctx.restore();
 }
