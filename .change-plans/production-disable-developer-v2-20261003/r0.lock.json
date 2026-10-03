@@ -1,0 +1,143 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "91cf5e4a636c8520db55cd3c045a996c615c8161a04ed1c402a23344695f5f32",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "production-disable-developer-v2-20261003",
+    "revision": 0,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Remove production developer entry and initial button flash; retain staging-only developer access",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM"
+    ],
+    "authority": [
+      "Standard",
+      "Rule / Skill",
+      "Owner Decision",
+      "HQ Review"
+    ],
+    "environment": "staging-production",
+    "baseSha": "d2ab447362844aad0f8e80b6d15b67a5db39ad7c",
+    "canonicalSources": [
+      "index.html",
+      "main.js",
+      "developer-access.js",
+      "OPERATIONS.md",
+      ".github/workflows/production-safety-checks.yml"
+    ],
+    "allowedPaths": [
+      ".change-plans/production-disable-developer-v2-20261003/r0.lock.json",
+      "index.html",
+      "main.js",
+      "developer-access.js",
+      "OPERATIONS.md",
+      ".github/workflows/production-safety-checks.yml",
+      "tests/test-production-developer-access.cjs",
+      "tests/production-developer-browser.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "data/**",
+      "assets/**",
+      "works/**",
+      "engine/**",
+      "tools/**",
+      "style.css",
+      "layout-fix.css",
+      "w/**",
+      "en/**",
+      "sitemap.xml",
+      "AGENTS.md"
+    ],
+    "expectedChanges": [
+      "Remove btn-debug-toggle from initial production HTML. No initial flash even before JS or during slow load.",
+      "Remove production dev=1 enablement; staging path alone enables development and lazily creates the existing button if absent.",
+      "Null-safe existing close path when production button is absent; no large shared Editor removal.",
+      "Update only changed script cache fingerprints in index.html.",
+      "Replace obsolete production Safety Check requiring dev=1 with tests proving disabled production and enabled staging. Align the one obsolete operational rule.",
+      "Focused Node and real-browser regression tests; no unrelated cleanup."
+    ],
+    "ownerDecisions": [
+      "User explicitly requests this production-only fix from current main and Draft PR only; no merge or deploy. Staging development must remain available."
+    ],
+    "hqDecisions": [
+      "User explicitly approves removal of production button and query startup, retaining shared code. Production Safety Checks currently require the opposite policy; update that assertion to enforce new production-off behavior and preserve other checks. Staging repository remains unmodified.",
+      "Initial local Impact Check found missing runtime.mobile-desktop declaration for main.js. Preserve old lock; restart from unchanged current production main with this fresh Plan before copying implementation. No prior PR or production deployment."
+    ],
+    "rulesApplied": [
+      "AGENTS.md",
+      "CHANGE-OPERATIONS.md",
+      "CHANGE-PLAN.md",
+      "CHANGE-VERIFICATION.md",
+      "YUMANIWA-PIXEL-STANDARD.md",
+      "tools/MAP-ASSET-REGISTRATION.md"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "change-operations-regression"
+    ],
+    "manualChecks": [
+      "production-initial-and-slow-load",
+      "production-normal-and-dev-query",
+      "staging-developer-controls"
+    ],
+    "impactChecks": [
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.rollback",
+      "surface.shared",
+      "risk.high-risk-review",
+      "os.previous-gate",
+      "os.regression",
+      "os.provenance",
+      "runtime.mobile-desktop"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert this production implementation commit as one unit through a separate reviewed PR; initial button and old dev policy would return.",
+    "outOfScope": [
+      "merge",
+      "deploy",
+      "staging repository changes",
+      "Editor redesign",
+      "deleting shared Editor modules",
+      "world/assets/works changes",
+      "production content promotion"
+    ],
+    "promotion": "Draft production PR only. No merge, direct main write or deploy.",
+    "unverified": [
+      "Physical iPhone/iPad Safari operation"
+    ],
+    "problem": "Production HTML paints developer button before onload hides it, and ?dev=1 still enables production development.",
+    "currentContract": "main.js defaults DEV false; developer-access.js overrides for staging or dev=1; onload then hides disabled controls. Production Safety Checks mandate old query gate.",
+    "whyExistingIsInsufficient": "Post-load hiding cannot prevent initial paint and query gate permits unwanted production entry.",
+    "design": "Remove initial button markup. Restrict gate to existing exact staging path boundary and create missing button only there before onload. Keep existing handlers/session code. Guard absent button in close. Update Safety Checks and focused regression.",
+    "alternativesRejected": [
+      "CSS-only hide leaving dev=1 enabled",
+      "Delete shared Editor implementation",
+      "Modify staging repository",
+      "Leave a dead dev=1 string just to pass old Safety Checks"
+    ],
+    "migration": "No data migration. Production UI capability only; selected file fingerprints update.",
+    "compatibility": "Normal town movement, interaction, menus and work entry unchanged. Staging path keeps button, keyboard entry and editor session.",
+    "boundaryCases": [
+      "JS disabled or main script blocked",
+      "images delay load event",
+      "production root and dev query variations",
+      "staging exact path and subpaths",
+      "similar-looking non-staging paths",
+      "button absent during close",
+      "staging existing button not duplicated"
+    ],
+    "testPlan": [
+      "Node gate matrix and initial HTML assertions; shared button presence/absence handlers; cache fingerprint consistency.",
+      "Existing Editor session/history and town interaction/transition/direct-route tests.",
+      "Real Chromium initial no-JS, blocked main, delayed image and production dev=1 keyboard/direct-toggle checks; staging button/editor controls.",
+      "Run existing Production Safety Checks commands and exact-head CI.",
+      "Plan-first immutable lock then Scope/Risk/Impact using existing staging Change OS tools; production has no installed Change OS checker.",
+      "Chromium narrow and wide viewports; real iPhone/iPad remains UNVERIFIED."
+    ],
+    "promotionRisk": "Shared gate and small close change must preserve staging Editor and normal town input; no production deployment authorized."
+  }
+}
