@@ -1,0 +1,147 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "4bb85d4869e080da168738c098d8149ec47c81d3a9c09e4f88a703033064e619",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-steamclock-install-icon-20261003",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote selected SteamClock town-entry icon and aligned install package",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "ASSET"
+    ],
+    "authority": [
+      "Owner Decision",
+      "HQ Review",
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "c827fba87107634105a6a315f57baa1db7cd84ff",
+    "canonicalSources": [
+      "staging/main@c66008b0720d29b2a2f340ba7bc6e7780d52e75b",
+      "production/main@c827fba87107634105a6a315f57baa1db7cd84ff",
+      "assets/works/steamclock/icon.png",
+      "w/steamclock/manifest.webmanifest",
+      "work-install-meta.js",
+      "index.html"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-steamclock-install-icon-20261003/r0.lock.json",
+      "assets/works/steamclock/icon.png",
+      "w/steamclock/manifest.webmanifest",
+      "work-install-meta.js",
+      "index.html"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "style.css",
+      "data/**",
+      "works/**",
+      "engine/**",
+      "tools/**",
+      ".github/**",
+      "en/**",
+      "sitemap.xml",
+      "w/coffee-factory/**",
+      "w/pumpoko/**",
+      "assets/works/coffee-factory/**",
+      "assets/works/pumpoko/**",
+      "assets/maps/**",
+      "assets/works/*/ogp.jpg"
+    ],
+    "expectedChanges": [
+      "Copy explicitly selected staging 512x512 SteamClock icon byte-for-byte without artwork manipulation",
+      "Copy exact aligned staging town-entry manifest (512x512 and versioned image URL) and install loader; preserve production root HTML except loader fingerprint",
+      "Version only SteamClock touch-icon and manifest-icon image URLs; preserve exact existing manifest URL; root loader query follows content fingerprint",
+      "All other work install URLs and all PWA IDs/start URLs/scopes remain unchanged"
+    ],
+    "ownerDecisions": [
+      "User explicitly selected staging SteamClock artwork (gears/pipes visible) in this turn; use source unchanged and align metadata to its actual 512x512 dimensions",
+      "Original staged production migration remains authorized; Coffee factory and PUMPOKO remain excluded"
+    ],
+    "hqDecisions": [
+      "Ready design keeps existing canonical manifest URL exactly as required by Release Validator install.contract. Actual PNG IHDR is authoritative for sizes. Only SteamClock image URLs receive cache revision; no new install mechanism.",
+      "Preserve work-local standalone SteamClock PWA package, SW and icons; change only town-entry package"
+    ],
+    "rulesApplied": [
+      "Plan Lock before implementation; Scope then Risk then Impact",
+      "Staging branch/PR and exact base-owned required checks",
+      "No artwork generation, upscaling or unrelated cleanup"
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "Already inspected and explicitly selected existing staging image",
+      "Stage Pages/byte/live install-link and clock launch evidence",
+      "Production Pages/public bytes/live install links and clock launch/close after merge"
+    ],
+    "impactChecks": [
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.rollback",
+      "surface.shared",
+      "risk.high-risk-review",
+      "asset.file",
+      "asset.rendering",
+      "asset.cache"
+    ],
+    "impactExclusions": [],
+    "rollback": "New production PR reverts image, manifest, install loader and root query as one package to c827fba; retained work-local PWA remains unchanged.",
+    "promotion": "Original staged migration and current explicit artwork selection authorize production after exact-head Safety Checks, code review, staging merge/Pages/public/UI evidence; verify production merge Pages and public runtime.",
+    "problem": "Adopted SteamClock icon PNG is 512 square but town-entry manifest declares 1024; same-path artwork replacement also requires cache refresh.",
+    "currentContract": "?work=id adds touch-icon and w/id/manifest links. Town-entry manifest points at assets/works/id/icon.png; standalone work has separate unchanged PWA icons.",
+    "whyExistingIsInsufficient": "Staging manifest dimension is inaccurate; old production image cached under the same URL could obscure selected artwork.",
+    "design": "Transfer exact stage c66008b fixed install loader, manifest and selected original PNG. Keep canonical manifest URL unchanged and version only SteamClock image links. Root install script fingerprint uses adopted bytes.",
+    "migration": "One existing PNG replaced plus two adopted text files and cache-only root edit; no new work, PWA identity or runtime migration.",
+    "compatibility": "Keep nine published works and Coffee/PUMPOKO exclusions; production DEV=false, SEO/indexable metadata and all root bytes outside one cache query remain unchanged. Work-local standalone SteamClock manifest, SW, icons and runtime stay unchanged.",
+    "alternativesRejected": [
+      "Copy inconsistent staging declaration",
+      "Upscale or generate artwork",
+      "Change standalone PWA or SW",
+      "Version every work icon unnecessarily",
+      "Manifest query versioning rejected by existing install.contract; PR134 closed unmerged without changing validator"
+    ],
+    "boundaryCases": [
+      "Manifest PNG dimensions/MIME/path match",
+      "SteamClock image revision applies to touch icon and manifest icon only; canonical manifest URL remains unchanged",
+      "Other existing install links unchanged",
+      "Invalid/empty work query rejected",
+      "Coffee iconless behavior remains unchanged"
+    ],
+    "dependencies": [
+      "Staging PR135 exact head3a7905771de9679a5a66d720a59d3d4f49e23f24 merged at c66008b0720d29b2a2f340ba7bc6e7780d52e75b",
+      "Require stage Pages success and exact image/manifest/loader/root bytes plus live clock launch before production merge"
+    ],
+    "testPlan": [
+      "Existing work-install-meta test suite",
+      "Compare actual loader output for all nine existing IDs with trusted base (only SteamClock query may differ)",
+      "Manifest PNG signature/IHDR and unchanged identity/scopes assertions",
+      "Root diff only install-loader cache query with FNV-1a matching content",
+      "Staging noindex/DEV and exclusions/standalone package unchanged",
+      "Scope -> Risk -> Impact and base-owned registered static checks",
+      "Production Release Validator steamclock with explicit full nine published IDs",
+      "Production Search generator full nine --check",
+      "Exact byte comparison with stage package; canonical manifest and all nine install links",
+      "Production Safety Checks exact reviewed PR head and merge head",
+      "After Pages public four files exact byte checks and real clock launch/close"
+    ],
+    "promotionRisk": "Shared loader must not alter other eight works or canonical manifest link. GitHub Pages manifest cache expires by existing delivery policy; OS add-to-home-screen caching remains unverified.",
+    "outOfScope": [
+      "Coffee factory and PUMPOKO",
+      "Work-local PWA changes",
+      "Town/world/content/Search text/SEO changes",
+      "New artwork",
+      "Other adopted public packages already migrated; staging-only debug/labs/operations files"
+    ],
+    "unverified": [
+      "Physical iPhone/iPad/Android home-screen icon refresh and installation"
+    ]
+  }
+}
