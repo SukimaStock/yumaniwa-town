@@ -1,0 +1,145 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "2528d9b813fb3bc9a7d4a2b0acff1f3ea3345236022c11495b388a30b944e995",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-dotweather-20261003",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote accepted DotWeather canonical Engine v0.2 and compatible storage schemas",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "WORK"
+    ],
+    "authority": [
+      "Owner Decision",
+      "HQ Review",
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "df1b0763670b4d4f3e13ca20362da831fff9bffe",
+    "canonicalSources": [
+      "staging/main@a1305b3f6d4b46b7ac9b3629015611ea18eb00de",
+      "production/main@df1b0763670b4d4f3e13ca20362da831fff9bffe",
+      "works/dotweather/MIGRATION-ENGINE-v0.2.md",
+      "works/dotweather/index.html",
+      "works/dotweather/sketch.js",
+      "engine/sukimastock-engine.v0.2.0.js"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-dotweather-20261003/r0.lock.json",
+      "works/dotweather/index.html",
+      "works/dotweather/sketch.js",
+      "tests/test-dotweather-storage.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "index.html",
+      "style.css",
+      "engine/**",
+      "data/**",
+      "assets/**",
+      "tools/**",
+      ".github/**",
+      "w/**",
+      "en/**",
+      "sitemap.xml",
+      "works/coffee-factory/**",
+      "works/pumpoko/**",
+      "works/kotsu-koro/**",
+      "works/steamclock/**",
+      "works/dotweather/dotweather-debug.js",
+      "works/dotweather/sukimastock-engine.js"
+    ],
+    "expectedChanges": [
+      "Switch DotWeather to the already-present byte-identical canonical Engine v0.2; retain app id, 30fps, saved keys, data wrapper and analytics identity",
+      "Copy accepted staging sketch with seven storage schemas; no weather, network, city-search, visual or audio changes",
+      "Copy staging entry except omit staging-only debug script; preserve existing production canonical/robots",
+      "Keep unreferenced local Engine file for rollback; do not delete assets or change other works"
+    ],
+    "ownerDecisions": [
+      "User requests gradual staging-to-production migration and asks to proceed to the next stage after PR41",
+      "Coffee factory and PUMPOKO remain excluded"
+    ],
+    "hqDecisions": [
+      "Reuse the already-accepted canonical Engine v0.2 migration; canonical Engine is identical in both repositories and unchanged in this PR",
+      "No new storage format or key: existing records are version 1 wrappers; keep all work-specific logic",
+      "Omit staging-only weather simulator from production entry and do not ship its file",
+      "WORLD OBJECT generation-crossing promotion remains unresolved and excluded"
+    ],
+    "rulesApplied": [
+      "Production branch -> PR -> Production Safety Checks -> merge",
+      "No whole-repository copy",
+      "Keep public work set exactly the existing nine IDs",
+      "Plan Lock before implementation; Scope -> Risk -> Impact checks"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "production-safety-checks",
+      "dotweather-storage-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants"
+    ],
+    "manualChecks": [
+      "Confirm deployed staging weather rendering, city switching and reload persistence in cloud browser",
+      "Migration document records accepted staging real-device Engine and Storage checks; device details not asserted",
+      "After merge check public production files and representative DotWeather interaction"
+    ],
+    "impactChecks": [
+      "work.runtime",
+      "work.regression",
+      "risk.high-risk-review",
+      "runtime.regression"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert DotWeather implementation commit through a new production PR; old local Engine remains available and storage keys/format are unchanged.",
+    "outOfScope": [
+      "Coffee factory and PUMPOKO",
+      "SteamClock PWA cache migration",
+      "Town WORLD OBJECT basis, guide, metadata, search, Engine, workflows and developer tools",
+      "Original content and DotWeather weather/network/audio/visual behavior changes"
+    ],
+    "promotion": "Proceed with next independent production promotion stage under existing migration authorization, after Scope/Risk/Impact, compatibility regressions and Production Safety Checks. Verify Pages and public bytes.",
+    "unverified": [
+      "Physical device checks in migration document are historical acceptance; no new physical-device observation this session",
+      "Cloud desktop does not certify iOS Safari or external Plausible ingestion"
+    ],
+    "problem": "Production DotWeather still loads its local Engine v0.1.1 and lacks accepted Storage v2 definitions.",
+    "currentContract": "DotWeather uses app-scoped sse:dotweather:data keys with version 1 records, 30fps and work-local Open-Meteo logic; production already hosts canonical Engine v0.2.",
+    "whyExistingIsInsufficient": "Production misses the accepted staging Engine and schema migration.",
+    "design": "Use existing canonical v0.2 script and accepted staging sketch, omit staging simulator, retain all unrelated production files.",
+    "migration": "Two runtime files only; Engine already present and byte-identical. Legacy persistent records remain in the same keys and version 1 wrapper.",
+    "compatibility": "Keep app ID, key namespace, visual/network modules, 30fps, tones, identity, town launch/return, public set and SEO.",
+    "alternativesRejected": [
+      "Whole staging copy contains excluded works and unresolved town basis changes",
+      "Combining SteamClock introduces PWA migration beyond this independent step",
+      "Shipping staging-only weather simulator in production"
+    ],
+    "boundaryCases": [
+      "All seven legacy records preserve exact values and raw persisted bytes",
+      "Missing and malformed saved data use existing safe fallbacks",
+      "Invalid new writes cannot overwrite existing valid records",
+      "localStorage unavailable falls back to memory",
+      "Reload retains new settings in old-compatible wrappers",
+      "Town open/close/reopen remains unchanged"
+    ],
+    "testPlan": [
+      "node-syntax",
+      "production-safety-checks",
+      "dotweather-storage-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants",
+      "Confirm deployed staging weather rendering, city switching and reload persistence in cloud browser",
+      "Migration document records accepted staging real-device Engine and Storage checks; device details not asserted",
+      "After merge check public production files and representative DotWeather interaction"
+    ],
+    "promotionRisk": "Storage validation now rejects invalid data; verify all representative legacy records and fallback behavior with real canonical Engine. Town runtime and other works are unchanged."
+  }
+}
