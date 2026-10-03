@@ -1,22 +1,13 @@
 // ==========================================
 // 湯間庭町 / 開発モード安全書き出し
-// 実行時に追加・上書きされたパーツを丸ごと正本へ混ぜず、
-// 開発モードを開いてから実際に変更した差分だけを書き出す。
+// 単一sessionの不変baselineとdraftだけを比較する。runtimeから再取得しない。
 // ==========================================
 (function () {
     'use strict';
 
-    var editorBaseline = null;
-    var baselineCaptureToken = 0;
-
-    function clone(value) {
-        if (value === undefined) return undefined;
-        return JSON.parse(JSON.stringify(value));
-    }
-
-    function same(a, b) {
-        return JSON.stringify(a) === JSON.stringify(b);
-    }
+    var sessionApi = window.YUMANIWA_EDITOR_SESSION;
+    var clone = sessionApi.clone;
+    var same = sessionApi.same;
 
     function getSceneSource(sceneId) {
         return sceneId === 'station_plaza'
@@ -27,34 +18,23 @@
     function getPartSource(sceneId, part) {
         var id = String((part && part.id) || '');
 
-        if (id === 'station_update_history_signboard') return 'town-update-sign.js';
-        if (id === 'station_feedback_box_placeholder') return 'town-feedback-box.js';
         if (id === 'station_ghost_npc') return 'town-ghost-npc.js';
 
-        if (
-            id === 'yakitori_yumado_shop' ||
-            id === 'common_temporary_storefront' ||
-            id === 'no_entry_sign' ||
-            (sceneId === 'yumado_street_map' && id === 'standing_signboard')
-        ) {
-            return 'data/town-runtime-fixes.js';
-        }
-
+        // Town placement is canonical in station-plaza.js / town-maps.js.
+        // runtime-fixes.js must never be an editor-diff destination.
         return getSceneSource(sceneId);
     }
 
     function getTriggerSource(sceneId, trigger) {
         var id = String((trigger && trigger.id) || '');
 
-        if (id === 'town_update_history_sign') return 'town-update-sign.js';
-        if (id === 'town_feedback_box_trigger') return 'town-feedback-box.js';
         if (id === 'station_ghost_npc_trigger') return 'town-ghost-npc.js';
 
         return getSceneSource(sceneId);
     }
 
     function listById(items) {
-        var result = {};
+        var result = Object.create(null);
         var source = Array.isArray(items) ? items : [];
 
         for (var i = 0; i < source.length; i++) {
@@ -69,7 +49,7 @@
     function diffById(beforeItems, afterItems, sourceResolver, sceneId) {
         var before = listById(beforeItems);
         var after = listById(afterItems);
-        var ids = {};
+        var ids = Object.create(null);
         var changes = [];
         var id;
 
@@ -122,135 +102,30 @@
         return changes;
     }
 
-    function getCurrentCollisionData() {
-        if (typeof window.buildExportCollisionData !== 'function') return null;
-        return clone(window.buildExportCollisionData());
-    }
-
-    function getCurrentParts() {
-        if (typeof window.getActiveTownParts !== 'function') return [];
-        return clone(window.getActiveTownParts());
-    }
-
-    function getCurrentTriggers() {
-        return clone(Array.isArray(window.triggers) ? window.triggers : []);
-    }
-
-    function getCurrentAreaZones() {
-        return clone(Array.isArray(window.areaZones) ? window.areaZones : []);
-    }
-
-    function getEditHistoryLength() {
-        return Array.isArray(window.editHistory) ? window.editHistory.length : 0;
-    }
-
-    function hasGridEditSinceBaseline(baseline) {
-        if (!baseline || !Array.isArray(window.editHistory)) return false;
-
-        var start = Math.max(0, Number(baseline.historyLength) || 0);
-        for (var i = start; i < window.editHistory.length; i++) {
-            var entry = window.editHistory[i];
-            if (entry && entry.type === 'grid') return true;
-        }
-
-        return false;
-    }
-
-    function captureBaselineNow() {
-        if (!window.currentScene) return;
-
-        editorBaseline = {
-            sceneId: window.currentScene,
-            parts: getCurrentParts(),
-            triggers: getCurrentTriggers(),
-            collision: getCurrentCollisionData(),
-            areaZones: getCurrentAreaZones(),
-            historyLength: getEditHistoryLength()
-        };
-    }
-
-    function scheduleBaselineCapture(force) {
-        if (!force && window.editorHasUnsavedChanges && editorBaseline) return;
-
-        baselineCaptureToken += 1;
-        var token = baselineCaptureToken;
-
-        window.requestAnimationFrame(function () {
-            window.requestAnimationFrame(function () {
-                if (token !== baselineCaptureToken) return;
-                if (!window.isEditMode) return;
-                captureBaselineNow();
-            });
-        });
-    }
-
     function buildChangeManifest() {
-        var sceneId = window.currentScene || 'station_plaza';
-
-        if (!editorBaseline || editorBaseline.sceneId !== sceneId) {
-            captureBaselineNow();
+        var session = sessionApi.current();
+        if (!session) throw new Error('Editor sessionを開いてください');
+        var baseline = session.baseline;
+        var after = sessionApi.snapshot();
+        var validation = window.YUMANIWA_SCENE_VALIDATION.validateSceneData(
+            after, window.YUMANIWA_WORLD_OBJECTS.objects);
+        if (!validation.ok) throw new Error('書き出せない変更: ' + validation.errors.join('; '));
+        var sceneId = session.sceneId;
+        function collision(scene) {
+            return { passableRects: clone(scene.passableRects), blockedRects: clone(scene.blockedRects),
+                blockedPoints: clone(scene.blockedPoints) };
         }
-
-        var baseline = editorBaseline || {
-            sceneId: sceneId,
-            parts: [],
-            triggers: [],
-            collision: null,
-            areaZones: [],
-            historyLength: getEditHistoryLength()
-        };
-
-        var currentParts = getCurrentParts();
-        var currentTriggers = getCurrentTriggers();
-        var currentCollision = getCurrentCollisionData();
-        var currentAreaZones = getCurrentAreaZones();
-
-        var partChanges = diffById(
-            baseline.parts,
-            currentParts,
-            getPartSource,
-            sceneId
-        );
-
-        var triggerChanges = diffById(
-            baseline.triggers,
-            currentTriggers,
-            getTriggerSource,
-            sceneId
-        );
-
-        var collisionWasEdited = hasGridEditSinceBaseline(baseline);
-        var collisionChange = (
-            collisionWasEdited &&
-            !same(baseline.collision, currentCollision)
-        )
-            ? {
-                source: getSceneSource(sceneId),
-                before: clone(baseline.collision),
-                after: clone(currentCollision)
-            }
-            : null;
-
-        var areaZonesChange = same(baseline.areaZones, currentAreaZones)
-            ? null
-            : {
-                source: getSceneSource(sceneId),
-                before: clone(baseline.areaZones),
-                after: clone(currentAreaZones)
-            };
-
+        var beforeCollision = collision(baseline), afterCollision = collision(after);
         return {
-            format: 'yumaniwa-editor-diff-v1',
-            scene: sceneId,
-            title: window.activeTownSceneDef && window.activeTownSceneDef.title
-                ? window.activeTownSceneDef.title
-                : sceneId,
-            note: '開発モードを開いてから変更した内容だけです。before/afterを確認し、sourceに示した正本へ反映してください。',
+            format: 'yumaniwa-editor-diff-v1', scene: sceneId, title: baseline.title,
+            note: '正本からの累積変更です。コピーではbaselineを更新しません。',
             changes: {
-                props: partChanges,
-                triggers: triggerChanges,
-                collision: collisionChange,
-                areaZones: areaZonesChange
+                props: diffById(baseline.props, after.props, getPartSource, sceneId),
+                triggers: diffById(baseline.triggers, after.triggers, getTriggerSource, sceneId),
+                collision: same(beforeCollision, afterCollision) ? null : {
+                    source: getSceneSource(sceneId), before: beforeCollision, after: afterCollision },
+                areaZones: same(baseline.areaZones, after.areaZones) ? null : {
+                    source: getSceneSource(sceneId), before: clone(baseline.areaZones), after: clone(after.areaZones) }
             }
         };
     }
@@ -284,7 +159,14 @@
         var textarea = document.getElementById('export-textarea');
         if (!textarea) return;
 
-        var manifest = buildChangeManifest();
+        var manifest;
+        try { manifest = buildChangeManifest(); }
+        catch (error) {
+            textarea.value = '';
+            window.updateEditorStatus(error.message);
+            window.alert(error.message);
+            return;
+        }
         textarea.value = [
             '// ==========================================',
             '// 湯間庭町 / 開発モード変更差分',
@@ -319,35 +201,8 @@
         if (exportButton) exportButton.textContent = '変更を書き出す';
     }
 
-    var baseToggleDebugMode = window.toggleDebugMode;
-    if (typeof baseToggleDebugMode === 'function') {
-        window.toggleDebugMode = function () {
-            var result = baseToggleDebugMode.apply(this, arguments);
-
-            if (window.isEditMode) {
-                scheduleBaselineCapture(!window.editorHasUnsavedChanges || !editorBaseline);
-            }
-
-            return result;
-        };
-    }
-
-    var baseMarkEditorExportCopied = window.markEditorExportCopied;
-    if (typeof baseMarkEditorExportCopied === 'function') {
-        window.markEditorExportCopied = function () {
-            var result = baseMarkEditorExportCopied.apply(this, arguments);
-
-            if (window.isEditMode) {
-                captureBaselineNow();
-            }
-
-            return result;
-        };
-    }
-
     window.buildFullStationPlazaExportCode = buildSafeExportText;
     window.showExportModal = showSafeExportModal;
-    window.YUMANIWA_EDITOR_CAPTURE_BASELINE = captureBaselineNow;
     window.YUMANIWA_EDITOR_BUILD_DIFF = buildChangeManifest;
 
     updateExportUiLabels();
