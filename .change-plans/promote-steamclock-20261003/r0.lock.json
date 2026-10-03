@@ -1,0 +1,155 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "2fba0a66320810d11a9e55748e56724870842b5e1e08971ef73d4d03ae631e5e",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-steamclock-20261003",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote accepted SteamClock canonical Engine and Asset Loader with isolated production PWA cache",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "WORK"
+    ],
+    "authority": [
+      "Owner Decision",
+      "HQ Review",
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "9f5acd1b6a6cd5b55bb3578fb18570a28655bb57",
+    "canonicalSources": [
+      "staging/main@a1305b3f6d4b46b7ac9b3629015611ea18eb00de",
+      "production/main@9f5acd1b6a6cd5b55bb3578fb18570a28655bb57",
+      "works/steamclock/MIGRATION-ENGINE-v0.2.md",
+      "works/steamclock/index.html",
+      "works/steamclock/sketch.js",
+      "works/steamclock/sw.js",
+      "engine/sukimastock-engine.v0.2.0.js"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-steamclock-20261003/r0.lock.json",
+      "works/steamclock/index.html",
+      "works/steamclock/sketch.js",
+      "works/steamclock/sw.js",
+      "tests/test-steamclock-pwa.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "index.html",
+      "style.css",
+      "engine/**",
+      "data/**",
+      "assets/**",
+      "tools/**",
+      ".github/**",
+      "w/**",
+      "en/**",
+      "sitemap.xml",
+      "works/coffee-factory/**",
+      "works/pumpoko/**",
+      "works/kotsu-koro/**",
+      "works/dotweather/**",
+      "works/steamclock/manifest.webmanifest",
+      "works/steamclock/sukimastock-engine.js",
+      "works/steamclock/assets/**",
+      "works/steamclock/icons/**"
+    ],
+    "expectedChanges": [
+      "Use existing byte-identical canonical Engine v0.2 and exact accepted staging sketch with 16 tracked assets in critical/deferred groups",
+      "Remove old readImage override via accepted staging HTML; preserve production robots, canonical, PWA identity and font behavior",
+      "Set production cache to steamclock-v11; bound activation cleanup to steamclock-v prefix, preserving staging and other apps",
+      "Version sketch entry and matching precache URL as sketch.js?v=20261003-assets-v2 so the approved sketch is fetched and precached",
+      "Retain old unreferenced local Engine and all assets for rollback; no changes to time, visuals or game/town code"
+    ],
+    "ownerDecisions": [
+      "User approved the next SteamClock PWA/cache migration stage following production PR42",
+      "Coffee factory and PUMPOKO remain excluded"
+    ],
+    "hqDecisions": [
+      "Reuse accepted Engine/Asset Loader implementation and existing network-first navigation/cache-first asset strategy; no new offline or global cache contract",
+      "Production adaptation uses existing production prefix steamclock-v and next version v11; deletion is limited to this prefix, mirroring accepted staging isolation",
+      "Sketch cache query and precache query must match; this is a delivery revision, not an app behavior change",
+      "Use existing production robots/canonical and opt-in debug behavior; do not ship staging noindex",
+      "Unresolved WORLD OBJECT basis, guide and Engine 0.3 promotion remain separate"
+    ],
+    "rulesApplied": [
+      "Production branch -> PR -> Production Safety Checks -> merge",
+      "No whole-repository copy",
+      "Keep public work set exactly the existing nine IDs",
+      "Plan Lock before implementation; Scope -> Risk -> Impact checks"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "production-safety-checks",
+      "steamclock-pwa-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants"
+    ],
+    "manualChecks": [
+      "Observe current deployed staging clock, decorative assets and running time; reload",
+      "Migration document records accepted real-device canary and Asset Loader report with 16 ready assets; historical evidence only",
+      "After merge check public files, clock rendering and time progression, town return/re-entry and normal reload"
+    ],
+    "impactChecks": [
+      "work.runtime",
+      "work.regression",
+      "risk.high-risk-review",
+      "runtime.regression",
+      "surface.shared"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert implementation through a new production PR and release a fresh steamclock-v cache version; do not redeploy the old globally-deleting worker as-is. Keep old local Engine and assets for runtime rollback.",
+    "outOfScope": [
+      "Coffee factory and PUMPOKO",
+      "Other works, Engine, town WORLD OBJECT basis, guide, metadata, search, workflows and developer tools",
+      "New offline behavior, SW scope or manifest changes",
+      "Source articles and gameplay changes"
+    ],
+    "promotion": "User explicitly approved SteamClock production stage; merge after Scope/Risk/Impact, PWA regressions and Production Safety Checks, then verify exact-head Pages and public/browser observations.",
+    "unverified": [
+      "Physical installed iPhone/iPad PWA update and offline behavior are not newly observed in this session",
+      "Cloud browser cannot certify Safari resume or external analytics ingestion"
+    ],
+    "problem": "Production still loads a local Engine and old deferred-image shim; its activation deletes all same-origin caches, including other works.",
+    "currentContract": "SteamClock has work-local SW scope, network-first navigation, cache-first same-origin GET assets, production steamclock-v10 cache, fixed existing PWA identity and 16 used images.",
+    "whyExistingIsInsufficient": "Production misses the accepted canonical Engine/Asset Loader migration and bounded staging cache cleanup.",
+    "design": "Transfer accepted sketch and HTML with production environment/cache adjustments; apply existing bounded SW cleanup using the production prefix and matching versioned sketch precache.",
+    "migration": "Three runtime files; canonical Engine is already hosted and identical. Preserve manifest/icons/assets. New worker replaces v10, deletes only old production SteamClock caches and claims clients.",
+    "compatibility": "Preserve clock visuals, timing, tones, font, URLs, scope, PWA id, town launch and published set. No saved key or manifest change.",
+    "alternativesRejected": [
+      "Copying staging cache name and noindex into production",
+      "Keeping global cache deletion",
+      "Combining unrelated town/guide/Engine promotion",
+      "Deleting old local Engine/assets"
+    ],
+    "boundaryCases": [
+      "Old production SteamClock caches are removed, current cache retained",
+      "Staging SteamClock, town and unrelated caches survive activation",
+      "Versioned sketch and canonical Engine are included in install cache",
+      "Failed precache rejects install before skipWaiting",
+      "Offline navigation uses precached index",
+      "Only same-origin GET responses are cached; non-200 and opaque are not stored",
+      "Decorative assets remain deferred while six critical assets preload",
+      "Reload and direct town reopening"
+    ],
+    "testPlan": [
+      "node-syntax",
+      "production-safety-checks",
+      "steamclock-pwa-regression",
+      "release-validator",
+      "staging-package-byte-match",
+      "exclusion-invariants",
+      "Observe current deployed staging clock, decorative assets and running time; reload",
+      "Migration document records accepted real-device canary and Asset Loader report with 16 ready assets; historical evidence only",
+      "After merge check public files, clock rendering and time progression, town return/re-entry and normal reload"
+    ],
+    "promotionRisk": "PWA update can retain obsolete files or delete unrelated caches. Test actual candidate install/activate/fetch handlers and cached-script references; report physical PWA testing separately."
+  }
+}
