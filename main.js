@@ -4289,7 +4289,8 @@ function closeTownEditor() {
     window.YUMANIWA_TOWN_INTERACTION.cancel();
     pendingWarp = null;
     document.getElementById('editor-panel').style.display = 'none';
-    document.getElementById('btn-debug-toggle').style.display = DEV_MODE_ENABLED ? 'block' : 'none';
+    var button = document.getElementById('btn-debug-toggle');
+    if (button) button.style.display = DEV_MODE_ENABLED ? 'block' : 'none';
     isEditMode = false; debugMode = false;
     document.getElementById('debug-info').style.display = 'none';
     editStep = 0; currentHoverTile = null;

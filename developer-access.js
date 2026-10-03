@@ -1,16 +1,28 @@
 // 湯間庭町 / 開発機能の公開環境ゲート
-// staging は常時ON、本番は ?dev=1 のときだけONにする。
+// staging だけON。本番ではqueryにかかわらず開発機能を起動しない。
 (function () {
-    var params = new URLSearchParams(window.location.search || "");
     var path = window.location.pathname || "";
     var isStaging =
         path === "/yumaniwa-town-staging" ||
         path.indexOf("/yumaniwa-town-staging/") === 0;
 
-    var enabled = isStaging || params.get("dev") === "1";
+    var enabled = isStaging;
 
     if (typeof DEV_MODE_ENABLED !== "undefined") {
         DEV_MODE_ENABLED = enabled;
+    }
+
+    // Production HTML contains no entry button, including before scripts load.
+    // Keep shared staging use working without duplicating its existing button.
+    if (enabled && !document.getElementById('btn-debug-toggle')) {
+        var panel = document.getElementById('editor-panel');
+        if (panel && panel.parentNode) {
+            var button = document.createElement('button');
+            button.id = 'btn-debug-toggle';
+            button.type = 'button';
+            button.textContent = '開発';
+            panel.parentNode.insertBefore(button, panel);
+        }
     }
 
     if (!enabled || typeof window.getTriggerFormValues !== 'function') return;
