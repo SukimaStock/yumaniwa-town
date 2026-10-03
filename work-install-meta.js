@@ -16,7 +16,7 @@
     if (!/^[a-z0-9-]+$/.test(workId)) return;
 
     var iconlessWorkIds = {
-        "diorama-calendar": true
+        "coffee-factory": true
     };
 
     function addLink(rel, href) {
