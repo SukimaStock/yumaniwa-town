@@ -1,0 +1,155 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "12b6d6fe995dbee7f8db01da7445e182bcd0c9a95d68825a360709d58e4260b6",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-display-names-diorama-cola-20261007",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote only staging #164 display names DioramaCalendar and 真夜中コーラ to production",
+    "planLevel": "full",
+    "classes": [
+      "CONTENT",
+      "SYSTEM"
+    ],
+    "authority": [
+      "Owner Decision",
+      "Standard",
+      "Rule / Skill",
+      "HQ Review"
+    ],
+    "environment": "staging-production",
+    "baseSha": "db4b91a01890e78cfed66a92169dfebc380c6a97",
+    "canonicalSources": [
+      "data/works.js",
+      "data/work-search-meta.js",
+      "tools/generate-work-search-pages.cjs",
+      "tools/YumaniwaDesk.py",
+      "OPERATIONS.md",
+      "RELEASE-WORKFLOW.md"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-display-names-diorama-cola-20261007/r0.lock.json",
+      "data/works.js",
+      "index.html",
+      "w/diorama-calendar/index.html",
+      "w/midnight-cola/index.html"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "developer-access.js",
+      "work-guide-terminal.js",
+      "work-guide-terminal.css",
+      "tools/**",
+      "tests/**",
+      ".github/**",
+      "works/**",
+      "assets/**",
+      "engine/**",
+      "en/**",
+      "data/work-search-meta.js",
+      "data/work-lifecycle.json",
+      "data/places.js",
+      "data/town-maps.js",
+      "data/updates.js",
+      "data/ghost-dialogue.js",
+      "sitemap.xml",
+      "*.md"
+    ],
+    "expectedChanges": [
+      "Add menuTitle DioramaCalendar only for diorama-calendar.",
+      "Change midnight-cola menuTitle only from MIDNIGHT COLA to 真夜中コーラ.",
+      "Regenerate the existing nine-work production Search/Share set; only the two Japanese h1 lines may differ.",
+      "Update only the existing data/works.js script cache revision in production index.html, using the existing FNV-1a UTF-16 algorithm on production source.",
+      "Preserve all other production WORKS fields, published set, IDs/URLs/logos, English files and Search metadata.",
+      "Preserve production no-dev policy, no initial developer entry, normal and dev=1 access both disabled; no staging noindex or experimental code copied."
+    ],
+    "ownerDecisions": [
+      "User 2026-10-07 04:42:33 UTC: こちらから確認できました。Production 反映お願いします; explicit authorization to promote only the two display-name corrections, create/merge a production PR and observe normal production deployment.",
+      "Staging #164 merged as 409964eae518cd92e73a177c8c85a24020b929a6; user reports staging display confirmed. Agent previously tested the same tree with 210 Node + 16 browser checks; staging Pages successful. Agent live staging HTTP remained 403 and is not claimed observed."
+    ],
+    "hqDecisions": [
+      "Full/SYSTEM/HQ Review reflects root and generated HTML path risk floors. The authorized source-identical display correction reuses existing menuTitle, generator and cache contracts with no new runtime/schema/SEO/publication/developer contract.",
+      "Production retains its existing developer-disabled patch #48; no whole-file staging replacement or cherry-pick of staging cache/noindex output."
+    ],
+    "rulesApplied": [
+      "Production AGENTS.md / OPERATIONS.md / RELEASE-WORKFLOW.md: select only needed deltas, production branch -> PR -> Production Safety Checks -> merge -> Pages.",
+      "Existing production Plan-only immutable r0 precedent; use unchanged staging Change OS tools read-only against production root; do not install or modify verification tools in production.",
+      "Known required cache output is allowedPaths, never conditional without CI acknowledgement.",
+      "Released works are retained existing releases: no candidate transition or new work publication; validate fixed existing nine-ID publication set against staging lifecycle.",
+      "Generated output uses production generator --env production with explicit full existing published set.",
+      "Final verificationState remains UNVERIFIED; physical/external/live checks require observed evidence."
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "browser.production-display-names",
+      "browser.production-english-preserved",
+      "browser.production-developer-disabled",
+      "public.production-display",
+      "device.iphone-ipad"
+    ],
+    "impactChecks": [
+      "works.venue-menu",
+      "works.direct-route",
+      "works.search-share",
+      "works.analytics-id",
+      "works.town-awareness",
+      "works.release-validator",
+      "surface.shared",
+      "runtime.regression",
+      "risk.high-risk-review"
+    ],
+    "impactExclusions": [],
+    "problem": "Production Japanese venue menu/guide use Diorama Calendar and MIDNIGHT COLA; approved staging correction shows DioramaCalendar and 真夜中コーラ.",
+    "currentContract": "Venue menu and guide consume menuTitle || title; Japanese generated h1 consumes menuTitle, English h1 consumes English Search/Share metadata. Production dev is disabled on normal and dev=1 URLs.",
+    "whyExistingIsInsufficient": "Existing mechanisms are sufficient; only approved menuTitle values and canonical generated/cache outputs need transfer.",
+    "design": "Apply two metadata deltas to current production source. Recompute production cache revision and run production generator. Do not copy staging WORKS or root HTML.",
+    "alternativesRejected": [
+      "Copy entire staging files or merge unrelated staging history.",
+      "Change title/frameTitle/IDs/URLs/logos/English metadata or runtime.",
+      "Hand-edit generated pages.",
+      "Enable production dev mode or import staging noindex, lifecycle/LAB/prototypes, tests or workflows."
+    ],
+    "migration": "None; no storage, ID, URL, schema, lifecycle or publication migration.",
+    "compatibility": "Only requested Japanese display names change; launch, guide order/filter/return, existing English text, production developer gate and SEO remain unchanged.",
+    "boundaryCases": [
+      "Diorama had no prior menuTitle; Cola had an English menuTitle.",
+      "Production WORKS differs from staging, so preserve production fields and compute its own cache key.",
+      "English pages and sitemap must remain byte-identical; Japanese output may only change h1.",
+      "No developer UI before JS, after load, or with dev=1 on production path."
+    ],
+    "dependencies": [
+      "Existing published set: orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window",
+      "User-observed staging and merged #164 source"
+    ],
+    "testPlan": [
+      "Verify full WORKS before/after equals base except two approved menuTitle values; index diff only canonical production works.js cache revision; generated Japanese pages differ only in h1.",
+      "Run Scope -> Risk -> Impact against exact production candidate using unchanged staging trusted tooling.",
+      "Run production workflow's all-JS syntax, Desk syntax, developer access/editor regressions and invariants/manifests checks; run related guide/direct-route/work-ready regressions.",
+      "Run production generator --check for the fixed nine-work set and retained-publication eligibility check from staging lifecycle.",
+      "Real HTTP Chromium at production /yumaniwa-town/ path with mobile/desktop widths: menus, guide, ja/en pages, developer controls absent for normal/dev=1; check IDs/URLs/images and pageerrors.",
+      "Confirm exact final head CI validate / Production Safety Checks and ruleset/branch protection before merge; no force/admin/bypass.",
+      "Check exact merge tree equals tested candidate, normal Pages build/deployment success and postmerge safety. Observe public URLs when accessible; record 403 or other environment limits precisely."
+    ],
+    "rollback": "Revert only this implementation commit with matching generated/cache outputs through a new production PR and Safety Checks; no force push.",
+    "promotionRisk": "Production developer-disabled and index/follow conditions must remain unchanged; public HTTP may be blocked by environment despite successful Pages. No additional scope is authorized to fix unrelated issues.",
+    "outOfScope": [
+      "Other staging changes",
+      "New works or publication-set changes",
+      "Production developer/runtime/schema/SEO changes",
+      "Lifecycle/LAB/exploration promotion",
+      "Tests/tool/workflow/ruleset changes",
+      "External analytics settings"
+    ],
+    "promotion": "Authorized production PR merge and its ordinary Pages deployment after exact-head Safety Checks; no direct main push or manual workflow dispatch.",
+    "unverified": [
+      "Physical iPhone/iPad, external analytics and public rendering unless directly observed; user staging confirmation is reported separately from agent observation."
+    ]
+  }
+}
