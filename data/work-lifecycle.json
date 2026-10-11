@@ -1,0 +1,79 @@
+{
+  "schema": "sukimastock-work-lifecycle/1",
+  "defaults": {
+    "status": "active",
+    "environment": "staging"
+  },
+  "works": [
+    {
+      "id": "orbit",
+      "path": "works/orbit",
+      "status": "released",
+      "title": "ORBIT — Silent Reboot",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "diorama-calendar",
+      "path": "works/diorama-calendar",
+      "status": "released",
+      "title": "Diorama Calendar",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "rojiura-masala",
+      "path": "works/rojiura-masala",
+      "status": "released",
+      "title": "路地裏マサラ",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "steamclock",
+      "path": "works/steamclock",
+      "status": "released",
+      "title": "SteamClock",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "dotweather",
+      "path": "works/dotweather",
+      "status": "released",
+      "title": "DotWeather",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "junkissa-dive",
+      "path": "works/junkissa-dive",
+      "status": "released",
+      "title": "純喫茶ダイヴ",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "midnight-cola",
+      "path": "works/midnight-cola",
+      "status": "released",
+      "title": "MIDNIGHT COLA",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "yakitori-wars",
+      "path": "works/yakitori-wars",
+      "status": "released",
+      "title": "Yakitori Wars",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "rainy-window",
+      "path": "works/rainy-window",
+      "status": "released",
+      "title": "雨の日の窓",
+      "releaseEvidence": "SukimaStock/yumaniwa-town@db4b91a01890e78cfed66a92169dfebc380c6a97:data/works.js (open; read-only baseline 2026-10-05)"
+    },
+    {
+      "id": "pumpoko",
+      "path": "works/pumpoko",
+      "status": "candidate",
+      "title": "PUMPOKO",
+      "candidateDecision": "Owner decision 2026-10-11: prepare PUMPOKO only as a production release candidate after staging introduction/launch confirmation; this is not authorization for production promotion or deployment."
+    }
+  ]
+}

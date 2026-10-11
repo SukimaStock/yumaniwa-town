@@ -1,0 +1,52 @@
+name: PUMPOKO Production Candidate Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "works/pumpoko/**"
+      - "engine/codea-lite.v1.0.0.js"
+      - "engine/sukimastock-engine.v0.3.0.js"
+      - "data/**"
+      - "w/pumpoko/**"
+      - "en/w/pumpoko/**"
+      - "assets/works/pumpoko/**"
+      - "sitemap.xml"
+      - "index.html"
+      - "tools/generate-work-search-pages.cjs"
+      - "tools/work-lifecycle.cjs"
+      - "tools/release-validator.cjs"
+      - "tests/test-pumpoko-production.cjs"
+      - ".github/workflows/pumpoko-production-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "works/pumpoko/**"
+      - "data/work-lifecycle.json"
+      - "data/works.js"
+      - "w/pumpoko/**"
+      - "en/w/pumpoko/**"
+      - "tools/work-lifecycle.cjs"
+      - "tests/test-pumpoko-production.cjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full verified snapshot
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify canonical runtime, release list, Search pages, and production snapshot
+        run: |
+          node --check tools/work-lifecycle.cjs
+          node --check tools/release-validator.cjs
+          node --check tools/generate-work-search-pages.cjs
+          node --test tests/test-pumpoko-production.cjs tests/test-work-guide.cjs tests/test-work-ready.cjs tests/test-town-direct-routes.cjs
