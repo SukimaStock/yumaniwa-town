@@ -64,11 +64,15 @@ test('production publication set is exactly nine released works plus PUMPOKO',()
   assert.equal(works.find(w=>w.id==='pumpoko').venue,'leisure_center');
   assert.equal(works.find(w=>w.id==='pumpoko').entry,'./works/pumpoko/index.html');
 });
-test('every shipped PUMPOKO byte matches the owner-tested staging source',()=>{
+test('PUMPOKO runtime stays byte-exact; only named SEO head fields may differ',()=>{
   for(const [name,expected] of Object.entries(canonical)){
     const full=path.join(root,name);
     assert.ok(fs.existsSync(full),'missing verified source: '+name);
-    assert.equal(execFileSync('git',['hash-object',full],{cwd:root,encoding:'utf8'}).trim(),expected,'different blob: '+name);
+    if(name==='works/pumpoko/index.html'){
+      const baseline=execFileSync('git',['cat-file','blob',expected],{cwd:root,encoding:'utf8'});
+      const allowed=baseline.replace('<meta name="robots" content="noindex,nofollow">','<meta name="robots" content="noindex,follow">').replace('<title>PUMPOKO 02</title>','<title>PUMPOKO</title>');
+      assert.equal(fs.readFileSync(full,'utf8'),allowed,'only the two specified SEO head fields may change; all runtime markup/scripts must stay exact');
+    }else assert.equal(execFileSync('git',['hash-object',full],{cwd:root,encoding:'utf8'}).trim(),expected,'different blob: '+name);
   }
   const actual=fs.readdirSync(path.join(root,'works/pumpoko'),{withFileTypes:true});
   assert.ok(actual.length>0);
