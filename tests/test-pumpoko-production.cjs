@@ -4,6 +4,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {execFileSync}=require('node:child_process');
 const {buildPage,buildSitemap}=require('../tools/generate-work-search-pages.cjs');
+const {readStandalonePages}=require('../tools/standalone-pages.cjs');
 const {validate}=require('../tools/release-validator.cjs');
 const {readRegistry,assertPublication,assertProductionSnapshot}=require('../tools/work-lifecycle.cjs');
 const root=path.resolve(__dirname,'..');
@@ -82,7 +83,7 @@ test('PUMPOKO runtime stays byte-exact; only named SEO head fields may differ',(
 });
 test('ten Search / Share pages and sitemap match production generator',()=>{
   const works=scriptVar('data/works.js','WORKS'),meta=scriptVar('data/work-search-meta.js','WORK_SEARCH_META');
-  assert.equal(fs.readFileSync(path.join(root,'sitemap.xml'),'utf8'),buildSitemap(published));
+  assert.equal(fs.readFileSync(path.join(root,'sitemap.xml'),'utf8'),buildSitemap(published,readStandalonePages(root)));
   for(const id of published)for(const [locale,folder] of [['ja','w'],['en','en/w']]){
     const work=works.find(w=>w.id===id);
     const actual=fs.readFileSync(path.join(root,folder,id,'index.html'),'utf8');

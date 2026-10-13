@@ -1,0 +1,118 @@
+{
+  "sourceRepository": "SukimaStock/yumaniwa-town-staging",
+  "sourceSha": "0f1e49312a06fcbbdb5a278cdd9dcefc11e55ba1",
+  "dependencies": [
+    {
+      "source": "works/sukima-3d-lab/engine/behaviors.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/behaviors.js",
+      "sha256": "9c0ec29b4537daf78993778fd92d0d8da9febaacec456d3ade06af3a46832d90"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/camera.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/camera.js",
+      "sha256": "5aef67ed5f0a2e16450fd82aca80f6e842792469847f2eaf663331d733235b78"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/geometry.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/geometry.js",
+      "sha256": "91259bb7a9b259273a81f1242cfcccee54ef2b5b8906ab2d730c31230259389b"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/manipulation-mapping.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/manipulation-mapping.js",
+      "sha256": "182bdf54e5db66afc2d3e187660684e5f08e54f58502153b63a95e6593db3e08"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/manipulation.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/manipulation.js",
+      "sha256": "7ecaa90ad09c5bbf47ef57a378750e8b95705ae96464d7987e1c932f7d72194a"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/math.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/math.js",
+      "sha256": "6311fd964862ff04dc3acae3c899b31a2d7c86332719421ee6371ef1c0317179"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/mesh.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/mesh.js",
+      "sha256": "d0eeebd6d86fd5353f96262a78c5569abe9ca984971d0c5f773fa8003a1e5ff8"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/motion.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/motion.js",
+      "sha256": "d58f0c49f19bf05e63b0e3b502849bae7952087794f7c5867af1c5281e546b78"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/parts.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/parts.js",
+      "sha256": "916747a99d5f69cb555409a6ac4b3f9f3175a51a4d9b3b457029e49e528ea83b"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/renderer.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/renderer.js",
+      "sha256": "e92366c83f5080cad3cf107b7d95bd15163476a34536fa19bcf621af2bbea4ca"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/response.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/response.js",
+      "sha256": "84c7d4ab90cac8bf9b5eebb9871dcb7c6c385c403f07e43a3d1c045ace5932fa"
+    },
+    {
+      "source": "works/sukima-3d-lab/engine/specimen.js",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/engine/specimen.js",
+      "sha256": "31f79659d8e53dc8345909a694c7d626111d3b3dcd676ae6c68cecc43ab39bbd"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/desktop-fan.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/desktop-fan.json",
+      "sha256": "4ffc7a73051cc6a53ec3dbd1622811fb6c7b0ed95ecbe8fc396f7f326f96792d"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/folding-reading-stand.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/folding-reading-stand.json",
+      "sha256": "006f2e911bfac003f989fd32a12a529688994555b7aa322bf7ff8161ea476930"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/mail-sorting-trays.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/mail-sorting-trays.json",
+      "sha256": "afc53c056f29ba88ed8e61f541922bdbbdc725b045a19dd5f3699c47e5651a91"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/rotary-dial-telephone.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/rotary-dial-telephone.json",
+      "sha256": "180c3184e7739659007a8073eece80760089faaa05f09dc3072653bd8fb7536a"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/sliding-matchbox.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/sliding-matchbox.json",
+      "sha256": "8ec5d6c9602971d2db1d53570da1c77ece57ae5a7909310687cff499ddeb4c3d"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/three-leaf-succulent.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/three-leaf-succulent.json",
+      "sha256": "46e7ab148eaaabcd3a8d38406e68326af1f6b8b1f5be17396976bd004f1922df"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/ticket-stamper.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/ticket-stamper.json",
+      "sha256": "f093c7e048dc0cc513045ce66cafeabc645507981556d9ad77eead92b1042117"
+    },
+    {
+      "source": "works/sukima-3d-lab/objects/tilting-reading-lamp.json",
+      "target": "works/yumaniwa-tourist-desk/vendor/3d/objects/tilting-reading-lamp.json",
+      "sha256": "4b80a5838bb331b9efebe9615b87c5061de195e3f598ea19a9bd1f0d1bdafa58"
+    },
+    {
+      "source": "engine/sukimastock-engine.v0.3.0.js",
+      "target": "engine/sukimastock-engine.v0.3.0.js",
+      "sha256": "d1956517f0144a67f7b42fe9e376368034f3cbb9b19247cc0409a9f21580493f",
+      "existing": true
+    },
+    {
+      "source": "assets/station-guide-map.jpg",
+      "target": "assets/station-guide-map.jpg",
+      "sha256": "a2ca0c32fb66a5f649e27d38337607841ce94b93a4334cb29e25bfd46fe6b703",
+      "existing": true
+    }
+  ]
+}
