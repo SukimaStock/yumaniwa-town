@@ -26,6 +26,6 @@ jobs:
         with:
           node-version: '22'
       - name: Check local dependencies, SEO, camera, picking and actual app input fixture
-        run: node --test tests/test-tourist-desk-production.mjs works/yumaniwa-tourist-desk/tests/app-input.test.mjs
+        run: node --test tests/test-tourist-desk-production.mjs works/yumaniwa-tourist-desk/tests/*.test.mjs
       - name: Verify generated sitemap and unchanged existing search pages
         run: node tools/generate-work-search-pages.cjs --env production --published orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window,pumpoko --check
