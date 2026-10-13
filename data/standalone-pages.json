@@ -1,0 +1,13 @@
+{
+  "schema": "yumaniwa-standalone-pages/1",
+  "pages": [
+    {
+      "id": "yumaniwa-tourist-desk",
+      "path": "works/yumaniwa-tourist-desk",
+      "status": "candidate",
+      "sourceSha": "0f1e49312a06fcbbdb5a278cdd9dcefc11e55ba1",
+      "candidateDecision": "Owner 2026-10-13 accepts completed Staging 0.5 as the Production PR candidate.",
+      "productionInstruction": "User 2026-10-13 Production正式公開 instruction: prepare Production PR of 0.5; merge/deploy held for later explicit approval."
+    }
+  ]
+}

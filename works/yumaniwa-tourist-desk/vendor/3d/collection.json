@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "ticket-stamper",
+      "file": "objects/ticket-stamper.json",
+      "number": 78
+    },
+    {
+      "id": "mail-sorting-trays",
+      "file": "objects/mail-sorting-trays.json",
+      "number": 103
+    },
+    {
+      "id": "desktop-fan",
+      "file": "objects/desktop-fan.json",
+      "number": 128
+    },
+    {
+      "id": "folding-reading-stand",
+      "file": "objects/folding-reading-stand.json",
+      "number": 132
+    },
+    {
+      "id": "three-leaf-succulent",
+      "file": "objects/three-leaf-succulent.json",
+      "number": 208
+    },
+    {
+      "id": "rotary-dial-telephone",
+      "file": "objects/rotary-dial-telephone.json",
+      "number": 232
+    },
+    {
+      "id": "tilting-reading-lamp",
+      "file": "objects/tilting-reading-lamp.json",
+      "number": 233
+    },
+    {
+      "id": "sliding-matchbox",
+      "file": "objects/sliding-matchbox.json",
+      "number": 283
+    }
+  ]
+}
