@@ -1,0 +1,84 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "6b95357e984028487766b920eeae1ada3ed23787fb8f1dbc1ad91eb1973e4769",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-dotweather-integrity-20261015",
+    "revision": 0,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote reviewed DotWeather load integrity and recovery corrections from Staging PR408",
+    "planLevel": "standard",
+    "classes": [
+      "WORK"
+    ],
+    "authority": [
+      "Standard"
+    ],
+    "environment": "staging-production",
+    "baseSha": "eb02129d4b4cb9fb10365d3bbb6bec999bebc96b",
+    "canonicalSources": [
+      "Staging PR408 merge 5610001e739a61764f4800abd32241740493780b",
+      "Production eb02129d4b4cb9fb10365d3bbb6bec999bebc96b",
+      "User 2026-10-15 20:59 Europe/Skopje: はい、反映お願いします"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-dotweather-integrity-20261015/r0.lock.json",
+      "works/dotweather/dotweather-data.js",
+      "works/dotweather/dotweather-ui.js",
+      "works/dotweather/index.html",
+      "works/dotweather/tests/weather-recovery.test.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "engine/**",
+      "data/**",
+      "tools/**",
+      ".github/**",
+      "index.html",
+      "town-analytics.js",
+      "sw.js"
+    ],
+    "expectedChanges": [
+      "Copy only reviewed data/UI and regression tests from Staging PR408",
+      "Update production data/UI cache tokens; retain production HTML, no debug module",
+      "Keep existing Production works, metadata, Engine, analytics provider and saved keys unchanged"
+    ],
+    "ownerDecisions": [
+      "User 2026-10-15 explicitly authorizes Production reflection following Staging audit completion"
+    ],
+    "hqDecisions": [],
+    "rulesApplied": [
+      "Production AGENTS.md and existing Release branch PR Safety Checks merge deployment workflow",
+      "Normal locked Standard WORK promotion; no new work lifecycle transition"
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "dotweather-regression",
+      "production-safety-checks",
+      "release-validator",
+      "selection-exclusion-byte-comparison",
+      "production-chrome-render-refresh-city-switch",
+      "plausible-call-observation"
+    ],
+    "impactChecks": [
+      "work.runtime",
+      "work.regression"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert work-local implementation commit; unchanged storage keys remain compatible; no Production change",
+    "outOfScope": [
+      "Other works",
+      "Shared Engine and town",
+      "Staging debug and unrelated experiments",
+      "Plausible dashboard settings"
+    ],
+    "promotion": "User authorized DotWeather PR408 fixes only",
+    "unverified": [
+      "Physical iPhone Safari",
+      "Historical per-event causes and cross-event users unavailable from aggregate export"
+    ]
+  }
+}
