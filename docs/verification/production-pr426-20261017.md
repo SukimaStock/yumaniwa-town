@@ -18,7 +18,9 @@ Existing play, town, and language links receive only nonempty `utm_source`, `utm
 - PASS: Production generator `--check` with explicit ten-ID published set and user authorization reference.
 - PASS: read-only Production release-validator, 1,489 PASS, 0 FAIL, 0 HQ_REQUIRED. Existing full-release external/manual checks remain unverified; its overall readiness field is not claimed as a new feature verification.
 - PASS: exact-diff check reverses the single 19-line insertion and obtains byte-identical base generator and 20 pages, including metadata/styles/robots; sitemap is unchanged.
-- Browser and Plan/Scope/Risk/Impact evidence are completed before handoff in this record.
+- PASS: local headless Chromium desktop (1440×900) and iPhone touch/viewport emulation (390×844), 40 JA/EN cases, language → actual play clicks, all five UTMs, fixed work IDs, no horizontal overflow, plus existing open=1 shortcut and four screenshots. Evidence: `/workspace/scratch/0f35a500be52/evidence/production426-qa/results.json`.
+- PASS: Plan Lock envelope verification and staging-owned read-only Scope / Risk / Impact gates against this Production checkout. Production tooling is not replaced.
+- PASS: independent read-only review by `review426`; all 20 pages equal Production generation and remain byte-identical outside the19-line insertion. Independent probes verified all20 Production destination sets. No blocking findings.
 
 ## Limits and rollback
 
