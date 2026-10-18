@@ -10,7 +10,7 @@ const {readRegistry,assertPublication,assertProductionSnapshot}=require('../tool
 const root=path.resolve(__dirname,'..');
 const productionBaseline='ebd32c56b3c486545cec4531dd84f26ca425a1aa';
 const originalStaging='70d2d0d27ead868f6ab623cb7d0e2eaf526e1588';
-const published=["orbit","diorama-calendar","rojiura-masala","steamclock","dotweather","junkissa-dive","midnight-cola","yakitori-wars","rainy-window","pumpoko"];
+const published=["orbit","diorama-calendar","rojiura-masala","steamclock","dotweather","junkissa-dive","midnight-cola","yakitori-wars","rainy-window","pumpoko","coffee-factory"];
 const articles=["31beb527cad14b72a2afdc57f4b986b4", "3fbab1d8a9b14123bfdb1461a94e8098", "5b5f9715572b4d8a894c06b220c9139c", "95d48e6613ce4037907364809ee3359f", "ea784083edc146d298ba5b7c33a1b7f1", "fac8492827054dd8a3922c8b8396198a", "note-20260717-153a44e0", "note-20260731-n6565e030d711", "note-20260807-n845da26b1b0b", "note-20260917-c12ade65", "note-20261009-n308001a6a00a", "note-n21f2389ac91d"];
 const articleCatalog=require('../tools/shinpo-migrate.cjs').articleCatalog({env:'production',publishedArticles:articles,root});
 const canonical={
@@ -50,15 +50,18 @@ function decision(){
   assert.ok(entry,'pumpoko lifecycle entry required');
   assert.ok(['candidate','released'].includes(entry.status),'pumpoko must be selected candidate or released');
   const newlyPromoted=entry.status==='candidate';
-  const opts={root,env:'production',ids:published,published,articles};
-  if(newlyPromoted)Object.assign(opts,{promote:['pumpoko'],productionInstruction:approval});
+  const opts={root,env:'production',ids:published,published,articles,promote:['coffee-factory'],productionInstruction:"User 2026-10-18T13:19+02:00: prepare unmerged CoffeeFactory Production PR only. This is candidate generation for review; no merge/deploy approval."};
+  if(newlyPromoted)Object.assign(opts,{promote:['pumpoko','coffee-factory']});
   return {registry,entry,opts,newlyPromoted};
 }
-test('production publication set is exactly nine released works plus PUMPOKO',()=>{
+test('production publication set is exactly ten released works plus CoffeeFactory candidate',()=>{
   const {registry,entry,opts}=decision();
   assert.deepEqual(registry.works.map(w=>w.id).sort(),[...published].sort());
   assert.equal(entry.path,'works/pumpoko');
-  for(const work of registry.works.filter(w=>w.id!=='pumpoko'))assert.equal(work.status,'released',work.id);
+  const coffee=registry.works.find(w=>w.id==='coffee-factory');
+  assert.equal(coffee.status,'candidate');
+  assert.match(coffee.candidateDecision,/No merge\/deploy authorization/);
+  for(const work of registry.works.filter(w=>w.id!=='pumpoko' && w.id!=='coffee-factory'))assert.equal(work.status,'released',work.id);
   assertPublication(registry,opts.published,opts.promote||[],opts.productionInstruction||'');
   assertProductionSnapshot(root,registry,published);
   const works=scriptVar('data/works.js','WORKS');
@@ -83,7 +86,7 @@ test('PUMPOKO runtime stays byte-exact; only named SEO head fields may differ',(
   walk(path.join(root,'works/pumpoko'));
   assert.equal(n,20,'work runtime must contain exactly 20 canonical files');
 });
-test('ten Search / Share pages and sitemap match production generator',()=>{
+test('eleven Search / Share pages and sitemap match production generator',()=>{
   const works=scriptVar('data/works.js','WORKS'),meta=scriptVar('data/work-search-meta.js','WORK_SEARCH_META');
   assert.equal(fs.readFileSync(path.join(root,'sitemap.xml'),'utf8'),buildSitemap(published,readStandalonePages(root),articleCatalog,'production'));
   for(const id of published)for(const [locale,folder] of [['ja','w'],['en','en/w']]){
@@ -95,11 +98,11 @@ test('ten Search / Share pages and sitemap match production generator',()=>{
   }
   const rootHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
   for(const id of published)assert.ok(rootHtml.includes('./w/'+id+'/'),'root lacks static discovery of '+id);
-  for(const id of ['coffee-factory','pumpoko-01','pumpoko-02','orbit-02'])assert.ok(!rootHtml.includes('./w/'+id+'/'));
+  for(const id of ['pumpoko-01','pumpoko-02','orbit-02'])assert.ok(!rootHtml.includes('./w/'+id+'/'));
   const manifest=JSON.parse(fs.readFileSync(path.join(root,'w/pumpoko/manifest.webmanifest'),'utf8'));
   assert.equal(manifest.icons[0].src,'../../assets/works/pumpoko/icon.png');
 });
-test('full read-only Release Validator checks the actual ten-work production snapshot',()=>{
+test('full read-only Release Validator checks the actual eleven-work production snapshot',()=>{
   const {opts}=decision();
   const result=validate(opts);
   const blockers=result.results.filter(x=>x.status==='FAIL'||x.status==='HQ_REQUIRED');
