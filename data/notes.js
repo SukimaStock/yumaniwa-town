@@ -41,6 +41,8 @@ var NOTE_ARTICLES = [
     // [NOTES:ADD_NEWEST_HERE]
     {
         id: "note-n21f2389ac91d",
+        archivePage: "./shinpo/pumpkin-jam/",
+        archiveThumbnail: "./assets/shinpo/pumpkin-jam/cover.png",
         title: "ゲームジャムでカボチャを転がした",
         url: "https://note.com/hamamah/n/n21f2389ac91d",
         publishedAt: "2026-10-17",
@@ -49,6 +51,8 @@ var NOTE_ARTICLES = [
 
     {
         id: "note-20261009-n308001a6a00a",
+        archivePage: "./shinpo/orbit-remaking/",
+        archiveThumbnail: "./assets/shinpo/orbit-remaking/cover.png",
         title: "昔の自分ともう一度ゲームを作る",
         url: "https://note.com/hamamah/n/n308001a6a00a",
         publishedAt: "2026-10-09",
@@ -73,6 +77,8 @@ var NOTE_ARTICLES = [
 
     {
         id: "note-20260917-c12ade65",
+        archivePage: "./shinpo/curry-delivery/",
+        archiveThumbnail: "./assets/shinpo/curry-delivery/cover.png",
         title: "ゲームジャムで、カレーを配達した",
         url: "https://note.com/hamamah/n/na42fdcfeabf2",
         publishedAt: "2026-09-17",
@@ -113,6 +119,8 @@ var NOTE_ARTICLES = [
 
     {
         id: "note-20260807-n845da26b1b0b",
+        archivePage: "./shinpo/no-right-answer/",
+        archiveThumbnail: "./assets/shinpo/no-right-answer/cover.jpg",
         title: "正解のないゲームを探していた",
         url: "https://note.com/hamamah/n/n845da26b1b0b",
         publish_date: "2026-08-07",
@@ -121,6 +129,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "note-20260731-n6565e030d711",
+        archivePage: "./shinpo/making-like-craft/",
+        archiveThumbnail: "./assets/shinpo/making-like-craft/cover.jpg",
         title: "アプリを作っていたはずが、工作の時間に戻っていた",
         url: "https://note.com/hamamah/n/n6565e030d711",
         publish_date: "2026-07-31",
@@ -138,6 +148,8 @@ var NOTE_ARTICLES = [
 
     {
         id: "note-20260717-153a44e0",
+        archivePage: "./shinpo/town-beginning/",
+        archiveThumbnail: "./assets/shinpo/town-beginning/cover.png",
         title: "作品を並べるより、住める場所を作りたかった",
         url: "https://note.com/hamamah/n/nad06ba5e60a2",
         publishedAt: "2026-07-17",
@@ -146,6 +158,8 @@ var NOTE_ARTICLES = [
 
     {
         id: "3fbab1d8a9b14123bfdb1461a94e8098",
+        archivePage: "./shinpo/touch-doodles/",
+        archiveThumbnail: "./assets/shinpo/touch-doodles/cover.png",
         title: "ひねる、積む、なぞる。触れるらくがきの話",
         url: "https://note.com/hamamah/n/nca6b0ef9db94",
         publish_date: "2026-07-02",
@@ -162,6 +176,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "ea784083edc146d298ba5b7c33a1b7f1",
+        archivePage: "./shinpo/yakitori-remake/",
+        archiveThumbnail: "./assets/shinpo/yakitori-remake/cover.png",
         title: "ゲームの中の焼き鳥を、焼き直した",
         url: "https://note.com/hamamah/n/n8a34c550580a",
         publish_date: "2026-06-19",
@@ -290,6 +306,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "5b5f9715572b4d8a894c06b220c9139c",
+        archivePage: "./shinpo/weather-air/",
+        archiveThumbnail: "./assets/shinpo/weather-air/cover.png",
         title: "正確な天気よりも外の空気が知りたい",
         url: "https://note.com/hamamah/n/n165c5c836b4a",
         publish_date: "2026-03-28"
@@ -348,6 +366,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "fac8492827054dd8a3922c8b8396198a",
+        archiveThumbnail: "./assets/shinpo/leftover-details/cover.webp",
+        archivePage: "./shinpo/leftover-details/",
         title: "どうでもいい部分が、なぜか残る",
         url: "https://note.com/hamamah/n/n1c68d15e4d91",
         publish_date: "2026-04-28"
@@ -378,6 +398,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "95d48e6613ce4037907364809ee3359f",
+        archivePage: "./shinpo/board-game-making/",
+        archiveThumbnail: "./assets/shinpo/backnumber/board-game-cover.png",
         title: "「ボードゲームの作り方」が分からなかったので、アプリで再現してみた",
         url: "https://note.com/hamamah/n/n0ca130319cac",
         publish_date: "2026-05-22",
@@ -402,6 +424,8 @@ var NOTE_ARTICLES = [
     },
     {
         id: "31beb527cad14b72a2afdc57f4b986b4",
+        archivePage: "./shinpo/game-app-in-between/",
+        archiveThumbnail: "./assets/shinpo/backnumber/game-app-cover.png",
         title: "ゲーム未満、アプリ未満の心地よさ",
         url: "https://note.com/hamamah/n/n16f7a42c0b6a",
         publish_date: "2026-06-12",
