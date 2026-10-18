@@ -26,6 +26,26 @@ var WORKS = [
     // [WORKS:ADD_NEWEST_HERE]
 
     {
+    "id": "coffee-factory",
+    "title": "CoffeeFactory",
+    "venue": "leisure_center",
+    "kind": "work",
+    "status": "open",
+    "launch": "embedded",
+    "entry": "./works/coffee-factory/index.html",
+    "frameTitle": "CoffeeFactory",
+    "returnLabel": "湯窓レジャーセンター",
+    "frameMode": "soft",
+    "playerLayout": "phone",
+    "playerWidth": 360,
+    "playerHeight": 640,
+    "menuCategory": "抽出タイマー",
+    "menuDescription": "こびと達と一緒に、一杯を淹れるコーヒー抽出タイマー。",
+    "description": "豆を選び、準備し、注ぎ、一杯を完成させるコーヒー抽出タイマー。",
+    "emptyText": "小さな工場が、抽出の準備をしています。"
+},
+
+    {
         id: "pumpoko",
         title: "PUMPOKO",
         venue: "leisure_center",

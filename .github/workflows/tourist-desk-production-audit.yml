@@ -28,4 +28,11 @@ jobs:
       - name: Check local dependencies, SEO, camera, picking and actual app input fixture
         run: node --test tests/test-tourist-desk-production.mjs works/yumaniwa-tourist-desk/tests/*.test.mjs
       - name: Verify generated sitemap and unchanged existing search pages
-        run: node tools/generate-work-search-pages.cjs --env production --published orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window,pumpoko --articles 31beb527cad14b72a2afdc57f4b986b4,3fbab1d8a9b14123bfdb1461a94e8098,5b5f9715572b4d8a894c06b220c9139c,95d48e6613ce4037907364809ee3359f,ea784083edc146d298ba5b7c33a1b7f1,fac8492827054dd8a3922c8b8396198a,note-20260717-153a44e0,note-20260731-n6565e030d711,note-20260807-n845da26b1b0b,note-20260917-c12ade65,note-20261009-n308001a6a00a,note-n21f2389ac91d --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROMOTE_ARGS=()
+          if node -e "const r=require('./data/work-lifecycle.json'); process.exit(r.works.some(w=>w.id==='coffee-factory' && w.status==='candidate')?0:1)"; then
+            PROMOTE_ARGS=(--promote coffee-factory --production-instruction "User 2026-10-18: prepare unmerged CoffeeFactory PR only; no merge/deploy approval.")
+          fi
+          node tools/generate-work-search-pages.cjs --env production --published orbit,diorama-calendar,rojiura-masala,steamclock,dotweather,junkissa-dive,midnight-cola,yakitori-wars,rainy-window,pumpoko,coffee-factory --articles 31beb527cad14b72a2afdc57f4b986b4,3fbab1d8a9b14123bfdb1461a94e8098,5b5f9715572b4d8a894c06b220c9139c,95d48e6613ce4037907364809ee3359f,ea784083edc146d298ba5b7c33a1b7f1,fac8492827054dd8a3922c8b8396198a,note-20260717-153a44e0,note-20260731-n6565e030d711,note-20260807-n845da26b1b0b,note-20260917-c12ade65,note-20261009-n308001a6a00a,note-n21f2389ac91d "${PROMOTE_ARGS[@]}" --check

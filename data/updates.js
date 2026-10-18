@@ -7,6 +7,19 @@
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
     {
+    "date": "2026-09-18",
+    "title": "レジャーセンターに『CoffeeFactory』を設置",
+    "body": "こびと達と一緒に、一杯を淹れるコーヒー抽出タイマーです。",
+    "tags": [
+        "leisure-center",
+        "app",
+        "open"
+    ],
+    "workIds": [
+        "coffee-factory"
+    ]
+},
+    {
         date: "2026-10-11",
         title: "レジャーセンターに『PUMPOKO』を設置",
         body: "地上を転がり、地下で跳ねる。カボチャとルタバガの小さな旅が始まりました。",
