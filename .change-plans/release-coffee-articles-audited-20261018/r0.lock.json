@@ -1,0 +1,159 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "3adc2e704c7bdb089684d8112d439a7b41e8c9a85b19fe42f70325eb780e745e",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "release-coffee-articles-audited-20261018",
+    "revision": 0,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Publish approved CoffeeFactory articles and PR491/492 connections to Production",
+    "planLevel": "full",
+    "classes": [
+      "CONTENT",
+      "SYSTEM",
+      "ASSET"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review"
+    ],
+    "environment": "staging-production",
+    "baseSha": "6b9dca703e71a0d74ab61f4f057e916234209e65",
+    "canonicalSources": [
+      "data/notes.js",
+      "tools/shinpo-template.html",
+      "data/work-search-meta.js",
+      "https:/note.com/hamamah/n/ndd00e6f70f55",
+      "https:/note.com/hamamah/n/n4e18da793516",
+      "Staging3392045c4c0749724a70b401109fe125eecc9576 (PR491/492)",
+      "Production6b9dca703e71a0d74ab61f4f057e916234209e65"
+    ],
+    "allowedPaths": [
+      "data/shinpo/a6e80d044f734d4693d0926541fcba22.json",
+      "data/shinpo/note-20260904-ddca9fa0.json",
+      "data/notes.js",
+      "shinpo/coffee-factory/index.html",
+      "shinpo/first-public-app/index.html",
+      "shinpo/index.html",
+      "data/work-search-meta.js",
+      "w/coffee-factory/index.html",
+      "en/w/coffee-factory/index.html",
+      "data/shinpo/fac8492827054dd8a3922c8b8396198a.json",
+      "shinpo/leftover-details/index.html",
+      "assets/shinpo/coffee-factory/cover.png",
+      "assets/shinpo/coffee-factory/body-1.png",
+      "assets/shinpo/coffee-factory/body-2.png",
+      "assets/shinpo/coffee-factory/body-3.png",
+      "assets/shinpo/coffee-factory/body-4.png",
+      "assets/shinpo/coffee-factory/body-5.png",
+      "assets/shinpo/first-public-app/cover.jpg",
+      "assets/shinpo/first-public-app/body-1.png",
+      "assets/shinpo/first-public-app/body-2.png",
+      "assets/shinpo/first-public-app/body-3.png",
+      "assets/shinpo/first-public-app/body-4.png",
+      "sitemap.xml",
+      ".change-plans/release-coffee-articles-audited-20261018/r0.lock.json",
+      "tests/test-pumpoko-production.cjs",
+      ".github/workflows/tourist-desk-production-audit.yml"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "index.html",
+      "style.css",
+      "works/**",
+      "engines/**",
+      "tools/**"
+    ],
+    "expectedChanges": [
+      "Publish two original articles, their 11 original images and matching notes archive metadata",
+      "Apply PR491/492 leftover-details CoffeeFactory links, retaining its original images and historical prose",
+      "Add CoffeeFactory articleIds and regenerate only changed JA/EN introductions with Production canonical/OGP/robots",
+      "Generate Production backnumbers and sitemap including existing 12 and new 2 articles; retain all 11 published works and standalone pages",
+      "Keep Vimeo/X as visible external references; no player/runtime changes",
+      "Add exactly the two approved article IDs to the explicit publication lists in PUMPOKO test and Tourist Desk audit invocation; no checks, assertions, triggers, permissions, or protections removed/relaxed."
+    ],
+    "ownerDecisions": [
+      "User 2026-10-18 13:49 UTC: はい、okです。本番反映お願いします. Explicit approval of PR491/492 articles/connections after reviewing both articles."
+    ],
+    "hqDecisions": [
+      "既存静的テンプレート内。unknown-code SYSTEM/full。原典完全性は人が証拠を照合し未取得を記録する。"
+    ],
+    "rulesApplied": [
+      "Official Full r0 before implementation",
+      "Select only approved PR491/492 article/connection changes; generate Production SEO",
+      "Retain existing full Production works/articles/standalone publication sets",
+      "Keep existing CoffeeFactory runtime and all other works byte-identical",
+      "No source snapshots/private transfer evidence committed",
+      "Attempt1 PR66 failed only stale 12-article audit lists; fresh r0 before minimal audit fixture update, preserving old Lock and PR evidence."
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "change-operations-regression"
+    ],
+    "manualChecks": [
+      "Preserve exact bytes of 11 images and canonical original body/order",
+      "Production canonical/OGP/indexable robots and sitemap publication sets",
+      "390/1280px navigation/images; preserve all other work/runtime bytes",
+      "Public exact SHA Pages and actual URLs separately; parent can verify when executor tunnel403",
+      "Independent review audit delta only adds approved two IDs; same assertions and workflow protections."
+    ],
+    "impactChecks": [
+      "risk.high-risk-review",
+      "runtime.regression",
+      "asset.file",
+      "asset.rendering",
+      "asset.cache",
+      "runtime.mobile-desktop",
+      "search.generated-pages",
+      "search.localized-copy",
+      "search.sitemap",
+      "search.structured-data",
+      "search.validator",
+      "os.previous-gate",
+      "os.regression",
+      "os.provenance"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert this Production PR only; preserve existing CoffeeFactory release and all other works.",
+    "outOfScope": [
+      "Unrelated Staging changes",
+      "Runtime/engine/other works",
+      "Video iframe/player expansion",
+      "Private source snapshots/transfer evidence",
+      "All other workflows; CI permissions/triggers/protections changes"
+    ],
+    "promotion": "Explicitly approved Production publication of PR491/492 only",
+    "unverified": [
+      "Actual public browser/device/video playback unverified; parent Staging public HTTP/11image hashes/20internal links confirmed",
+      "Production HTTP is attempted after exact-SHA deployment; tunnel403 must not be bypassed"
+    ],
+    "problem": "Two original CoffeeFactory-related note articles are not yet available within the town.",
+    "currentContract": "Existing articleIds generates JA/EN related article links; afterword holds current Web work links separately from historical prose.",
+    "whyExistingIsInsufficient": "Only the existing leftover-details article is connected; both requested new articles remain external.",
+    "design": "Reuse canonical static article import, notes archive metadata, existing backnumber and work articleIds generation; current Web links stay outside historical source prose.",
+    "alternativesRejected": [
+      "固定枠",
+      "原文要約/画像創作",
+      "CMS"
+    ],
+    "migration": "Selective copy of approved canonical article data and original assets; narrow metadata patch; regenerate Production outputs.",
+    "compatibility": "元の4枠と他記事を保持",
+    "boundaryCases": [
+      "同じIDの再実行",
+      "未取得media",
+      "中断再開",
+      "base進行"
+    ],
+    "testPlan": [
+      "Official Scope/Risk/Impact against Production base",
+      "Production generation consistency for full explicit published works/articles",
+      "Release validator Production selected CoffeeFactory plus article set",
+      "Existing Production safety tests and required CI",
+      "Independent diff review, safe merge, exact SHA Pages, actual public HTTP if accessible",
+      "Run both previously failing audit suites and full explicit generator command before replacement PR"
+    ],
+    "promotionRisk": "Production articles/index/SEO only; validate referenced articles and works remain published."
+  }
+}

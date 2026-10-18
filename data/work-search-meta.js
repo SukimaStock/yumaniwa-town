@@ -12,6 +12,7 @@ var WORK_SEARCH_META_SCHEMA = 1;
 
 var WORK_SEARCH_META = {
     "coffee-factory": {
+    "articleIds": ["a6e80d044f734d4693d0926541fcba22", "note-20260904-ddca9fa0", "fac8492827054dd8a3922c8b8396198a"],
     "schemaType": "SoftwareApplication",
     "alternateNames": [],
     "ja": {
