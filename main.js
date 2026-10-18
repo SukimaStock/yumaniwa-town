@@ -7679,15 +7679,19 @@ function buildNoteRackSelection() {
     // 1. 町の現在地。
     add(articles[0], "最新", "latest");
 
-    // 2. 直近の記事群から一枚。featured / pickup を付ければ、今後はその候補を優先できる。
+    // 2. 未選択の町内紙面から一枚。なければ従来のfeatured / pickup・直近記事へ戻る。
+    var localPool = [];
     var featuredPool = [];
     for (var i = 1; i < articles.length; i++) {
+        if (articles[i].archivePage && !usedIds[getNoteRackArticleId(articles[i])]) {
+            localPool.push(articles[i]);
+        }
         if (articles[i].featured === true || articles[i].pickup === true) {
             featuredPool.push(articles[i]);
         }
     }
     var recentPool = articles.slice(1, Math.min(articles.length, 10));
-    add(pickRandomNoteRackArticle(featuredPool.length ? featuredPool : recentPool, usedIds), "今のピックアップ", "pickup");
+    add(pickRandomNoteRackArticle(localPool.length ? localPool : (featuredPool.length ? featuredPool : recentPool), usedIds), "今のピックアップ", "pickup");
 
     // 3. 古い紙面も含め、毎回ふらりと違う一枚。
     add(pickRandomNoteRackArticle(articles, usedIds), "ふらりと一枚", "random");
@@ -7709,8 +7713,9 @@ window.openNoteArticleFromRack = function(articleId) {
 
     recordShinpoArticleOpen(article);
 
-    // カードを選んだ瞬間だけ、正式なnote記事へ進む。
-    window.open(article.url, "_blank");
+    // 保存版だけは町の紙面を開く。それ以外は従来どおりnoteへ進む。
+    var target = article.archivePage ? new URL(article.archivePage, window.location.href).href : article.url;
+    window.open(target, "_blank");
 };
 
 function renderNoteRackCard(slot) {
@@ -7722,6 +7727,24 @@ function renderNoteRackCard(slot) {
     var slotLabel = escapeNoteRackHtml(slot.label);
     var slotKind = escapeNoteRackHtml(slot.kind || "");
     var html = '';
+
+    // 選ばれた移植済み記事は、noteの埋め込みではなく新聞の切り抜きにする。
+    if (article.archivePage) {
+        html += '<article class="note-rack-card shinpo-archive-card" data-rack-kind="' + slotKind + '">';
+        html += '<div class="shinpo-archive-paper"><div class="shinpo-archive-meta">';
+        html += '<span class="shinpo-archive-mast">湯間庭新報</span>';
+        html += '<span class="shinpo-archive-date">' + escapeNoteRackHtml(date) + '</span></div>';
+        html += '<div class="shinpo-archive-content' + (article.archiveThumbnail ? ' has-thumbnail' : '') + '">';
+        html += '<div class="shinpo-archive-headline">' + title + '</div>';
+        if (article.archiveThumbnail) {
+            html += '<img class="shinpo-archive-thumbnail" src="' + escapeNoteRackHtml(article.archiveThumbnail) + '" width="1280" height="670" alt="" loading="lazy" onerror="this.parentNode.classList.remove(\'has-thumbnail\');this.remove()">';
+        }
+        html += '</div></div>';
+        html += '<div class="note-rack-card-footer"><span class="note-rack-card-slot">' + slotLabel + '</span><span class="note-rack-card-cta">新聞を広げる ↗</span></div>';
+        html += '<button class="note-rack-card-open" type="button" aria-label="' + title + 'を湯間庭新報で読む" onclick="openNoteArticleFromRack(\'' + articleId + '\')"></button>';
+        html += '</article>';
+        return html;
+    }
 
     // URL形式が例外的な記事だけは、棚の中でタイトル札として残す。
     if (!embedUrl) {
@@ -7770,6 +7793,7 @@ window.renderNoteCardRack = function(dest) {
         html += '</div>';
     }
 
+    html += '<p style="margin:16px 0 0;text-align:right"><a href="./shinpo/" style="color:inherit;font:13px/1.6 sans-serif;text-underline-offset:3px">バックナンバー</a></p>';
     html += '</div>';
     return html;
 };

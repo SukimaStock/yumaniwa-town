@@ -1,0 +1,159 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "f671c9eefd27a3ac907e9b9988ee5dd7059950216bd2db5827c27a6a04745e1f",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "shinpo-production-20261018",
+    "revision": 1,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Publish selected twelve Shinpo articles and connected reading to Production",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "CONTENT",
+      "ASSET"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review"
+    ],
+    "environment": "staging-production",
+    "baseSha": "f738a8fc0d1875deb85fae7bdd67e61457befaad",
+    "canonicalSources": [
+      "data/notes.js",
+      "data/shinpo",
+      "data/work-search-meta.js",
+      "tools/shinpo-migrate.cjs",
+      "tools/shinpo-template.html",
+      "tools/generate-work-search-pages.cjs",
+      "tools/SHINPO-MIGRATION.md",
+      "2026-10-18 user implementation instruction and preceding audit"
+    ],
+    "allowedPaths": [
+      ".change-plans/shinpo-production-20261018/r0.lock.json",
+      "data/shinpo/**",
+      "assets/shinpo/**",
+      "shinpo/**",
+      "data/notes.js",
+      "data/work-search-meta.js",
+      "main.js",
+      "style.css",
+      "index.html",
+      "tools/shinpo-migrate.cjs",
+      "tools/shinpo-template.html",
+      "tools/shinpo-index-template.html",
+      "tools/site-environment.cjs",
+      "tools/generate-work-search-pages.cjs",
+      "tools/release-validator.cjs",
+      "tools/SHINPO-MIGRATION.md",
+      "w/**",
+      "en/w/**",
+      "sitemap.xml",
+      "tests/test-pumpoko-production.cjs",
+      ".github/workflows/tourist-desk-production-audit.yml",
+      ".change-plans/shinpo-production-20261018/r1.lock.json"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "works/**",
+      "engines/**",
+      "data/works.js",
+      "data/work-lifecycle.json",
+      "developer-access.js"
+    ],
+    "expectedChanges": [
+      "控えめなバックナンバーリンクと静的一覧、記事から一覧へ戻る",
+      "対応作品紹介だけに日本語制作記事1～2件（英語は日本語記事と明示）",
+      "移植済み同一記事4hrefと町カード1hrefだけ修正、原典引用保持",
+      "環境別canonical/OGP/robots、staging sitemapはnoindexページを掲載せずproduction記事は明示選別",
+      "全71媒体の実寸属性・汎用altを内容に合わせ補う。媒体bytes/frames不変",
+      "既存生成・原典保護・移植再開テストを維持し最小回帰を追加",
+      "既存release validatorを環境別URLと明示選別記事へ対応。productionガード、static discovery、OGP実ファイル照合を維持"
+    ],
+    "ownerDecisions": [
+      "2026-10-18 user: バッチリですね！productionにも反映してください。"
+    ],
+    "hqDecisions": [
+      "Build-time only environment config; production writes require explicit instruction plus selected article IDs; preserve existing work publication/lifecycle guards; no new facility/registry/runtime patch",
+      "既存validator固定production baseと新environment policyを整合するためfresh r0で検証器と回帰をscopeに含める。旧Lockは編集しない"
+    ],
+    "rulesApplied": [
+      "AGENTS.md",
+      "EXPRESSION-AUDIT.md: no subtitle/copy, original body unchanged",
+      "CHANGE-PLAN full initial lock before implementation"
+    ],
+    "staticChecks": [
+      "node-syntax",
+      "change-operations-regression"
+    ],
+    "manualChecks": [
+      "All articles/backnumber/board/work links and original attributions",
+      "320/390px equivalent and desktop image/animation/overflow checks",
+      "Exact SHA Pages and live navigation"
+    ],
+    "impactChecks": [
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.rollback",
+      "risk.high-risk-review",
+      "asset.rendering",
+      "asset.cache",
+      "runtime.mobile-desktop",
+      "search.generated-pages",
+      "search.localized-copy",
+      "search.regression",
+      "search.sitemap",
+      "search.structured-data",
+      "search.validator",
+      "asset.file",
+      "os.previous-gate",
+      "os.regression",
+      "os.provenance",
+      "surface.shared"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert only this PR; asset bytes and work runtime remain unchanged",
+    "outOfScope": [
+      "New work publication including AmberTime",
+      "Search Console and external settings",
+      "game runtime/save changes"
+    ],
+    "promotion": "Explicit user-authorized selective Production release; preserve ten existing published works and standalone tourist desk",
+    "unverified": [
+      "Real Safari/iPhone and search canonical adoption",
+      "No claim of Production live availability before Pages verification"
+    ],
+    "problem": "抽選だけの入口、作品から記事への入口不足、環境固定SEOと画像領域予約不足",
+    "currentContract": "notes/article JSON and existing generators own content; four rack slots and source prose/media protected",
+    "whyExistingIsInsufficient": "No static all-article list; no work-to-article links; source has four identical-note escapes and one unintended environment escape",
+    "design": "Generate a plain date/title backnumber from registered article data, reuse work search metadata for small article ID references, relative navigation, environment-aware absolute metadata, explicit production article selection",
+    "alternativesRejected": [
+      "new facility or fifth slot",
+      "global external link replacement",
+      "automatic production publication",
+      "CMS/search/filter system"
+    ],
+    "migration": "Existing IDs/URLs/dates/source media and work entrypoints retained; additive build-time navigation and narrow attributes",
+    "compatibility": "No save, engine, game mechanics, source media bytes or rack selection changes",
+    "boundaryCases": [
+      "new article import updates index",
+      "duplicate/missing article ids",
+      "unpublished production article selection",
+      "unknown environment",
+      "historical versus current edition",
+      "animated lazy media",
+      "narrow long title"
+    ],
+    "testPlan": [
+      "shinpo check and all related tests",
+      "work search generation/campaign tests",
+      "Scope then Risk then Impact",
+      "independent review and required CI",
+      "live Pages desktop and browser mobile equivalent"
+    ],
+    "promotionRisk": "Do not copy staging noindex/empty sitemap into production; production needs selected article ids and self canonical after explicit authorization",
+    "previousPlanDigest": "e363a93f5e2ab4338932429a619a4f45647e028ad0dae11cfa1a5d046120028a",
+    "revisionReason": "Declare existing asset imports, shared surface integration and narrow explicit article-selection CI argv impacts before Production implementation."
+  }
+}
