@@ -20,6 +20,14 @@ var WORK_GUIDE_FEATURED = [
 ];
 
 var WORK_GUIDE_META = {
+    "coffee-factory": {
+    "duration": "3〜5分",
+    "moods": [
+        "short",
+        "quiet"
+    ],
+    "guideLine": "小さな工場を眺めながら、一杯を淹れる。"
+},
     "pumpoko": {
         duration: "5〜15分",
         moods: ["play"],

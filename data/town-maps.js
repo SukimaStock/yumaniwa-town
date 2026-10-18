@@ -562,6 +562,16 @@
           text: '空模様の展示。'
         },
         {
+          id: 'leisure_work_coffee_factory',
+          label: 'CoffeeFactory',
+          actionLabel: '触る',
+          type: 'work',
+          workId: 'coffee-factory',
+          area: { x: 2, y: 12, w: 5, h: 5 },
+          tapPadding: 1,
+          text: 'コーヒーの展示。'
+        },
+        {
           id: 'leisure_work_diorama_calendar',
           label: 'Diorama Calendar',
           actionLabel: '触る',
@@ -629,6 +639,16 @@
           collision: { enabled: true, x: 0.08, y: 0.82, w: 0.84, h: 0.16 },
           interaction: { enabled: true, triggerId: 'leisure_work_dotweather', x: 0.04, y: 0.05, w: 0.92, h: 0.92 },
           tap: { enabled: true, x: 0.04, y: 0.05, w: 0.92, h: 0.92 }
+        },
+        {
+          id: 'leisure_exhibit_coffee_factory',
+          objectId: 'leisure_exhibit_coffeefactory_01',
+          x: 2.0, y: 12.75, w: 4.0, h: 4.0, footY: 16.75,
+          enabled: true,
+          catalogKey: 'worldObjectExhibit',
+          collision: { enabled: true, x: 0.05, y: 0.80, w: 0.90, h: 0.17 },
+          interaction: { enabled: true, triggerId: 'leisure_work_coffee_factory', x: 0.03, y: 0.05, w: 0.94, h: 0.92 },
+          tap: { enabled: true, x: 0.03, y: 0.05, w: 0.94, h: 0.92 }
         },
         {
           id: 'leisure_exhibit_diorama_calendar',

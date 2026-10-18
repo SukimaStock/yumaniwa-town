@@ -693,6 +693,38 @@
                 status: 'final'
             }
         },
+        leisure_exhibit_coffeefactory_01: {
+            id: 'leisure_exhibit_coffeefactory_01',
+            category: 'exhibit',
+            type: 'coffee_factory_exhibit',
+            src: 'assets/maps/props/leisure-center/leisure-exhibit-coffeefactory.png?v=20260925-1',
+            finalization: {
+                target: 'FACILITY_S',
+                logicalCanvasPx: [64, 64],
+                townAssetFilePx: [64, 64],
+                townAssetPixelRatio: 1,
+                grid: {
+                    block: 1,
+                    offsetX: 0,
+                    offsetY: 0
+                },
+                townCanvas: {
+                    enabled: true,
+                    editable: true,
+                    exactFinal: true
+                },
+                pixelStandard: {
+                    version: 'yumaniwa-pixel/0.1',
+                    worldPxPerLogicalPx: 1,
+                    editingSpace: 'TOWN_LOGICAL_PIXELS',
+                    previewMatchesTown: true,
+                    townUsesLogicalCanvas: true,
+                    physicalFileMayUseDeviceScale: false
+                },
+                pixelSafe: false,
+                status: 'final'
+            }
+        },
         leisure_exhibit_diorama_calendar_01: {
             id: 'leisure_exhibit_diorama_calendar_01',
             category: 'exhibit',
