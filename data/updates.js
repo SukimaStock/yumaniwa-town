@@ -7,6 +7,19 @@
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
     {
+        "date": "2026-11-08",
+        "title": "レジャーセンターに『あとだま』を設置",
+        "body": "前に打った玉と協力するビリヤードパズルです。三球で全部の輪を光らせます。",
+        "tags": [
+            "leisure-center",
+            "game",
+            "open"
+        ],
+        "workIds": [
+            "atodama"
+        ]
+    },
+    {
     "date": "2026-09-18",
     "title": "レジャーセンターに『CoffeeFactory』を設置",
     "body": "こびと達と一緒に、一杯を淹れるコーヒー抽出タイマーです。",
