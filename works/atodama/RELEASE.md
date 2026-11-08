@@ -44,3 +44,16 @@ Staging PR #865は `2cd863b61f5708724e58d51920164db12ea1ab37` へマージ済み
 - 独自のcore action計測は採用していないためN/A。既存のWork Open/Close/ShareのID契約を維持し、外部Goal・実送信は未確認。SNSは投稿せず、公開リンクと共有画像を作者へ引き渡す。
 
 Pages・本番HTTP配信の結果はマージ後に追記する。町内画面のブラウザー実操作は自動承認審査による拒否のため引き続きUNVERIFIED。
+
+## 実配信の記録（2026-11-08）
+
+Production PR [#68](https://github.com/SukimaStock/yumaniwa-town/pull/68) を `5cdb0f921550d7a394f221526c101e31709d3fb1` へマージ。PR head `1e65bc8dec7eb3045514c6828322c8ffb609900e` のProduction Safety Checks / PUMPOKO監査 / Tourist Desk監査は全成功。
+
+同merge SHAの [Pages run 42461907341](https://github.com/SukimaStock/yumaniwa-town/actions/runs/42461907341) はsuccess。同SHAのSafety run42461908006、PUMPOKO監査run42461907960もsuccess。公開先のroot、sitemap、6 metadata、4 runtime、OGP/icon、日英紹介、manifestの17ファイルをHTTP 200で取得し、候補版と全件バイト一致を確認。
+
+- 日本語共有URL：https://sukimastock.github.io/yumaniwa-town/w/atodama/
+- 町内起動：https://sukimastock.github.io/yumaniwa-town/?work=atodama
+- 英語紹介：https://sukimastock.github.io/yumaniwa-town/en/w/atodama/
+- 画像：https://sukimastock.github.io/yumaniwa-town/assets/works/atodama/ogp.jpg
+
+公開済みの記録としてcandidate → releasedへ更新する。releasedは配信状態の記録であり、町内画面の実操作・物理iPhone Safari・外部Plausibleの確認完了を意味しない。ブラウザー確認はローカルURLへの自動承認審査による拒否のため未確認のまま。Release Completeとは報告しない。SNS投稿はしておらず、共有URLと画像を作者へ引き渡す。
