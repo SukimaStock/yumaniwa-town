@@ -1,0 +1,175 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "b14b66e8dd5e7630bbdb93024e7dcaab8a7fab68dda765a8bd999e37658f4e5e",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "atodama-production-20261108",
+    "revision": 0,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Publish only あとだま and required entries while retaining all existing eleven works and production environment.",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "WORK",
+      "ASSET",
+      "CONTENT"
+    ],
+    "authority": [
+      "Standard",
+      "Rule / Skill",
+      "Owner Decision",
+      "HQ Review"
+    ],
+    "environment": "staging-production",
+    "baseSha": "2b973548fef56c2b4c66e8a221d72e14471ea3ec",
+    "canonicalSources": [
+      "data/works.js",
+      "data/work-lifecycle.json",
+      "data/work-guide-meta.js",
+      "data/work-search-meta.js",
+      "data/updates.js",
+      "data/ghost-dialogue.js",
+      "tests/test-pumpoko-production.cjs",
+      ".github/workflows/tourist-desk-production-audit.yml",
+      "Staging candidate 4bbfa9786e14e2d4978cc2f0bb7a0ec887e14dba from PR865; exact merge evidence will be recorded"
+    ],
+    "allowedPaths": [
+      "works/atodama/index.html",
+      "works/atodama/style.css",
+      "works/atodama/app.mjs",
+      "works/atodama/core.mjs",
+      "works/atodama/tests/verify.mjs",
+      "works/atodama/tests/solutions.json",
+      "works/atodama/RELEASE.md",
+      "data/works.js",
+      "data/work-guide-meta.js",
+      "data/work-search-meta.js",
+      "data/work-lifecycle.json",
+      "data/updates.js",
+      "data/ghost-dialogue.js",
+      "assets/works/atodama/ogp.jpg",
+      "assets/works/atodama/icon.png",
+      "w/atodama/index.html",
+      "w/atodama/manifest.webmanifest",
+      "en/w/atodama/index.html",
+      "index.html",
+      "sitemap.xml",
+      "tests/test-pumpoko-production.cjs",
+      ".github/workflows/tourist-desk-production-audit.yml",
+      ".change-plans/atodama-production-20261108/r0.lock.json"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "engine/**",
+      "tools/**",
+      "developer-access.js",
+      "work-install-meta.js",
+      "lab/**",
+      "works/ambertime/**",
+      ".github/workflows/production-safety-checks.yml",
+      ".github/workflows/pumpoko-production-audit.yml"
+    ],
+    "expectedChanges": [
+      "Copy only atodama work files, assets and per-work manifest from confirmed staging candidate.",
+      "Merge atodama entries into production works/guide/search/lifecycle/updates/ghost data; preserve every existing entry. Production ledger is existing 11 plus candidate atodama only.",
+      "Generate production atodama JA/EN indexable pages and sitemap using the existing generator with explicit twelve-work publication and fourteen existing articles. Keep existing pages byte-identical.",
+      "Add the atodama static discovery link and update changed production-data cache fingerprints without taking staging root markup/runtime.",
+      "Update only the explicit published set/candidate selection/current instruction in the production-only PUMPOKO audit test and Tourist Desk generator arguments. Preserve exact-set assertions, all canonical PUMPOKO blob hashes, article IDs, permissions, event triggers, checkout and check executors.",
+      "Record actual static/CI/Pages/HTTP evidence and remaining browser/device/analytics limits in the existing work-local release record."
+    ],
+    "ownerDecisions": [
+      "User 2026-11-08 Europe/Skopje in this conversation: おお、すごい！ after playing the completed あとだま Site; followed by 湯間庭町で公開しますので作業を進めてください. This accepts the presented game and authorizes town-publication work, including necessary candidate preparation and production reflection. No exact-SHA physical-device or separate artwork approval is asserted."
+    ],
+    "hqDecisions": [
+      "No new runtime, schema, placement, launch/frame, storage or analytics contract. The production-only audit definitions intentionally remain outside staging; their literal publication set must include the newly authorized atodama. This does not weaken any check.",
+      "Read-only technical review release_review confirmed this production-scoped plan may maintain the two existing production-only audit files; the review is not HQ approval. No new external account/permission or CI bypass is authorized."
+    ],
+    "rulesApplied": [
+      "AGENTS: existing schemas and menu-only registration; no scene/runtime/Engine changes.",
+      "RELEASE-WORKFLOW: selective staging to production, candidate and explicit publication authority separately recorded.",
+      "EXPRESSION-AUDIT: use concrete game rules and concise copy; no invented intent, subtitle or recommendation placement.",
+      "Production-specific environment audit files stay production-only; do not import them into staging as shared workflow changes."
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "Browser standalone and embedded pointer/keyboard launch, ghost opens shutter, undo/retry, mute/unmute, modal, pause/return/reentry, and reload.",
+      "390x844 and 375x667 responsive browser viewports plus desktop; physical iPhone Safari remains unobserved unless actual evidence is supplied.",
+      "Existing same-frame work and leisure_center entry/exit; guide/discovery/update/ghost identity; OGP crop.",
+      "Live production URLs, delivered bytes, JA/EN robots/canonical/hreflang/sitemap and exact-SHA Pages result."
+    ],
+    "impactChecks": [
+      "asset.cache",
+      "asset.file",
+      "asset.rendering",
+      "ghost.runtime",
+      "ghost.work-id",
+      "risk.high-risk-review",
+      "runtime.regression",
+      "search.generated-pages",
+      "search.localized-copy",
+      "search.sitemap",
+      "search.structured-data",
+      "search.validator",
+      "surface.shared",
+      "updates.runtime",
+      "updates.work-id",
+      "work.regression",
+      "work.runtime",
+      "works.analytics-id",
+      "works.direct-route",
+      "works.release-validator",
+      "works.search-share",
+      "works.town-awareness",
+      "works.venue-menu",
+      "os.previous-gate",
+      "os.regression",
+      "os.provenance"
+    ],
+    "impactExclusions": [],
+    "rollback": "Ordinary revert PR of this atodama production diff, including its exact-set audit inputs. Do not remove best-score storage or alter other works.",
+    "outOfScope": [
+      "Other staging works or whole staging publication",
+      "New shared runtime, Engine, schema, scene placement, service worker or analytics contracts",
+      "SNS/email sending or external Search Console/Plausible configuration"
+    ],
+    "promotion": "User 2026-11-08 in this conversation explicitly said 湯間庭町で公開しますので作業を進めてください. This is separate from acceptance of the presented game and necessary candidate selection. Merge only after required Safety Checks and confirmed staging result. No SNS posting.",
+    "unverified": [
+      "Physical iPhone Safari exact-SHA behavior",
+      "External analytics Goal configuration and ingestion unless directly observed"
+    ],
+    "problem": "あとだま is authorized for publication but absent from production.",
+    "currentContract": "Production-only explicit eleven-work audited publication set and unchanged existing runtime.",
+    "whyExistingIsInsufficient": "The existing exact-set audits correctly reject a twelfth work until their explicit publication inputs are updated.",
+    "design": "Retain strict set equality and existing runtime assertions, adding atodama only to the audited set and candidate selection.",
+    "alternativesRejected": [
+      "Publish the private Site link as an external dependency",
+      "Copy all staging works into production",
+      "Add a physical building or shared player feature"
+    ],
+    "migration": "Additive single-work registration. Preserve adopted localStorage key atodama-v1; scores from the Site are origin-local and are not migrated across origins.",
+    "compatibility": "No shared runtime change. Work-local pause/close behavior follows existing player contracts. Existing production metadata entries are preserved independently.",
+    "boundaryCases": [
+      "Pointer cancellation never fires a shot",
+      "Undo restores the previous aim without changing older recordings",
+      "Replay after clear returns to the clear result",
+      "Hidden/closed iframe pauses simulation/audio",
+      "Storage denial still allows play",
+      "Short portrait frame must keep controls reachable",
+      "Production includes existing published set plus only atodama"
+    ],
+    "testPlan": [
+      "Fixed-base scope and production-only environment diff review",
+      "Exact-set PUMPOKO production audit + canonical blob preservation + direct routes/guide/ready tests",
+      "Production developer/Editor/History Safety regression",
+      "Explicit-set production generator check and selected-work Release Validator",
+      "Atodama deterministic game regression",
+      "Independent technical review of production diff",
+      "Existing required Production Safety Checks and unchanged PUMPOKO/Tourist workflows, then exact-SHA Pages and live HTTP/hash verification"
+    ],
+    "promotionRisk": "Town-integrated browser inspection is blocked by automatic approval review and remains UNVERIFIED. The user accepted the independently browser-tested standalone game. Static/CI/live bytes are separate evidence and not Release Complete."
+  }
+}
