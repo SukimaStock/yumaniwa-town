@@ -1,0 +1,108 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "c11adc2be20f94cb3591ec56f829b9547174694c7818db07b750be29707cc5a3",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-mobile-frame-20261122",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote the accepted mobile page underlay, area labels, and readable touch conversations from Staging PR #947 to production.",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review",
+      "Owner Decision"
+    ],
+    "environment": "staging-production",
+    "baseSha": "662716de8a17d8b70d4d2afcbb2defd533de3b06",
+    "canonicalSources": [
+      "Production AGENTS.md, OPERATIONS.md, RELEASE-WORKFLOW.md and base 662716d root HTML, CSS, JS and interaction tests",
+      "Staging 8763922460e8e05ae0933a7a9b2d92804206e1b8 (PR #947), its pre-implementation lock, mobile verification and author acceptance",
+      "Staging Change OS CHANGE-PLAN.md / CHANGE-VERIFICATION.md / CHANGE-OPERATIONS.md; production safety checks and launch catalog"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-mobile-frame-20261122/r0.lock.json",
+      "style.css",
+      "layout-fix.css",
+      "main.js",
+      "index.html",
+      "tests/test-town-interaction.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "works/**",
+      "assets/**",
+      "data/**",
+      "engine/**",
+      "tools/**",
+      ".github/**"
+    ],
+    "expectedChanges": [
+      "Protect page backing using the existing gradient edge color; retain normal gradient pixels and constant theme preference.",
+      "Fit area title lines and subtitles within their actual parent without changing authored words or line breaks.",
+      "Use space available to messages on short landscape viewports and permit touch scrolling of longer messages. Preserve tap, backdrop and keyboard dismiss and reset each new message to its start.",
+      "Refresh revision parameters for changed root resources.",
+      "Update the existing warp tap test to distinguish a cancelled pointer gesture from a committed click; keep exactly-once destination assertions and verify fresh-message scroll reset."
+    ],
+    "ownerDecisions": [
+      "The author tested the Staging change, reported improvement and explicitly instructed production promotion."
+    ],
+    "hqDecisions": [
+      "Apply the accepted UI and test hunks only to production. Recompute just the three production asset revisions, keeping their original URL parameters and every other production-specific HTML tag."
+    ],
+    "rulesApplied": [
+      "Lock before implementation; base-owned gates and exact SHA CI; independent browser verification."
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "Staging improvement confirmed by the author. Physical post-deployment iPhone X/Safari not observed by the agent.",
+      "Candidate WebKit/Chromium portrait/landscape interaction, release drawing and actual published URLs."
+    ],
+    "impactChecks": [
+      "surface.shared",
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.mobile-desktop",
+      "runtime.rollback",
+      "risk.high-risk-review"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert this isolated production PR via normal Safety Checks and Pages deployment. No stored-data migration.",
+    "outOfScope": [
+      "All other Staging changes, new works, native browser UI overrides, changes to artwork, lighting, dev access, analytics, desktop/phone breakpoint or navigation."
+    ],
+    "promotion": "The author requested production deployment of #947 after observing improvement on Staging. Promote only the changes between 51ab2a9 and 8763922 for these files.",
+    "unverified": [
+      "On-device result on the newly deployed production page; the author has confirmed improvement on Staging. Native X browser chrome is host-controlled."
+    ],
+    "problem": "A white seam of six CSS pixels appears at the X browser toolbar boundary. Narrow game frames clip long arrival headings and short landscape dialogs. A drag on an overflowing message triggers immediate dismissal.",
+    "currentContract": "Town screen uses 9:16 on small coarse pointers and 1:2 otherwise. The page has opaque gradient stops with a transparent backing. The area heading and message dialog are inside the game frame; the latter already has overflow-y auto.",
+    "whyExistingIsInsufficient": "Viewport-relative child title sizing ignores the narrower rendered frame. Short landscape dialogs retain portrait control reservation even when modal; touch guarding and pointerdown prevent reading overflowing text.",
+    "design": "Keep gradient imagery and give its root/body/container an opaque fallback; make child headings fit the available parent; size short-landscape messages to the game frame, allow native vertical panning within the message only and advance on a completed tap. Reuse the existing interaction action and exact asset URLs with a new revision.",
+    "alternativesRejected": [
+      "Resize/stretch the game canvas or change the art",
+      "Override X-owned controls or force a global dark scheme",
+      "Change directional controls or implement custom scrolling."
+    ],
+    "migration": "Cache revisions only; no storage or content migration.",
+    "compatibility": "Desktop and normal portrait, keyboard dismissal, backdrop dismissal, movement after dismissal, authored multiline titles, frame proportions and theme-color remain compatible.",
+    "boundaryCases": [
+      "390x661 at DPR3 versus 320x454 portrait, 568x320 and 844x310 landscape; 768/769 breakpoint and toolbar-height changes",
+      "A short counter message versus long scrollable content, tap vs pan, reopen after scrolling, keyboard, touch outside a message."
+    ],
+    "testPlan": [
+      "Verify published file selection and screen/input hunks against #947, validate production-only invariants, run trusted base gates and existing regressions and release checks.",
+      "Run short-landscape and portrait checks against real production candidate assets on WebKit and Chromium including both title and reading long messages; keep X toolbar coverage separate.",
+      "Use a protected PR with exact source and check SHA, then confirm merged Pages run and live production asset bytes, station and road."
+    ],
+    "promotionRisk": "Shared UI and touch handling. Production candidate browser checks and exact-SHA production safety/deployment verification required."
+  }
+}
