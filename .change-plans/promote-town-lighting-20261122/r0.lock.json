@@ -1,0 +1,126 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "1b05f1bc6740fb660f9bc3fcff721089e373e50d57b1b9e9f21de6838d72ed23",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-town-lighting-20261122",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote only the adopted town daylight/shadows, night lighting and regular Recreation Road lamps from staging PRs #941–946.",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "PLACEMENT"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review",
+      "Owner Decision"
+    ],
+    "environment": "staging-production",
+    "baseSha": "9de40f20def4043a39fcf3bc62b879dbb6c6996d",
+    "canonicalSources": [
+      "Production AGENTS.md, OPERATIONS.md, RELEASE-WORKFLOW.md, index.html, main.js, data/station-plaza-props.js, data/town-maps.js, data/world-objects.js and the established production checks",
+      "Accepted Staging 51ab2a981e33b3d5ce30180ee22de8da1fb08a11, PRs #941–946; source renderer, lighting materials, adapter, road scene and browser evidence",
+      "Staging CHANGE-PLAN.md, CHANGE-OPERATIONS.md, CHANGE-VERIFICATION.md and YUMANIWA-PIXEL-STANDARD.md"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-town-lighting-20261122/r0.lock.json",
+      "engine/sukimastock-lighting.v0.1.0.js",
+      "engine/town-lighting.js",
+      "data/town-lighting-materials.js",
+      "data/town-maps.js",
+      "data/station-plaza-props.js",
+      "main.js",
+      "index.html",
+      "tests/test-lighting.cjs",
+      "tests/test-town-lighting.cjs"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "assets/**",
+      "works/**",
+      "w/**",
+      "en/**",
+      "lab/**",
+      "tools/**",
+      ".github/**",
+      "data/station-plaza.js",
+      "data/world-objects.js",
+      "data/works.js",
+      "data/work-lifecycle.json",
+      "developer-access.js",
+      "sitemap.xml"
+    ],
+    "expectedChanges": [
+      "Reuse accepted renderer/material/adapter byte-for-byte and transfer the verified map diff adding four instances of street_lamp_01; current matching art is already deployed.",
+      "Patch only ground/player/formal-prop calls in production. Retain production authoring/render order, input and catalog. Include the three dependencies before main and update relevant script revisions from the production content.",
+      "Port the renderer and town regression cases that apply to the published runtime without referencing the staging-only draft preview or postcard work."
+    ],
+    "ownerDecisions": [
+      "The author approved the daytime shadow treatment and the #946 streetlamp placement, then instructed on 2026-11-22: はい、バッチリですね。本番環境にも反映しましょうか。 Scope is town visuals and the four lamps; no new work or article."
+    ],
+    "hqDecisions": [
+      "Production has the same six map shapes and identical registered art for all required sprites. Retain production-only release data, root metadata, facilities, access policy and older native prop ordering implementation.",
+      "Default noon and explicit phase/off links match the adopted staging behavior. No change to clock policy."
+    ],
+    "rulesApplied": [
+      "Full Plan-only initial commit with exact production base and staging verified SHA. Selective branch/PR, independent review, Scope/Risk/Impact, production safety checks and exact delivery proof.",
+      "Preserve Pixel Standard and production identity, 12 existing works and all existing article/standalone URLs. Use normal PR-based rollback."
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "Author adoption of staging and production instruction confirmed; real-device iPhone Safari remains unverified.",
+      "Chromium/WebKit comparison of outdoor and leisure views; staged night compared against production candidate. OFF/disabled, walking, tap, exits, attraction and UI; after deploy, HTTP, actual drawing and optional phase links."
+    ],
+    "impactChecks": [
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.mobile-desktop",
+      "runtime.rollback",
+      "risk.high-risk-review",
+      "surface.shared",
+      "scene.rendering",
+      "scene.collision",
+      "scene.interaction",
+      "scene.editor-desk",
+      "scene.validation",
+      "scene.transition-adjacency"
+    ],
+    "impactExclusions": [],
+    "rollback": "Use ?lighting=off for the old exposure and original pixels. Revert this isolated production PR through safety checks to remove the four new placements and all lighting changes; no data migration.",
+    "outOfScope": [
+      "All other staging changes, work or article release and generated search pages, artwork redraws, editor/creation draft, pre-release experiments, analytics and repositories' settings.",
+      "No real clock mapping, auto-cycling or permanent time control."
+    ],
+    "promotion": "User's separate production instruction in this conversation; release only town drawing PRs #941–946 from 51ab2a981e33b3d5ce30180ee22de8da1fb08a11 on production base 9de40f20def4043a39fcf3bc62b879dbb6c6996d. Staging partial assets/work lab are excluded.",
+    "unverified": [
+      "Physical iPhone Safari performance, thermals and touch feel on production."
+    ],
+    "problem": "The adopted town lighting and four road lamps currently exist only in staging.",
+    "currentContract": "Production already uses the same six mapped areas, native PNGs, outdoor props and footY ordering, plus production-only metadata/route and developer access rules.",
+    "whyExistingIsInsufficient": "The production drawing path uses unlit source images; Recreation Road currently has no lamp placements.",
+    "design": "Reuse the exact established lighting modules and map; integrate optional world-space lighting in the corresponding production drawing sites. Retain screen/world coordinates, native assets and conventional fallback.",
+    "alternativesRejected": [
+      "Copying the staging root file, work catalog, incomplete features, draft editor and postcards.",
+      "Changing base scenes, exposure/palette or solar schedule during promotion."
+    ],
+    "migration": "No storage or schema change. Changed cache fingerprints drive selective new downloads.",
+    "compatibility": "Fallback to original scene artwork. Production dev=false and normal DOM/SEO/canonical/manifest remain production-specific.",
+    "boundaryCases": [
+      "All four phases and off, no renderer/failed image/reload, camera movement and resize, draw order/edge clipping, night actor readability and indoor contact-only lighting.",
+      "Recreation Road route in both directions, equal lamp spacing, portal usability, pre-existing works open/close."
+    ],
+    "testPlan": [
+      "Verify dependencies/assets and source SHA/hunks. Use the verified staging Change OS Scope/Risk/Impact read-only tools on the production candidate; use production-owned checks/JS syntax at exact head.",
+      "Run production developer/editor/work/lighting regressions, release validator and generator --check using existing publication set; ensure no non-lighting file changes.",
+      "Compare actual browser outputs under both engines, retain staging author adoption, run independent review, verify PR checks, merge with pinned head, verify same-SHA Pages deployment, exact public files and working production night/noon screen."
+    ],
+    "promotionRisk": "Shared main and prop draw path are touched; keep minimal hooks and run real screens on both engines. All code/asset/publication outside the scope is excluded."
+  }
+}

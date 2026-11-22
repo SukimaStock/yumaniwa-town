@@ -318,18 +318,47 @@
             return false;
         }
 
-        var tileSize = window.TILE_SIZE || 16;
-        var renderOffsetY = getTownPropRenderOffsetY(prop);
-        var dx = Math.round(prop.x * tileSize);
-        var dy = Math.round((prop.y + renderOffsetY) * tileSize);
-        var dw = Math.round(prop.w * tileSize);
-        var dh = Math.round(prop.h * tileSize);
-
+        var rect = placementRect(prop);
+        var lighting = window.YUMANIWA_TOWN_LIGHTING;
         window.ctx.save();
         window.ctx.imageSmoothingEnabled = false;
-        window.ctx.drawImage(entry.image, dx, dy, dw, dh);
+        if (lighting) {
+            lighting.drawImage(window.ctx, window.currentScene, entry.image, prop.objectId,
+                rect.x, rect.y, rect.w, rect.h);
+        } else {
+            window.ctx.drawImage(entry.image, rect.x, rect.y, rect.w, rect.h);
+        }
         window.ctx.restore();
         return true;
+    }
+
+    // One snapped world rectangle for the sprite, its ground light and its shadow.
+    function placementRect(prop) {
+        var tileSize = window.TILE_SIZE || 16;
+        var renderOffsetY = getTownPropRenderOffsetY(prop);
+        return {
+            x: Math.round(prop.x * tileSize),
+            y: Math.round((prop.y + renderOffsetY) * tileSize),
+            w: Math.round(prop.w * tileSize),
+            h: Math.round(prop.h * tileSize)
+        };
+    }
+
+    function drawGroundLighting(lighting, sceneId) {
+        var props = getActiveProps();
+        var materials = window.YUMANIWA_TOWN_LIGHTING_MATERIALS;
+        if (!materials) return;
+        var contacts = lighting.softNoon && materials.noonContacts;
+        for (var i = 0; i < props.length; i++) {
+            var prop = props[i];
+            if (!prop || prop.enabled === false) continue;
+            if (!materials.objects[prop.objectId] && !(contacts && contacts[prop.objectId])) continue;
+            var entry = propImageCache[resolvePropSrc(prop)];
+            if (!entry || !entry.loaded) continue;
+            var rect = placementRect(prop);
+            lighting.drawGround(window.ctx, sceneId, entry.image, prop.objectId,
+                rect.x, rect.y, rect.w, rect.h);
+        }
     }
 
     function drawTownActorsAndProps() {
@@ -403,6 +432,7 @@
         resolvePropSrc: resolvePropSrc,
         preloadPropImage: getPropImage,
         preloadSceneProps: preloadSceneProps,
+        drawGroundLighting: drawGroundLighting,
         drawTownActorsAndProps: drawTownActorsAndProps
     };
 })();
