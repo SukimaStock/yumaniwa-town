@@ -1,0 +1,111 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "eb963b51566143b411594399808ce9f4b601ff8e0a65b6955aa5e838ad60749a",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-device-local-clock-20261122",
+    "revision": 0,
+    "previousPlanDigest": null,
+    "revisionReason": null,
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Promote the accepted device-local four-period town lighting clock from Staging to Production.",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review",
+      "Owner Decision"
+    ],
+    "environment": "staging-production",
+    "baseSha": "c3e0d4daac18bd4c4a6ce1988409e218e66063c0",
+    "canonicalSources": [
+      "Production AGENTS.md, OPERATIONS.md, RELEASE-WORKFLOW.md, main index.html and engine/town-lighting.js at base c3e0d4d",
+      "Staging main 23f6500e02e9e460c0e21e52282228fc549dc77b, merged PR #951 and successful Pages deployment",
+      "Staging Plan Lock town-device-local-clock-v2-20261122, its tests and accepted device-local clock instruction",
+      "Production existing lighting renderer/materials and tests/test-town-lighting.cjs"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-device-local-clock-20261122/r0.lock.json",
+      "engine/town-lighting.js",
+      "tests/test-town-lighting.cjs",
+      "index.html"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "data/**",
+      "assets/**",
+      "works/**",
+      "style.css",
+      "layout-fix.css",
+      "developer-access.js",
+      ".github/**"
+    ],
+    "expectedChanges": [
+      "Use the visiting device local clock for the existing four lighting periods: morning 05:00, noon 08:00, evening 17:00, and night 20:00.",
+      "Refresh the stage at initial load, minute boundaries, and tab visibility restoration while keeping explicit lighting stage/off query overrides and lighting=auto.",
+      "Add deterministic local-time boundary coverage while preserving production-specific lighting tests and behavior.",
+      "Refresh only the production lighting-adapter script cache revision in index.html; preserve all production HTML configuration."
+    ],
+    "ownerDecisions": [
+      "The author explicitly requested production promotion after Staging merge."
+    ],
+    "hqDecisions": [
+      "Promote only the device-local clock change. Keep the common renderer, production environment, art, routes, controls, stored data, and developer-access behavior unchanged."
+    ],
+    "rulesApplied": [
+      "Create a fresh production Plan Lock before implementation; use a separate production branch and PR; pass Production Safety Checks before merge; verify production Pages deployment and content."
+    ],
+    "staticChecks": [
+      "node-syntax"
+    ],
+    "manualChecks": [
+      "Staging PR #951 and Pages deployment succeeded; author explicitly requested promotion.",
+      "Production post-deploy browser check and physical iPhone Safari clock behavior remain unobserved."
+    ],
+    "impactChecks": [
+      "surface.shared",
+      "runtime.shared",
+      "runtime.regression",
+      "runtime.mobile-desktop",
+      "runtime.rollback",
+      "risk.high-risk-review"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert this isolated production PR through normal Production Safety Checks and Pages deployment. No stored data migration.",
+    "outOfScope": [
+      "Other Staging changes, lighting appearance changes, Production code/environment changes outside the existing adapter, Production developer access and all work/catalog updates."
+    ],
+    "promotion": "Production promotion explicitly requested by the author for Staging #951 only. Accepted Staging SHA 23f6500e02e9e460c0e21e52282228fc549dc77b. Production base c3e0d4daac18bd4c4a6ce1988409e218e66063c0.",
+    "unverified": [
+      "Physical iPhone Safari clock behavior and post-deploy author visual check."
+    ],
+    "problem": "Production lighting remains fixed at noon, while Staging now follows the visiting device's local time.",
+    "currentContract": "Production already loads the shared Lighting Renderer and town adapter; the adapter defaults to noon and supports explicit lighting query values.",
+    "whyExistingIsInsufficient": "Production does not yet map local wall-clock time to the four approved lighting periods.",
+    "design": "Transplant the small local-time period function and refresh scheduling from accepted Staging into the production adapter while retaining the production version's other code and all production HTML settings.",
+    "alternativesRejected": [
+      "Copying the full Staging index or lighting adapter into Production",
+      "Using Japan-only time or adding a permanent time control"
+    ],
+    "migration": "None.",
+    "compatibility": "No saved data, map, movement, actor, UI, interaction, or work content changes. lighting=off and explicit period query values remain available.",
+    "boundaryCases": [
+      "04:59/05:00",
+      "07:59/08:00",
+      "16:59/17:00",
+      "19:59/20:00",
+      "23:59/00:00",
+      "tab suspended and resumed",
+      "explicit query overrides"
+    ],
+    "testPlan": [
+      "Run deterministic period-boundary tests and lighting adapter regression on production base.",
+      "Run Production Safety Checks, review exact diff against current Production and Staging sources, then merge only with all required checks successful.",
+      "After merge verify Pages run success and production-served adapter/index content; physical iPhone remains unverified."
+    ]
+  }
+}
