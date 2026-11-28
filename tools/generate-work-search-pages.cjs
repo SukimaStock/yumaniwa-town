@@ -125,9 +125,13 @@ function buildPage(id, work, meta, locale, env, articles=[]) {
   const related=articles.filter(article=>(meta.articleIds || []).includes(article.id));
   const articleLinks=related.length ? '<p class="articles">'+(ja?'制作記事':'Japanese articles')+'： '+related.map(article=>'<a lang="ja" href="'+esc(prefix+'/'+article.url.replace(/^\.?\//,''))+'">'+esc(article.title)+'</a>').join(' / ')+'</p>' : '';
 
+  const analytics = id === 'oden'
+    ? '\n  <script>\n' + fs.readFileSync(path.join(__dirname, '../works/oden/analytics.js'), 'utf8') + '  </script>'
+    : '';
+
   return `<!doctype html>
 <html lang="${ja?'ja':'en'}">
-<head>
+<head>${analytics}
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="${theme.theme}">
