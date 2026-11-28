@@ -1,0 +1,186 @@
+{
+  "schema": "yumaniwa-change-plan-lock/0.2",
+  "planDigest": "419bf9e3d11858eef16f989a7c03d739ebcac80dce8fe65bdd8217f29dfc49b3",
+  "plan": {
+    "schema": "yumaniwa-change-plan/0.2",
+    "changeId": "promote-oden-20261128",
+    "revision": 2,
+    "previousPlanDigest": "863228257ebfbb818a81e3beaed3ba3b57737d38e8eaf58d1330d004cfb78a9a",
+    "revisionReason": "Scope and artifact preparation are complete. Risk/Impact Check against the exact production diff derived additional required WORK and ASSET classes and impacts for the game, assets, town menu, runtime IDs, Search pages, updates, and ghost dialogue. Fix the locked plan to satisfy these trusted checks before implementation.",
+    "status": "READY",
+    "repository": "SukimaStock/yumaniwa-town",
+    "change": "Publish the accepted ODEN game and its production-ready town, guide, Search/Share, assets, and Lifecycle integration, including the grounded rotation fix verified in Staging.",
+    "planLevel": "full",
+    "classes": [
+      "SYSTEM",
+      "WORK",
+      "ASSET"
+    ],
+    "authority": [
+      "Standard",
+      "HQ Review",
+      "Owner Decision"
+    ],
+    "environment": "staging-production",
+    "baseSha": "7d3c3cbef9a48ca70cece523fc0390c57cf92712",
+    "canonicalSources": [
+      "Production main 7d3c3cbef9a48ca70cece523fc0390c57cf92712 and its AGENTS.md, OPERATIONS.md, RELEASE-WORKFLOW.md, production safety workflow, and existing public data structures",
+      "Staging main 727d6a50f42efa49c1b1ad337a7e0415d6d9152e; ODEN PR #987 merged and Pages deployed successfully",
+      "Staging ODEN Lifecycle candidate record and existing approved identity, Japanese/English Search metadata, guide entry, update, and ghost dialogue",
+      "User instruction 2026-11-28: 'はい、本番公開用に整えるということです。'"
+    ],
+    "allowedPaths": [
+      ".change-plans/promote-oden-20261128/r0.lock.json",
+      ".change-plans/promote-oden-20261128/r1.lock.json",
+      ".change-plans/promote-oden-20261128/r2.lock.json",
+      "index.html",
+      "data/work-lifecycle.json",
+      "data/works.js",
+      "data/updates.js",
+      "data/ghost-dialogue.js",
+      "data/work-guide-meta.js",
+      "data/work-search-meta.js",
+      "works/oden/**",
+      "assets/works/oden/**",
+      "w/oden/index.html",
+      "w/oden/manifest.webmanifest",
+      "en/w/oden/index.html",
+      "sitemap.xml",
+      "w/w/atodama/index.html",
+      "en/w/atodama/index.html",
+      "w/w/coffee-factory/index.html",
+      "en/w/coffee-factory/index.html",
+      "w/w/pumpoko/index.html",
+      "en/w/pumpoko/index.html",
+      "w/w/orbit/index.html",
+      "en/w/orbit/index.html",
+      "w/w/diorama-calendar/index.html",
+      "en/w/diorama-calendar/index.html",
+      "w/w/rojiura-masala/index.html",
+      "en/w/rojiura-masala/index.html",
+      "w/w/steamclock/index.html",
+      "en/w/steamclock/index.html",
+      "w/w/dotweather/index.html",
+      "en/w/dotweather/index.html",
+      "w/w/junkissa-dive/index.html",
+      "en/w/junkissa-dive/index.html",
+      "w/w/midnight-cola/index.html",
+      "en/w/midnight-cola/index.html",
+      "w/w/yakitori-wars/index.html",
+      "en/w/yakitori-wars/index.html",
+      "w/w/rainy-window/index.html",
+      "en/w/rainy-window/index.html"
+    ],
+    "conditionalPaths": [],
+    "forbiddenPaths": [
+      "main.js",
+      "data/** other than the exact ODEN integration entries and production Lifecycle entry",
+      "engine/**",
+      "assets/** other than assets/works/oden/**",
+      "works/** other than works/oden/**",
+      "developer-access.js",
+      ".github/**",
+      "all other existing work/runtime/assets/data records and all Staging-only files"
+    ],
+    "expectedChanges": [
+      "Add ODEN to the existing Tomogushi Alley production work menu and route it to the standalone game using the established phone-sized embedded player profile.",
+      "Add the already-present Staging ODEN town update, guide metadata, ghost dialogue, and Japanese/English Search/Share metadata without transferring other Staging records.",
+      "Transfer only the ODEN runtime, its required audio scripts and artwork, and rotation regression test; retain all production systems and environment settings.",
+      "Generate only ODEN's production Japanese/English Search pages and update the production sitemap using the complete existing published work set plus ODEN.",
+      "Add ODEN as a released entry in the Production Lifecycle snapshot with this explicit production instruction and the resulting release evidence after deployment.",
+      "Add a static root Search link and install manifest so ODEN is discoverable and installable through the existing production contract.",
+      "Regenerate all existing published Search pages against their canonical production metadata and explicitly include all 14 already-present published Shinpo articles so no current sitemap URLs are dropped."
+    ],
+    "ownerDecisions": [
+      "User 2026-11-28 explicitly instructed production publication after confirming the Staging candidate is complete and agreed to prepare the full production-ready publication using the existing Staging settings."
+    ],
+    "hqDecisions": [
+      "Keep the established production town, player, route, analytics, and Search generator contracts. Do not copy Staging shared runtime or unrelated site state.",
+      "Use ODEN's existing Staging venue (Tomogushi Alley), text, guide categorization, artwork, player layout, and Japanese/English metadata without introducing new content decisions."
+    ],
+    "rulesApplied": [
+      "Candidate lifecycle and a distinct explicit production instruction are both required and checked against the Staging lifecycle source.",
+      "Use a fresh production Plan Lock, production branch, PR, Production Safety Checks, merge only after required checks, Pages deployment, and exact live content verification.",
+      "Transfer only the selected ODEN work and its approved integration; never copy the Staging repository or its open work set wholesale."
+    ],
+    "staticChecks": [
+      "Exact Plan Scope Guard, Risk Check, and Impact Check against production base SHA and candidate diff",
+      "ODEN rotation regression tests",
+      "Production Release Validator for the complete published set and ODEN",
+      "Production Safety Checks required PR workflow",
+      "Production Search generator check includes all 14 currently published Shinpo article IDs; preserves old sitemap entries",
+      "Production Search/Share generator --check for the complete published set",
+      "Production town interaction and relevant lifecycle/release-validator tests"
+    ],
+    "manualChecks": [
+      "The user accepted the Staging work as complete on 2026-11-28; Staging main 727d6a50f42efa49c1b1ad337a7e0415d6d9152e and the ODEN page deployment were previously observed successful.",
+      "Post-deploy production URL and game controls must be verified; physical device and analytics back-end behavior remain unverified unless observed."
+    ],
+    "impactChecks": [
+      "asset.cache",
+      "asset.file",
+      "asset.rendering",
+      "ghost.runtime",
+      "ghost.work-id",
+      "risk.high-risk-review",
+      "runtime.mobile-desktop",
+      "runtime.regression",
+      "runtime.rollback",
+      "runtime.shared",
+      "search.generated-pages",
+      "search.localized-copy",
+      "search.sitemap",
+      "search.structured-data",
+      "search.validator",
+      "surface.shared",
+      "updates.runtime",
+      "updates.work-id",
+      "work.regression",
+      "work.runtime",
+      "works.analytics-id",
+      "works.direct-route",
+      "works.release-validator",
+      "works.search-share",
+      "works.town-awareness",
+      "works.venue-menu"
+    ],
+    "impactExclusions": [],
+    "rollback": "Revert only the ODEN production release PR through the normal review and Production Safety Checks flow, then verify the production Pages deployment. Preserve all existing production works and routes.",
+    "outOfScope": [
+      "Any other Staging updates or work records",
+      "Changes to the common town runtime, shared player, maps, Service Worker, or production environment",
+      "Changes to any existing published work",
+      "Physical-device or external analytics configuration changes"
+    ],
+    "promotion": "Explicit user instruction in this conversation on 2026-11-28: 'それでは完成！本番環境に反映してください' and clarification 'はい、本番公開用に整えるということです。' Staging candidate ODEN verified at 727d6a50f42efa49c1b1ad337a7e0415d6d9152e; production base 7d3c3cbef9a48ca70cece523fc0390c57cf92712.",
+    "unverified": [
+      "Physical device play and external analytics backend acceptance."
+    ],
+    "problem": "ODEN's approved Staging game is candidate-ready but is absent from Production, so publishing the rotation improvement requires a complete selected ODEN release snapshot.",
+    "currentContract": "Production already supports embedded works menus at Tomogushi Alley, phone-sized player layouts, standalone work pages, Search/Share v2 generation, and LifeCycle records for published games.",
+    "whyExistingIsInsufficient": "The production repository currently has no ODEN runtime, town entry, guide, Search/Share pages, public assets, or Lifecycle record.",
+    "design": "Adapt the exact approved ODEN work and per-work metadata from Staging to the existing production contracts, and generate production Search pages without copying shared Staging code or unrelated work records.",
+    "alternativesRejected": [
+      "Copying the complete Staging repository or broad production data files wholesale",
+      "Publishing a standalone unlinked game without its required production discovery and Search/Share information"
+    ],
+    "migration": "No saved-game or server-data migration. Add a new static work directory and public discovery records only.",
+    "compatibility": "Preserve all existing production URLs and games. ODEN uses the existing production Tomogushi Alley menu and embedded phone-sized player. No shared runtime or storage contract changes.",
+    "boundaryCases": [
+      "Direct game URL",
+      "Tomogushi Alley work menu",
+      "Japanese and English Search pages",
+      "Phone and desktop input",
+      "Rotation at walls and floor",
+      "Rotation into open grounded gaps",
+      "collision and ghost landing consistency"
+    ],
+    "testPlan": [
+      "Run exact ODEN regression tests and production release/search validators against the assembled candidate.",
+      "Run existing production route and town interaction tests.",
+      "Review the full PR diff and required Production Safety Checks before merge.",
+      "Verify the same-SHA production Pages deployment and exact live ODEN HTML, assets, JA/EN pages, canonical/robots, and sitemap."
+    ],
+    "promotionRisk": "High: introduces a previously unpublished game to Production, its public town/menu and search routes, and approximately 5.4 MB of game audio scripts; changes remain isolated and can be reverted as one PR."
+  }
+}
