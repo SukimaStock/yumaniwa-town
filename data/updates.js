@@ -7,6 +7,13 @@
 var TOWN_UPDATES = [
     // [UPDATES:ADD_NEWEST_HERE]
     {
+            date: "2026-11-27",
+            title: "灯串横丁に『ODEN』を設置",
+            body: "おでんの具を鍋に並べる落ちものパズル。横一列、出汁がしみたら出来上がり。",
+            tags: ["tomogushi-alley", "game", "open"],
+            workIds: ["oden"]
+        },
+    {
         "date": "2026-11-08",
         "title": "レジャーセンターに『あとだま』を設置",
         "body": "前に打った玉と協力するビリヤードパズルです。三球で全部の輪を光らせます。",
